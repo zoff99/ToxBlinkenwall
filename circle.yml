@@ -137,34 +137,34 @@ dependencies:
     - . ~/pp;cd "$_SYSROOT_" ; tar -xzvf ~/pkg1.tgz
     # install raspi binary pkgs -------------------------
 
-    - cd toxdoorspy ; rm -fv toxdoorspy toxdoorspy_static
-    - cd toxdoorspy ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxdoorspy toxdoorspy.c -std=gnu99 -lsodium -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert
-    - cd toxdoorspy ; ldd toxdoorspy ; exit 0
-    - cd toxdoorspy ; find . -name '*toxdoorspy*' -exec ls -al {} \; 2> /dev/null ; exit 0
-    - cd toxdoorspy ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxdoorspy_static toxdoorspy.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
-    - cd toxdoorspy ; ls -al toxdoorspy toxdoorspy_static
-    - cd toxdoorspy ;. ~/pp ; cp -av ./toxdoorspy $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
-    - cd toxdoorspy ;. ~/pp ; cp -av ./toxdoorspy_static $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
+    - cd toxcam ; rm -fv toxcam toxcam_static
+    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert
+    - cd toxcam ; ldd toxcam ; exit 0
+    - cd toxcam ; find . -name '*toxcam*' -exec ls -al {} \; 2> /dev/null ; exit 0
+    - cd toxcam ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
+    - cd toxcam ; ls -al toxcam toxcam_static
+    - cd toxcam ;. ~/pp ; cp -av ./toxcam $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
+    - cd toxcam ;. ~/pp ; cp -av ./toxcam_static $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
 ## ----------- RASPI cross compile ----------------
 
 
 test:
   override:
-    - cd toxdoorspy ; rm -fv toxdoorspy toxdoorspy_static
-    - cd toxdoorspy ; gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxdoorspy toxdoorspy.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
-    - cd toxdoorspy ; ldd toxdoorspy ; exit 0
+    - cd toxcam ; rm -fv toxcam toxcam_static
+    - cd toxcam ; gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
+    - cd toxcam ; ldd toxcam ; exit 0
     - find / -name '*libjpeg*' 2> /dev/null ; exit 0
-    - cd toxdoorspy ; gcc -O2 -Wall -Wextra -Wpedantic -o toxdoorspy_static toxdoorspy.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
-    - cd toxdoorspy ; ls -al toxdoorspy toxdoorspy_static
+    - cd toxcam ; gcc -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
+    - cd toxcam ; ls -al toxcam toxcam_static
     - mkdir -p $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cp -av toxdoorspy/toxdoorspy $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cp -av toxdoorspy/toxdoorspy_static $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cd toxdoorspy ; ./toxdoorspy_static :
+    - cp -av toxcam/toxcam $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
+    - cp -av toxcam/toxcam_static $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
+    - cd toxcam ; ./toxcam_static :
         background: true
     - sleep 10
-    - cd toxdoorspy ; cat ./toxdoorspy.log
-    - cd toxdoorspy ; cat ./toxdoorspy.log | grep '\-\-MyToxID\-\-:' | cut -d':' -f 3
+    - cd toxcam ; cat ./toxcam.log
+    - cd toxcam ; cat ./toxcam.log | grep '\-\-MyToxID\-\-:' | cut -d':' -f 3
     - sleep 10
     #- sleep 240
-    - cd toxdoorspy ; cat ./toxdoorspy.log
+    - cd toxcam ; cat ./toxcam.log
