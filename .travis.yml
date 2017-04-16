@@ -79,9 +79,9 @@ script:
     - cd ..
     ### ------------ compile and install c-toxcore ------------
 
-    - cd toxdoorspy ; gcc -O2 -fPIC -Wall -Wextra -o toxdoorspy toxdoorspy.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
-    - ldd toxdoorspy ; echo exit 0
+    - cd toxcam ; gcc -O2 -fPIC -Wall -Wextra -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
+    - ldd toxcam ; echo exit 0
     - find / -name '*libjpeg*' 2> /dev/null ; echo exit 0
-    - gcc -O2 -Wall -Wextra -o toxdoorspy_static toxdoorspy.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
-    - ls -al toxdoorspy toxdoorspy_static
+    - gcc -O2 -Wall -Wextra -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt
+    - ls -al toxcam toxcam_static
 
