@@ -1,0 +1,6 @@
+[submodule "c-toxcore"]
+        path = c-toxcore
+        url = https://github.com/TokTok/c-toxcore
+[submodule "libsodium"]
+        path = libsodium
+        url = https://github.com/jedisct1/libsodium
