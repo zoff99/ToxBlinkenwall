@@ -166,7 +166,7 @@ typedef struct {
 	char last_answer[100];
 	int waiting_for_answer; // 0 -> no, 1 -> waiting for answer, 2 -> got answer
 	time_t auto_resend_start_time;
-	mz_zip_archive zip_archive;
+	// mz_zip_archive zip_archive;
 } ToxicFriend;
 
 typedef struct {
@@ -1580,15 +1580,15 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
 	send_text_message_to_friend(tox, friend_number, " .vcm      --> videocall me");
 }
 
-void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
-{
-}
-void add_file_to_zipfile(mz_zip_archive *pZip, const char* file_to_add_full_path, const char* filename_in_zipfile)
-{
-}
-void finish_zipfile(mz_zip_archive *pZip)
-{
-}
+//void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
+//{
+//}
+//void add_file_to_zipfile(mz_zip_archive *pZip, const char* file_to_add_full_path, const char* filename_in_zipfile)
+//{
+//}
+//void finish_zipfile(mz_zip_archive *pZip)
+//{
+//}
 
 void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message,
                                    size_t length, void *user_data)
