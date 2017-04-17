@@ -3009,7 +3009,8 @@ int main(int argc, char *argv[])
 
       case 'h':
          printf("Usage: %s [OPTIONS]\n", argv[0]);
-         printf("  -v, --videodevice devicefile         file\n");
+         printf("  -d, --videodevice devicefile         file\n");
+         printf("  -v, --version                        show version\n");
          printf("  -h, --help                           print this help and exit\n");
          printf("\n");
             if (logfile)
