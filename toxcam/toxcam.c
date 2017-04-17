@@ -2341,15 +2341,37 @@ int init_cam()
 	dest_format.fmt.pix.width = format.fmt.pix.width;
 	dest_format.fmt.pix.height = format.fmt.pix.height;
 
-
-    dbg(2, "Video format(wanted): %u\n", format.fmt.pix.pixelformat);
+    if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
+	{
+		dbg(2, "Video format(wanted): V4L2_PIX_FMT_YUV420\n");
+	}
+	else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG)
+	{
+		dbg(2, "Video format(wanted): V4L2_PIX_FMT_MJPEG\n");
+	}
+	else
+	{
+		dbg(2, "Video format(wanted): %u\n", format.fmt.pix.pixelformat);
+	}
+	
 	// Get <-> Set ??
 	if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
 	{
 		dbg(0, "VIDIOC_G_FMT\n");
 	}
 
-    dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
+    if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
+	{
+		dbg(2, "Video format(got): V4L2_PIX_FMT_YUV420\n");
+	}
+	else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG)
+	{
+		dbg(2, "Video format(got): V4L2_PIX_FMT_MJPEG\n");
+	}
+	else
+	{
+		dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
+	}
 
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
