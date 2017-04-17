@@ -2576,6 +2576,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
 /* assumes planes are continuous memory */
 #ifndef NO_V4LCONVERT
+    dbg(9, "V4LCONVERT\n");
     int result = v4lconvert_convert(v4lconvert_data, &format, &dest_format, data, buf.bytesused, y,
                                     (video_width * video_height * 3) / 2);
 
@@ -2584,8 +2585,10 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         dbg(0, "v4lconvert_convert error %s\n", v4lconvert_get_error_message(v4lconvert_data));
     }
 #else
+    dbg(9, "convert2\n");
     if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
-	{
+    {
+	dbg(9, "yuv422to420\n");
         yuv422to420(y, u, v, data, video_width, video_height);
     }
 	else
@@ -2842,7 +2845,7 @@ void *thread_av(void *data)
 		{
 			pthread_mutex_lock(&av_thread_lock);
 
-			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
+			dbg(9, "AV Thread #%d:get frame\n", (int) id);
 
             // capturing is enabled, capture frames
             int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
@@ -2850,7 +2853,7 @@ void *thread_av(void *data)
 
 			if (r == 1)
 			{
-				// dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
+				dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
 
 				TOXAV_ERR_SEND_FRAME error = 0;
 				toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
