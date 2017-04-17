@@ -19,8 +19,8 @@ machine:
     RASPI_s_: "/home/ubuntu/src/"
     RASPI_PKGSDIR: "/home/ubuntu/pkgs/"
 ## ----------- RASPI cross compile ----------------
-    # toxcore v0.1.7
-    CTOXCORE_VERSION_HASH: 48c86e942d487a8856cbd25797b320bfb1879ddc
+    # toxcore v0.1.6
+    CTOXCORE_VERSION_HASH: 895de7ef26e7617769f2271345e414545c2581f8 # 48c86e942d487a8856cbd25797b320bfb1879ddc
     LIBSODIUM_VERSION: "tags/1.0.11"
     LIBSODIUM_BRANCH: "1.0.11"
     RASPBERRRY_TOOLS_HASH: d820ab9c21969013b4e56c7e9cba25518afcdd44
