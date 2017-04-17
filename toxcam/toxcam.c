@@ -2341,15 +2341,19 @@ int init_cam()
 	dest_format.fmt.pix.width = format.fmt.pix.width;
 	dest_format.fmt.pix.height = format.fmt.pix.height;
 
+
+    dbg(2, "Video format(wanted): %u\n", format.fmt.pix.pixelformat);
 	// Get <-> Set ??
 	if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
 	{
 		dbg(0, "VIDIOC_G_FMT\n");
 	}
 
+    dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
+
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
-	dbg(2, "Video size(1): %u %u\n", video_width, video_height);
+	dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
 
 	format.fmt.pix.width = 1280;
 	format.fmt.pix.height = 720;
@@ -2366,7 +2370,7 @@ int init_cam()
 
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
-	dbg(2, "Video size(2): %u %u\n", video_width, video_height);
+	dbg(2, "Video size(got): %u %u\n", video_width, video_height);
 
 	dest_format.fmt.pix.width = format.fmt.pix.width;
 	dest_format.fmt.pix.height = format.fmt.pix.height;
@@ -2587,8 +2591,8 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 #else
     dbg(9, "convert2\n");
     if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
-    {
-	dbg(9, "yuv422to420\n");
+	{
+        dbg(9, "yuv422to420\n");
         yuv422to420(y, u, v, data, video_width, video_height);
     }
 	else
