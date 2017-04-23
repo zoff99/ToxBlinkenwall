@@ -53,7 +53,7 @@ dependencies:
     - cd libsodium/ ; ./configure && make check
     - cd libsodium/ ; sudo bash -c "printf 'y\naa\n\n' | checkinstall --install --pkgname libsodium --pkgversion 1.0.0 --nodoc --deldesc=no --pkglicense='GPL2'"
     - cd libsodium/ ; sudo ldconfig
-    - cd c-toxcore ; sudo ldconfig -v 2>/dev/null | grep sodium
+    - cd libsodium ; sudo ldconfig -v 2>/dev/null | grep sodium
     ### ------- compile and install libsodium -------
 
     ### ------------ compile and install c-toxcore ------------
