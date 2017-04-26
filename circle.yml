@@ -43,6 +43,10 @@ dependencies:
     - sudo apt-get install libopus-dev libvpx-dev pkg-config
     - sudo apt-get install libasound2-dev
     - sudo apt-get install linux-generic
+    - sudo apt-get install libjpeg-dev
+    - sudo apt-get install libpulse-dev
+    - sudo apt-get install libconfig-dev
+
     - sudo bash -c "echo '::1             localhost ipv6-localhost ipv6-loopback' >> /etc/hosts" # ipv6 localhost entry
 
     - gcc --version ; exit 0
@@ -147,10 +151,10 @@ dependencies:
     # install raspi binary pkgs -------------------------
 
     - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert -lasound
+    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
     - cd toxcam ; ldd toxcam ; exit 0
     - cd toxcam ; find . -name '*toxcam*' -exec ls -al {} \; 2> /dev/null ; exit 0
-    - cd toxcam ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt -lasound
+    - cd toxcam ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound
     - cd toxcam ; ls -al toxcam toxcam_static
     - cd toxcam ;. ~/pp ; cp -av ./toxcam $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     - cd toxcam ;. ~/pp ; cp -av ./toxcam_static $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
@@ -161,10 +165,10 @@ dependencies:
 test:
   override:
     - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert -lasound
+    - cd toxcam ; gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert # -lasound
     - cd toxcam ; ldd toxcam ; exit 0
     - find / -name '*libjpeg*' 2> /dev/null ; exit 0
-    - cd toxcam ; gcc -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt -lasound
+    - cd toxcam ; gcc -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound
     - cd toxcam ; ls -al toxcam toxcam_static
     - mkdir -p $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
     - cp -av toxcam/toxcam $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
