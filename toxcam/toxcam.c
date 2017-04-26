@@ -51,13 +51,19 @@
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
 
-#undef NO_V4LCONVERT
+#include <alsa/asoundlib.h>
 
-#ifndef NO_V4LCONVERT
+
+
+#define V4LCONVERT 1
+// #define HAVE_SOUND 1
+
+
+#ifdef V4LCONVERT
 #include <libv4lconvert.h>
 #endif
 
-#ifndef NO_V4LCONVERT
+#ifdef V4LCONVERT
 static struct v4lconvert_data *v4lconvert_data;
 #endif
 
@@ -66,8 +72,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 1
-static const char global_version_string[] = "0.99.1";
+#define VERSION_PATCH 3
+static const char global_version_string[] = "0.99.3";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -95,9 +101,9 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 4
-#define DEFAULT_GLOBAL_VID_BITRATE 100 // kb/sec
-#define DEFAULT_FPS_SLEEP_MS 160 // default video fps (sleep in msecs. !!)
+#define VIDEO_BUFFER_COUNT 2
+#define DEFAULT_GLOBAL_VID_BITRATE 2 // 100 // kb/sec
+#define DEFAULT_FPS_SLEEP_MS 500 // 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
@@ -213,6 +219,7 @@ struct buffer {
 typedef struct TOXCAM_AV_VIDEO_FRAME {
     uint16_t w, h;
     uint8_t *y, *u, *v;
+//    uint8_t bit_depth;
 } toxcam_av_video_frame;
 
 
@@ -228,7 +235,12 @@ void av_local_disconnect(ToxAV *av, uint32_t num);
 void run_cmd_return_output(const char *command, char* output, int lastline);
 void save_resumable_fts(Tox *m, uint32_t friendnum);
 void resume_resumable_fts(Tox *m, uint32_t friendnum);
-
+void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b);
+void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value);
+void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text);
+void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state);
+void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v);
+void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b);
 
 
 const char *savedata_filename = "savedata.tox";
@@ -245,6 +257,7 @@ const char *shell_cmd__get_my_number_of_open_files = "cat /proc/sys/fs/file-nr 2
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
+const char *global_overlay_timestamp_format = "%Y-%m-%d %H:%M:%S";
 uint64_t global_start_time;
 int global_cam_device_fd = 0;
 uint32_t n_buffers;
@@ -260,6 +273,7 @@ uint32_t global_audio_bit_rate = 0;
 uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
+int global_blink_state = 0;
 
 // -- hardcoded --
 // -- hardcoded --
@@ -479,7 +493,7 @@ void yieldcpu(uint32_t ms)
 
 Tox *create_tox()
 {
-    Tox *tox;
+	Tox *tox;
 	struct Tox_Options options;
 
 /*
@@ -491,13 +505,15 @@ Tox *create_tox()
 	}
 */
 
-    tox_options_default(&options);
+	tox_options_default(&options);
 
+	uint16_t tcp_port = 33776; // act as TCP relay
 
 	options.ipv6_enabled = false;
 	options.udp_enabled = true;
 	options.local_discovery_enabled = true;
 	options.hole_punching_enabled = true;
+	options.tcp_port = tcp_port;
 
     FILE *f = fopen(savedata_filename, "rb");
     if (f)
@@ -527,6 +543,9 @@ Tox *create_tox()
 	{
         tox = tox_new(&options, NULL);
     }
+
+	bool local_discovery_enabled = tox_options_get_local_discovery_enabled(&options);
+	dbg(9, "local discovery enabled = %d\n", (int)local_discovery_enabled);
 
     return tox;
 }
@@ -669,6 +688,8 @@ void bootstrap(Tox *tox)
         {"2001:bc8:4400:2100::1c:50f", 33445, "2C289F9F37C20D09DA83565588BF496FAB3764853FA38141817A72E3F18ACA0B", {0}},
         {"128.199.199.197",            33445, "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09", {0}},
         {"2400:6180:0:d0::17a:a001",   33445, "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09", {0}},
+        // {"192.168.0.20",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}} ,
+        // {"192.168.0.22",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}} ,
         {"biribiri.org",               33445, "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67", {0}}
     };
 
@@ -2238,6 +2259,26 @@ void check_dir(Tox *m)
 {
 }
 
+
+char* get_current_time_date_formatted()
+{
+	time_t t;
+	struct tm *tm = NULL;
+	const int max_size_datetime_str = 100;
+	char *str_date_time = malloc(max_size_datetime_str);
+
+	memset(str_date_time, 0, 100);
+	t = time(NULL);
+	tm = localtime(&t);
+
+	strftime(str_date_time, max_size_datetime_str, global_overlay_timestamp_format, tm);
+
+	// dbg(9, "str_date_time=%s\n", str_date_time);
+
+	return str_date_time;
+}
+
+
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
@@ -2322,7 +2363,7 @@ int init_cam()
     }
 
 
-#ifndef NO_V4LCONVERT
+#ifdef V4LCONVERT
     v4lconvert_data = v4lconvert_create(fd);
 #endif
 
@@ -2353,7 +2394,7 @@ int init_cam()
 	{
 		dbg(2, "Video format(wanted): %u\n", format.fmt.pix.pixelformat);
 	}
-	
+
 	// Get <-> Set ??
 	if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
 	{
@@ -2373,12 +2414,14 @@ int init_cam()
 		dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
 	}
 
+	format.fmt.pix.width = 1280;
+	format.fmt.pix.height = 720;
+	// format.fmt.pix.width = 640;
+	// format.fmt.pix.height = 480;
+
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
 	dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
-
-	format.fmt.pix.width = 1280;
-	format.fmt.pix.height = 720;
 
 	if (-1 == xioctl(fd, VIDIOC_S_FMT, &format))
 	{
@@ -2427,7 +2470,19 @@ int init_cam()
         }
 		else
 		{
-            dbg(0, "VIDIOC_REQBUFS error %d, %s\n", errno, strerror(errno));
+            // dbg(0, "VIDIOC_REQBUFS error %d, %s\n", errno, strerror(errno));
+			// try again ...
+			if (-1 == xioctl(fd, VIDIOC_REQBUFS, &bufrequest))
+			{
+				if (EINVAL == errno)
+				{
+					dbg(0, "[2nd] %s does not support x i/o\n", v4l2_device);
+				}
+				else
+				{
+					dbg(0, "[2nd] VIDIOC_REQBUFS error %d, %s\n", errno, strerror(errno));
+				}
+			}
         }
     }
 
@@ -2601,7 +2656,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
 
 /* assumes planes are continuous memory */
-#ifndef NO_V4LCONVERT
+#ifdef V4LCONVERT
     // dbg(9, "V4LCONVERT\n");
     int result = v4lconvert_convert(v4lconvert_data, &format, &dest_format, data, buf.bytesused, y,
                                     (video_width * video_height * 3) / 2);
@@ -2627,7 +2682,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         dbg(9, "VIDIOC_QBUF (1) error %d, %s\n", errno, strerror(errno));
     }
 
-#ifndef NO_V4LCONVERT
+#ifdef V4LCONVERT
     return (result == -1 ? 0 : 1);
 #else
     return 1;
@@ -2637,7 +2692,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
 void close_cam()
 {
-#ifndef NO_V4LCONVERT
+#ifdef V4LCONVERT
 	v4lconvert_destroy(v4lconvert_data);
 #endif
 
@@ -2828,11 +2883,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 void set_av_video_frame()
 {
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
-    av_video_frame.y = input.planes[0];
-    av_video_frame.u = input.planes[1];
-    av_video_frame.v = input.planes[2];
+    av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
+    av_video_frame.u = input.planes[1]; /**< U (Chroma) plane */
+    av_video_frame.v = input.planes[2]; /**< V (Chroma) plane */
     av_video_frame.w = input.d_w;
     av_video_frame.h = input.d_h;
+	//av_video_frame.bit_depth = input.bit_depth;
 
     dbg(2,"ToxVideo:av_video_frame set\n");
 }
@@ -2879,11 +2935,26 @@ void *thread_av(void *data)
 
 			if (r == 1)
 			{
+				// "0" -> [48]
+				// "9" -> [57]
+				// ":" -> [58]
+
+				char* date_time_str = get_current_time_date_formatted();
+				if (date_time_str)
+				{
+
+					text_on_yuf_frame_xy(10, 10, date_time_str);
+					free(date_time_str);
+				}
+
+
+				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
+
 				// dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
 
 				TOXAV_ERR_SEND_FRAME error = 0;
 				toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
-									   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
+						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
 
 				if (error)
 				{
@@ -2968,6 +3039,446 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 // ------------------ Tox AV stuff --------------------
 
 
+
+// ------------------ YUV420 overlay hack -------------
+// ------------------ YUV420 overlay hack -------------
+// ------------------ YUV420 overlay hack -------------
+
+
+
+
+/** 
+ * 8x8 monochrome bitmap fonts for rendering
+ * Author: Daniel Hepper <daniel@hepper.net>
+ * 
+ * License: Public Domain
+ * 
+ * Based on:
+ * // Summary: font8x8.h
+ * // 8x8 monochrome bitmap fonts for rendering
+ * //
+ * // Author:
+ * //     Marcel Sondaar
+ * //     International Business Machines (public domain VGA fonts)
+ * //
+ * // License:
+ * //     Public Domain
+ * 
+ * Fetched from: http://dimensionalrift.homelinux.net/combuster/mos3/?p=viewsource&file=/modules/gfx/font8_8.asm
+ **/
+
+// Constant: font8x8_basic
+// Contains an 8x8 font map for unicode points U+0000 - U+007F (basic latin)
+char font8x8_basic[128][8] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0001
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0002
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0003
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0004
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0005
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0006
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0007
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0008
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0009
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000A
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000B
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000C
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000D
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000E
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+000F
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0010
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0011
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0012
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0013
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0014
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0015
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0016
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0017
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0018
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0019
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001A
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001B
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001C
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001D
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001E
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+001F
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0020 (space)
+    { 0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18, 0x00},   // U+0021 (!)
+    { 0x36, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0022 (")
+    { 0x36, 0x36, 0x7F, 0x36, 0x7F, 0x36, 0x36, 0x00},   // U+0023 (#)
+    { 0x0C, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x0C, 0x00},   // U+0024 ($)
+    { 0x00, 0x63, 0x33, 0x18, 0x0C, 0x66, 0x63, 0x00},   // U+0025 (%)
+    { 0x1C, 0x36, 0x1C, 0x6E, 0x3B, 0x33, 0x6E, 0x00},   // U+0026 (&)
+    { 0x06, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0027 (')
+    { 0x18, 0x0C, 0x06, 0x06, 0x06, 0x0C, 0x18, 0x00},   // U+0028 (()
+    { 0x06, 0x0C, 0x18, 0x18, 0x18, 0x0C, 0x06, 0x00},   // U+0029 ())
+    { 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00},   // U+002A (*)
+    { 0x00, 0x0C, 0x0C, 0x3F, 0x0C, 0x0C, 0x00, 0x00},   // U+002B (+)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x06},   // U+002C (,)
+    { 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x00, 0x00},   // U+002D (-)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C, 0x00},   // U+002E (.)
+    { 0x60, 0x30, 0x18, 0x0C, 0x06, 0x03, 0x01, 0x00},   // U+002F (/)
+    { 0x3E, 0x63, 0x73, 0x7B, 0x6F, 0x67, 0x3E, 0x00},   // U+0030 (0)
+    { 0x0C, 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x3F, 0x00},   // U+0031 (1)
+    { 0x1E, 0x33, 0x30, 0x1C, 0x06, 0x33, 0x3F, 0x00},   // U+0032 (2)
+    { 0x1E, 0x33, 0x30, 0x1C, 0x30, 0x33, 0x1E, 0x00},   // U+0033 (3)
+    { 0x38, 0x3C, 0x36, 0x33, 0x7F, 0x30, 0x78, 0x00},   // U+0034 (4)
+    { 0x3F, 0x03, 0x1F, 0x30, 0x30, 0x33, 0x1E, 0x00},   // U+0035 (5)
+    { 0x1C, 0x06, 0x03, 0x1F, 0x33, 0x33, 0x1E, 0x00},   // U+0036 (6)
+    { 0x3F, 0x33, 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x00},   // U+0037 (7)
+    { 0x1E, 0x33, 0x33, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+0038 (8)
+    { 0x1E, 0x33, 0x33, 0x3E, 0x30, 0x18, 0x0E, 0x00},   // U+0039 (9)
+    { 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x00},   // U+003A (:)
+    { 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x0C, 0x0C, 0x06},   // U+003B (//)
+    { 0x18, 0x0C, 0x06, 0x03, 0x06, 0x0C, 0x18, 0x00},   // U+003C (<)
+    { 0x00, 0x00, 0x3F, 0x00, 0x00, 0x3F, 0x00, 0x00},   // U+003D (=)
+    { 0x06, 0x0C, 0x18, 0x30, 0x18, 0x0C, 0x06, 0x00},   // U+003E (>)
+    { 0x1E, 0x33, 0x30, 0x18, 0x0C, 0x00, 0x0C, 0x00},   // U+003F (?)
+    { 0x3E, 0x63, 0x7B, 0x7B, 0x7B, 0x03, 0x1E, 0x00},   // U+0040 (@)
+    { 0x0C, 0x1E, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x00},   // U+0041 (A)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x66, 0x66, 0x3F, 0x00},   // U+0042 (B)
+    { 0x3C, 0x66, 0x03, 0x03, 0x03, 0x66, 0x3C, 0x00},   // U+0043 (C)
+    { 0x1F, 0x36, 0x66, 0x66, 0x66, 0x36, 0x1F, 0x00},   // U+0044 (D)
+    { 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x46, 0x7F, 0x00},   // U+0045 (E)
+    { 0x7F, 0x46, 0x16, 0x1E, 0x16, 0x06, 0x0F, 0x00},   // U+0046 (F)
+    { 0x3C, 0x66, 0x03, 0x03, 0x73, 0x66, 0x7C, 0x00},   // U+0047 (G)
+    { 0x33, 0x33, 0x33, 0x3F, 0x33, 0x33, 0x33, 0x00},   // U+0048 (H)
+    { 0x1E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0049 (I)
+    { 0x78, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E, 0x00},   // U+004A (J)
+    { 0x67, 0x66, 0x36, 0x1E, 0x36, 0x66, 0x67, 0x00},   // U+004B (K)
+    { 0x0F, 0x06, 0x06, 0x06, 0x46, 0x66, 0x7F, 0x00},   // U+004C (L)
+    { 0x63, 0x77, 0x7F, 0x7F, 0x6B, 0x63, 0x63, 0x00},   // U+004D (M)
+    { 0x63, 0x67, 0x6F, 0x7B, 0x73, 0x63, 0x63, 0x00},   // U+004E (N)
+    { 0x1C, 0x36, 0x63, 0x63, 0x63, 0x36, 0x1C, 0x00},   // U+004F (O)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x06, 0x06, 0x0F, 0x00},   // U+0050 (P)
+    { 0x1E, 0x33, 0x33, 0x33, 0x3B, 0x1E, 0x38, 0x00},   // U+0051 (Q)
+    { 0x3F, 0x66, 0x66, 0x3E, 0x36, 0x66, 0x67, 0x00},   // U+0052 (R)
+    { 0x1E, 0x33, 0x07, 0x0E, 0x38, 0x33, 0x1E, 0x00},   // U+0053 (S)
+    { 0x3F, 0x2D, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0054 (T)
+    { 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x3F, 0x00},   // U+0055 (U)
+    { 0x33, 0x33, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00},   // U+0056 (V)
+    { 0x63, 0x63, 0x63, 0x6B, 0x7F, 0x77, 0x63, 0x00},   // U+0057 (W)
+    { 0x63, 0x63, 0x36, 0x1C, 0x1C, 0x36, 0x63, 0x00},   // U+0058 (X)
+    { 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x0C, 0x1E, 0x00},   // U+0059 (Y)
+    { 0x7F, 0x63, 0x31, 0x18, 0x4C, 0x66, 0x7F, 0x00},   // U+005A (Z)
+    { 0x1E, 0x06, 0x06, 0x06, 0x06, 0x06, 0x1E, 0x00},   // U+005B ([)
+    { 0x03, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x40, 0x00},   // U+005C (\)
+    { 0x1E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1E, 0x00},   // U+005D (])
+    { 0x08, 0x1C, 0x36, 0x63, 0x00, 0x00, 0x00, 0x00},   // U+005E (^)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF},   // U+005F (_)
+    { 0x0C, 0x0C, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0060 (`)
+    { 0x00, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x6E, 0x00},   // U+0061 (a)
+    { 0x07, 0x06, 0x06, 0x3E, 0x66, 0x66, 0x3B, 0x00},   // U+0062 (b)
+    { 0x00, 0x00, 0x1E, 0x33, 0x03, 0x33, 0x1E, 0x00},   // U+0063 (c)
+    { 0x38, 0x30, 0x30, 0x3e, 0x33, 0x33, 0x6E, 0x00},   // U+0064 (d)
+    { 0x00, 0x00, 0x1E, 0x33, 0x3f, 0x03, 0x1E, 0x00},   // U+0065 (e)
+    { 0x1C, 0x36, 0x06, 0x0f, 0x06, 0x06, 0x0F, 0x00},   // U+0066 (f)
+    { 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x1F},   // U+0067 (g)
+    { 0x07, 0x06, 0x36, 0x6E, 0x66, 0x66, 0x67, 0x00},   // U+0068 (h)
+    { 0x0C, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+0069 (i)
+    { 0x30, 0x00, 0x30, 0x30, 0x30, 0x33, 0x33, 0x1E},   // U+006A (j)
+    { 0x07, 0x06, 0x66, 0x36, 0x1E, 0x36, 0x67, 0x00},   // U+006B (k)
+    { 0x0E, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+006C (l)
+    { 0x00, 0x00, 0x33, 0x7F, 0x7F, 0x6B, 0x63, 0x00},   // U+006D (m)
+    { 0x00, 0x00, 0x1F, 0x33, 0x33, 0x33, 0x33, 0x00},   // U+006E (n)
+    { 0x00, 0x00, 0x1E, 0x33, 0x33, 0x33, 0x1E, 0x00},   // U+006F (o)
+    { 0x00, 0x00, 0x3B, 0x66, 0x66, 0x3E, 0x06, 0x0F},   // U+0070 (p)
+    { 0x00, 0x00, 0x6E, 0x33, 0x33, 0x3E, 0x30, 0x78},   // U+0071 (q)
+    { 0x00, 0x00, 0x3B, 0x6E, 0x66, 0x06, 0x0F, 0x00},   // U+0072 (r)
+    { 0x00, 0x00, 0x3E, 0x03, 0x1E, 0x30, 0x1F, 0x00},   // U+0073 (s)
+    { 0x08, 0x0C, 0x3E, 0x0C, 0x0C, 0x2C, 0x18, 0x00},   // U+0074 (t)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x33, 0x6E, 0x00},   // U+0075 (u)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x1E, 0x0C, 0x00},   // U+0076 (v)
+    { 0x00, 0x00, 0x63, 0x6B, 0x7F, 0x7F, 0x36, 0x00},   // U+0077 (w)
+    { 0x00, 0x00, 0x63, 0x36, 0x1C, 0x36, 0x63, 0x00},   // U+0078 (x)
+    { 0x00, 0x00, 0x33, 0x33, 0x33, 0x3E, 0x30, 0x1F},   // U+0079 (y)
+    { 0x00, 0x00, 0x3F, 0x19, 0x0C, 0x26, 0x3F, 0x00},   // U+007A (z)
+    { 0x38, 0x0C, 0x0C, 0x07, 0x0C, 0x0C, 0x38, 0x00},   // U+007B ({)
+    { 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00},   // U+007C (|)
+    { 0x07, 0x0C, 0x0C, 0x38, 0x0C, 0x0C, 0x07, 0x00},   // U+007D (})
+    { 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+007E (~)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
+};
+
+
+
+// "0" -> [48]
+// "9" -> [57]
+// ":" -> [58]
+
+
+void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value)
+{
+	int font_w = 8;
+	int font_h = 8;
+
+	uint8_t *y_plane = av_video_frame.y;
+	// uint8_t col_value = 0; // black
+	char *bitmap = font8x8_basic[font_char_num];
+
+	int k;
+	int j;
+	int offset = 0;
+	int set = 0;
+
+	for (k=0;k<font_h;k++)
+	{
+		y_plane = av_video_frame.y + ((start_y_pix + k) * av_video_frame.w);
+		y_plane = y_plane + start_x_pix;
+		for (j=0;j<font_w;j++)
+		{
+			set = bitmap[k] & 1 << j;
+			if (set)
+			{
+				*y_plane = col_value; // set luma value
+			}
+			y_plane = y_plane + 1;
+		}
+	}
+
+}
+
+void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state)
+{
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+
+	if (*state == 0)
+	{
+		*state = 1;
+		r = 255;
+		g = 0;
+		b = 0;
+		left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, 30, 30, r, g, b);
+	}
+	else if (*state == 1)
+	{
+		r = 255;
+		g = 255;
+		b = 0;
+		*state = 2;
+		left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, 30, 30, r, g, b);
+	}
+	else
+	{
+		r = 0;
+		g = 255;
+		b = 0;
+		*state = 0;
+		left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, 30, 30, r, g, b);
+	}
+}
+
+
+void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b)
+{
+	int size_total = frame_w * frame_h;
+
+	uint8_t y;
+	uint8_t u;
+	uint8_t v;
+
+	rbg_to_yuv(r, g, b, &y, &u, &v);
+
+	yuv_frame[px_y * frame_w + px_x] = y;
+	yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total] = u;
+	yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total + (size_total / 4)] = v;
+}
+
+
+
+#define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
+
+// RGB -> YUV
+#define RGB2Y(R, G, B) CLIP(( (  66 * (R) + 129 * (G) +  25 * (B) + 128) >> 8) +  16)
+#define RGB2U(R, G, B) CLIP(( ( -38 * (R) -  74 * (G) + 112 * (B) + 128) >> 8) + 128)
+#define RGB2V(R, G, B) CLIP(( ( 112 * (R) -  94 * (G) -  18 * (B) + 128) >> 8) + 128)
+
+// YUV -> RGB
+#define C(Y) ( (Y) - 16  )
+#define D(U) ( (U) - 128 )
+#define E(V) ( (V) - 128 )
+
+#define YUV2R(Y, U, V) CLIP(( 298 * C(Y)              + 409 * E(V) + 128) >> 8)
+#define YUV2G(Y, U, V) CLIP(( 298 * C(Y) - 100 * D(U) - 208 * E(V) + 128) >> 8)
+#define YUV2B(Y, U, V) CLIP(( 298 * C(Y) + 516 * D(U)              + 128) >> 8)
+
+void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v)
+{
+	*y = RGB2Y(r, g, b);
+	*u = RGB2U(r, g, b);
+	*v = RGB2V(r, g, b);
+}
+
+void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text)
+{
+	int carriage = 0;
+	const int letter_width = 8;
+	const int letter_spacing = 1;
+
+	int block_needed_width = 2 + 2 + (strlen(text) * (letter_width + letter_spacing));
+	left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, block_needed_width, 12, 255, 255, 255);
+
+	int looper;
+
+	for(looper=0;looper < strlen(text);looper++)
+	{
+		uint8_t c = text[looper];
+		if ((c > 0) && (c < 127))
+		{
+			print_font_char((12 + ((letter_width + letter_spacing) * carriage)), 12, c, 0);
+		}
+		else
+		{
+			// leave a blank
+		}
+		carriage++;
+	}
+}
+
+void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b)
+{
+	// int bar_width = bar_w_pix; // 150; // should be mulitple of 2 !!
+	// int bar_height = bar_h_pix; // 20; // should be mulitple of 2 !!
+	// int bar_start_x = bar_start_x_pix; // 10; // should be mulitple of 2 !! (zero is also ok)
+	// int bar_start_y = bar_start_y_pix; // 10; // should be mulitple of 2 !! (zero is also ok)
+
+	// uint8_t *y_plane = av_video_frame.y;
+
+	int k;
+	int j;
+	// int offset = 0;
+
+	for (k=0;k<bar_h_pix;k++)
+	{
+		// y_plane = av_video_frame.y + ((bar_start_y + k) * av_video_frame.w);
+		// y_plane = y_plane + bar_start_x;
+		for (j=0;j<bar_w_pix;j++)
+		{
+			// ******** // *y_plane = col_value; // luma value to 255 (white)
+			set_color_in_yuv_frame_xy(av_video_frame.y, (bar_start_x_pix + j), (bar_start_y_pix + k),
+				av_video_frame.w, av_video_frame.h, r, g, b);
+
+			// y_plane = y_plane + 1;
+		}
+	}
+}
+
+// ------------------ YUV420 overlay hack -------------
+// ------------------ YUV420 overlay hack -------------
+// ------------------ YUV420 overlay hack -------------
+
+
+
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+
+#ifdef HAVE_SOUND
+
+
+short audio_buf[128];
+snd_pcm_t *audio_capture_handle;
+// const char *audio_device = "plughw:0,0";
+// const char *audio_device = "hw:CARD=U0x46d0x991,DEV=0";
+const char *audio_device = "default";
+// sysdefault:CARD
+
+void record_from_sound_device()
+{
+	int i;
+	int err;
+	for (i = 0; i < 10; ++i)
+	{
+		if ((err = snd_pcm_readi(audio_capture_handle, audio_buf, 128)) != 128)
+		{
+			dbg(9, "read from audio interface failed (%s)\n", snd_strerror (err));
+		}
+	}
+}
+
+void close_sound_device()
+{
+	snd_pcm_close(audio_capture_handle);
+}
+
+void init_sound_device()
+{
+		int i;
+		int err;
+		snd_pcm_hw_params_t *hw_params;
+
+		if ((err = snd_pcm_open (&audio_capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+			dbg(9, "cannot open audio device %s (%s)\n", 
+				 audio_device,
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+			dbg(9, "cannot allocate hardware parameter structure (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_any (audio_capture_handle, hw_params)) < 0) {
+			dbg(9, "cannot initialize hardware parameter structure (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_set_access (audio_capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+			dbg(9, "cannot set access type (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_set_format (audio_capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
+			dbg(9, "cannot set sample format (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		unsigned int actualRate = 44100;
+		dbg(9, "sound: wanted audio rate:%d\n", actualRate);
+		if ((err = snd_pcm_hw_params_set_rate_near (audio_capture_handle, hw_params, &actualRate, 0)) < 0) {
+			dbg(9, "cannot set sample rate (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		dbg(9, "sound: got audio rate:%d\n", actualRate);
+
+		// 1 -> mono, 2 -> stereo
+		if ((err = snd_pcm_hw_params_set_channels (audio_capture_handle, hw_params, 1)) < 0) {
+			dbg(9, "cannot set channel count (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params (audio_capture_handle, hw_params)) < 0) {
+			dbg(9, "cannot set parameters (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		snd_pcm_hw_params_free (hw_params);
+
+		if ((err = snd_pcm_prepare (audio_capture_handle)) < 0) {
+			dbg(9, "cannot prepare audio interface for use (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+}
+
+#endif
+
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+
+
 void sigint_handler(int signo)
 {
     if (signo == SIGINT)
@@ -2989,18 +3500,14 @@ int main(int argc, char *argv[])
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
 
-	
-	
-	
-	
-	
-  v4l2_device = malloc(400);
-  snprintf(v4l2_device, 399, "%s", "/dev/video1");
+	v4l2_device = malloc(400);
+	memset(v4l2_device, 0, 400);
+	snprintf(v4l2_device, 399, "%s", "/dev/video0");
 
-  int aflag = 0;
-  char *cvalue = NULL;
-  int index;
-  int opt;
+	int aflag = 0;
+	char *cvalue = NULL;
+	int index;
+	int opt;
 
    const char     *short_opt = "hvd:";
    struct option   long_opt[] =
@@ -3083,7 +3590,23 @@ int main(int argc, char *argv[])
 
     Friends.max_idx = 0;
 
+
+
+
+    DHT_node nodes_tmp[] =
+    {
+        {"192.168.0.20",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}}
+    };
+    sodium_hex2bin(nodes_tmp[0].key_bin, sizeof(nodes_tmp[0].key_bin),
+                   nodes_tmp[0].key_hex, sizeof(nodes_tmp[0].key_hex)-1, NULL, NULL, NULL);
+
+
     bootstrap(tox);
+    // tox_add_tcp_relay(tox, "192.168.0.20", 33448, nodes_tmp[0].key_bin, NULL); // use TCP relay port here
+    // tox_add_tcp_relay(tox, "192.168.0.22", 33448, nodes_tmp[0].key_bin, NULL); // use TCP relay port here
+
+
+
 
     print_tox_id(tox);
 
@@ -3159,9 +3682,20 @@ int main(int argc, char *argv[])
 
 	// start toxav thread ------------------------------
 
+
+	// start audio recoding stuff ----------------------
+#ifdef HAVE_SOUND
+	init_sound_device();
+	record_from_sound_device();
+	close_sound_device();
+#endif
+	// start audio recoding stuff ----------------------
+
+
+
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
-	
+
     while (tox_loop_running)
     {
         tox_iterate(tox, NULL);
@@ -3193,3 +3727,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
