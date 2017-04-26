@@ -51,12 +51,13 @@
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
 
-#include <alsa/asoundlib.h>
-
-
-
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
+
+#ifdef HAVE_SOUND
+#include <alsa/asoundlib.h>
+#endif
+
 
 
 #ifdef V4LCONVERT
