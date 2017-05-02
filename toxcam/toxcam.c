@@ -2993,6 +2993,10 @@ void *thread_av(void *data)
 				dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
             }
 
+			// call toxav_iterate also when sending frames ----------
+			toxav_iterate(av);
+			// call toxav_iterate also when sending frames ----------
+
             pthread_mutex_unlock(&av_thread_lock);
 			// yieldcpu(1000); // 1 frame every 1 seconds!!
             yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~6 frames per second */
