@@ -2999,7 +2999,8 @@ void *thread_av(void *data)
 
             pthread_mutex_unlock(&av_thread_lock);
 			// yieldcpu(1000); // 1 frame every 1 seconds!!
-            yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~6 frames per second */
+			yieldcpu(100);
+            // yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~6 frames per second */
             // yieldcpu(80); /* ~12 frames per second */
             // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
             continue;     /* We're running video, so don't sleep for and extra 100 */
