@@ -35,6 +35,10 @@ machine:
     
 dependencies:
   pre:
+    # -----------------------------------
+    - sudo /etc/init.d/mysql stop
+    - sudo /etc/init.d/postgresql stop
+    # -----------------------------------
     - sudo apt-get update
     - sudo apt-get install cmake
     - aptitude search 4l|grep -i convert ; exit 0
