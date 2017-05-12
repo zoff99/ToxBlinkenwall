@@ -163,7 +163,7 @@ dependencies:
     - . ~/pp;cp -av "$PKGSDIR"/* $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     
     # --- toxbootstrapd for RASPI ----
-    - cp -av /home/ubuntu/build/build/.libs/tox-bootstrapd $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
+    - . ~/pp;cp -av /home/ubuntu/build/build/.libs/tox-bootstrapd $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     # --- toxbootstrapd for RASPI ----
 
     - cd toxcam ; rm -fv toxcam toxcam_static
