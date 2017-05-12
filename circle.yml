@@ -154,7 +154,7 @@ dependencies:
 
     # --- toxbootstrapd for RASPI ----
     - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --enable-daemon --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt ; exit 0 # this will fail
-    - . ~/pp; cd /home/ubuntu/build/build ; /bin/bash ../libtool --tag=CC --mode=link $CC -std=gnu99 -I/home/ubuntu/src//c-toxcore/other/bootstrap_daemon -I"$_SYSROOT_"/usr/include -g -O2 -o tox-bootstrapd ../other/bootstrap_daemon/src/tox_bootstrapd-command_line_arguments.o ../other/bootstrap_daemon/src/tox_bootstrapd-config.o ../other/bootstrap_daemon/src/tox_bootstrapd-log.o ../other/bootstrap_daemon/src/tox_bootstrapd-tox-bootstrapd.o ../other/tox_bootstrapd-bootstrap_node_packets.o libtoxcore.la -L"$_SYSROOT_"/usr/lib -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf -lconfig -lsodium
+    - . ~/pp; cd /home/ubuntu/build/build ; export V=3 ; /bin/bash ../libtool --tag=CC --mode=link $CC -std=gnu99 -I/home/ubuntu/src//c-toxcore/other/bootstrap_daemon -I"$_SYSROOT_"/usr/include -g -O2 -o tox-bootstrapd ../other/bootstrap_daemon/src/tox_bootstrapd-command_line_arguments.o ../other/bootstrap_daemon/src/tox_bootstrapd-config.o ../other/bootstrap_daemon/src/tox_bootstrapd-log.o ../other/bootstrap_daemon/src/tox_bootstrapd-tox-bootstrapd.o ../other/tox_bootstrapd-bootstrap_node_packets.o libtoxcore.la -L"$_SYSROOT_"/usr/lib -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf -lconfig -lsodium
     - ls -al /home/ubuntu/build/build/.libs/tox-bootstrapd
     - file /home/ubuntu/build/build/.libs/tox-bootstrapd
     # --- toxbootstrapd for RASPI ----
