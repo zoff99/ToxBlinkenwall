@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 3
-static const char global_version_string[] = "0.99.3";
+#define VERSION_PATCH 4
+static const char global_version_string[] = "0.99.4";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -275,6 +275,9 @@ uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
+
+int toxav_video_thread_stop = 0;
+int toxav_iterate_thread_stop = 0;
 
 // -- hardcoded --
 // -- hardcoded --
@@ -3676,17 +3679,31 @@ int main(int argc, char *argv[])
 
 
 	// start toxav thread ------------------------------
-	pthread_t tid[1];
-    if (pthread_create(&(tid[0]), NULL, thread_av, (void *) mytox_av) != 0)
+	pthread_t tid[2]; // 0 -> toxav_iterate thread, 1 -> video send thread
+
+	
+	// start toxav thread ------------------------------
+	toxav_iterate_thread_stop = 0;
+    	if (pthread_create(&(tid[0]), NULL, thread_av, (void *)mytox_av) != 0)
 	{
-        dbg(0, "AV Thread create failed\n");
+        dbg(0, "AV iterate Thread create failed");
 	}
 	else
 	{
-        dbg(2, "AV Thread successfully created\n");
+        dbg(2, "AV iterate Thread successfully created");
 	}
 
+	toxav_video_thread_stop = 0;
+    	if (pthread_create(&(tid[1]), NULL, thread_video_av, (void *)mytox_av) != 0)
+	{
+        dbg(0, "AV video Thread create failed");
+	}
+	else
+	{
+        dbg(2, "AV video Thread successfully created");
+	}
 	// start toxav thread ------------------------------
+	
 
 
 	// start audio recoding stuff ----------------------
