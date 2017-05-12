@@ -2906,14 +2906,14 @@ void *thread_av(void *data)
 
 	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
 	{
-		dbg(0, "Error creating av_thread_lock");
+		dbg(0, "Error creating av_thread_lock\n");
 	}
 	else
 	{
-		dbg(2, "av_thread_lock created successfully");
+		dbg(2, "av_thread_lock created successfully\n");
 	}
 
-	dbg(2, "AV Thread #%d: starting", (int) id);
+	dbg(2, "AV Thread #%d: starting\n", (int) id);
 	
 	if (video_call_enabled == 1)
 	{
@@ -2949,14 +2949,14 @@ void *thread_video_av(void *data)
 
 	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
 	{
-		dbg(0, "Error creating video av_thread_lock");
+		dbg(0, "Error creating video av_thread_lock\n");
 	}
 	else
 	{
-		dbg(2, "av_thread_lock video created successfully");
+		dbg(2, "av_thread_lock video created successfully\n");
 	}
 
-	dbg(2, "AV video Thread #%d: starting", (int) id);
+	dbg(2, "AV video Thread #%d: starting\n", (int) id);
 
 	while (toxav_video_thread_stop != 1)
 	{
