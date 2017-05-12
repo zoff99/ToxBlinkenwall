@@ -2899,6 +2899,82 @@ void set_av_video_frame()
 
 void *thread_av(void *data)
 {
+	ToxAV *av = (ToxAV *) data;
+
+	pthread_t id = pthread_self();
+	pthread_mutex_t av_thread_lock;
+
+	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
+	{
+		dbg(0, "Error creating av_thread_lock");
+	}
+	else
+	{
+		dbg(2, "av_thread_lock created successfully");
+	}
+
+	dbg(2, "AV Thread #%d: starting", (int) id);
+	
+	if (video_call_enabled == 1)
+	{
+		global_cam_device_fd = init_cam();
+		dbg(2, "AV Thread #%d: init cam\n", (int) id);
+		set_av_video_frame();
+		// start streaming
+		v4l_startread();
+	}
+
+	while (toxav_iterate_thread_stop != 1)
+	{
+		usleep(toxav_iteration_interval(av) * 1000);
+		// yieldcpu(10);
+	}
+	
+	if (video_call_enabled == 1)
+	{
+		// end streaming
+		v4l_endread();
+	}
+
+	dbg(2, "ToxVideo:Clean thread exit!\n");
+}
+
+
+void *thread_video_av(void *data)
+{
+	ToxAV *av = (ToxAV *) data;
+
+	pthread_t id = pthread_self();
+	pthread_mutex_t av_thread_lock;
+
+	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
+	{
+		dbg(0, "Error creating video av_thread_lock");
+	}
+	else
+	{
+		dbg(2, "av_thread_lock video created successfully");
+	}
+
+	dbg(2, "AV video Thread #%d: starting", (int) id);
+
+	while (toxav_video_thread_stop != 1)
+	{
+		pthread_mutex_lock(&av_thread_lock);
+		toxav_iterate(av);
+		// dbg(9, "AV video Thread #%d running ...", (int) id);
+		pthread_mutex_unlock(&av_thread_lock);
+
+		usleep(toxav_iteration_interval(av) * 1000);
+	}
+
+	dbg(2, "ToxVideo:Clean video thread exit!\n");
+}
+
+
+
+void *thread_av_XXXXX(void *data)
+{
     ToxAV *av = (ToxAV *) data;
 	pthread_t id = pthread_self();
 	pthread_mutex_t av_thread_lock;
