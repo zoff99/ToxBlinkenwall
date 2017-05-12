@@ -149,11 +149,21 @@ dependencies:
     - . ~/pp;cd $_s_;git clone https://github.com/TokTok/c-toxcore
     - . ~/pp;cd $_s_/c-toxcore/;git checkout $CTOXCORE_VERSION_HASH
     - . ~/pp;cd $_s_/c-toxcore/;autoreconf -fi
-    - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --enable-daemon --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
-    - . ~/pp;~/do_package.sh "c-toxcore" --prefix="$INSTALL_DEST"/usr --enable-daemon --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
+    - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
+    - . ~/pp;~/do_package.sh "c-toxcore" --prefix="$INSTALL_DEST"/usr --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
 
+    # --- toxbootstrapd for RASPI ----
+    # /home/ubuntu/build/build
+    # /bin/bash ../libtool  --tag=CC   --mode=link arm-linux-gnueabihf-gcc -std=gnu99 -I/home/ubuntu/src//c-toxcore/other/bootstrap_daemon -I/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/include     -g -O2   -o tox-bootstrapd ../other/bootstrap_daemon/src/tox_bootstrapd-command_line_arguments.o ../other/bootstrap_daemon/src/tox_bootstrapd-config.o ../other/bootstrap_daemon/src/tox_bootstrapd-log.o ../other/bootstrap_daemon/src/tox_bootstrapd-tox-bootstrapd.o ../other/tox_bootstrapd-bootstrap_node_packets.o   libtoxcore.la -L/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/lib -L/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/lib/arm-linux-gnueabihf -lconfig -lsodium
+    - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --enable-daemon --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt ; exit 0
+    - . ~/pp; cd /home/ubuntu/build/build ; /bin/bash ../libtool  --tag=CC   --mode=link arm-linux-gnueabihf-gcc -std=gnu99 -I/home/ubuntu/src//c-toxcore/other/bootstrap_daemon -I/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/include     -g -O2   -o tox-bootstrapd ../other/bootstrap_daemon/src/tox_bootstrapd-command_line_arguments.o ../other/bootstrap_daemon/src/tox_bootstrapd-config.o ../other/bootstrap_daemon/src/tox_bootstrapd-log.o ../other/bootstrap_daemon/src/tox_bootstrapd-tox-bootstrapd.o ../other/tox_bootstrapd-bootstrap_node_packets.o   libtoxcore.la -L/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/lib -L/home/ubuntu/cc/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/usr/lib/arm-linux-gnueabihf -lconfig -lsodium
+    - ls -al /home/ubuntu/build/build/.libs/tox-bootstrapd
+    - file /home/ubuntu/build/build/.libs/tox-bootstrapd
+    
     - . ~/pp;mkdir -p $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     - . ~/pp;cp -av "$PKGSDIR"/* $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
+    
+    - . cp -av /home/ubuntu/build/build/.libs/tox-bootstrapd $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
     - cd toxcam ; rm -fv toxcam toxcam_static
     - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
