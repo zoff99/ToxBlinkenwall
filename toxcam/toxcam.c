@@ -104,7 +104,7 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 2
 #define DEFAULT_GLOBAL_VID_BITRATE 45 // 100 // kb/sec
-#define DEFAULT_FPS_SLEEP_MS 500 // 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
+#define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
@@ -3047,7 +3047,7 @@ void *thread_av(void *data)
 		{
 			pthread_mutex_lock(&av_thread_lock);
 
-			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
+			dbg(9, "AV Thread #%d:get frame\n", (int) id);
 
             // capturing is enabled, capture frames
             int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
@@ -3070,10 +3070,10 @@ void *thread_av(void *data)
 
 				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
 
-				// dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
-
 				if (friend_to_send_video_to != -1)
 				{
+					dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
+
 					TOXAV_ERR_SEND_FRAME error = 0;
 					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
 						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
@@ -3117,7 +3117,7 @@ void *thread_av(void *data)
 
             pthread_mutex_unlock(&av_thread_lock);
 			// yieldcpu(1000); // 1 frame every 1 seconds!!
-            yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~2 frames per second */
+            yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~4 frames per second */
             // yieldcpu(80); /* ~12 frames per second */
             // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
 		}
@@ -3158,11 +3158,10 @@ void *thread_video_av(void *data)
 
 	while (toxav_video_thread_stop != 1)
 	{
-		pthread_mutex_lock(&av_thread_lock);
+		// pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
 		// dbg(9, "AV video Thread #%d running ...", (int) id);
-		pthread_mutex_unlock(&av_thread_lock);
-
+		// pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
 
