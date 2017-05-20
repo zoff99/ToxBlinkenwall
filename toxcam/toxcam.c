@@ -685,7 +685,7 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 void bootstrap(Tox *tox)
 {
 
-#if 0
+#if 1
 
     DHT_node nodes[] =
     {
