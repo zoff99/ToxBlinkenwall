@@ -2804,8 +2804,9 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 		TOXAV_ERR_ANSWER err;
 		int audio_bitrate = 10;
 		int video_bitrate = 10;
+		friend_to_send_video_to = friend_number;
+		global_video_active = 1;
 		toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
-
 	}
 }
 
