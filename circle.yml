@@ -181,7 +181,7 @@ dependencies:
 test:
   override:
     - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert # -lasound
+    - cd toxcam ; gcc -O2 -fPIC -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert # -lasound
     - cd toxcam ; ldd toxcam ; exit 0
     - find / -name '*libjpeg*' 2> /dev/null ; exit 0
     - cd toxcam ; gcc -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound

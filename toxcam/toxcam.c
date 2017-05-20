@@ -3732,8 +3732,8 @@ int main(int argc, char *argv[])
     //{
     //    {"192.168.0.20",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}}
     //};
-    sodium_hex2bin(nodes_tmp[0].key_bin, sizeof(nodes_tmp[0].key_bin),
-                   nodes_tmp[0].key_hex, sizeof(nodes_tmp[0].key_hex)-1, NULL, NULL, NULL);
+    // sodium_hex2bin(nodes_tmp[0].key_bin, sizeof(nodes_tmp[0].key_bin),
+    //                nodes_tmp[0].key_hex, sizeof(nodes_tmp[0].key_hex)-1, NULL, NULL, NULL);
 
 
     bootstrap(tox);
