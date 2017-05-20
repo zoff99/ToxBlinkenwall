@@ -167,7 +167,7 @@ dependencies:
     # --- toxbootstrapd for RASPI ----
 
     - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -Wall -Wextra -Wpedantic -o toxcam toxcam.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
+    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -o toxcam toxcam.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
     - cd toxcam ; ldd toxcam ; exit 0
     - cd toxcam ; find . -name '*toxcam*' -exec ls -al {} \; 2> /dev/null ; exit 0
     - cd toxcam ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound
