@@ -102,9 +102,9 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 2
-#define DEFAULT_GLOBAL_VID_BITRATE 45 // 100 // kb/sec
-#define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
+#define VIDEO_BUFFER_COUNT 3
+#define DEFAULT_GLOBAL_VID_BITRATE 15 // 100 // kb/sec
+#define DEFAULT_FPS_SLEEP_MS 160 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
