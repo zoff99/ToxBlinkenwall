@@ -103,7 +103,7 @@ typedef struct DHT_node {
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 2
-#define DEFAULT_GLOBAL_VID_BITRATE 2 // 100 // kb/sec
+#define DEFAULT_GLOBAL_VID_BITRATE 10 // 100 // kb/sec
 #define DEFAULT_FPS_SLEEP_MS 500 // 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -2800,6 +2800,12 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 	{
 		dbg(9, "Handling CALL callback friendnum=%d audio_enabled=%d video_enabled=%d\n", (int)friend_number, (int)audio_enabled, (int)video_enabled);
 		((CallControl *)user_data)->incoming = true;
+
+		TOXAV_ERR_ANSWER err;
+		int audio_bitrate = 10;
+		int video_bitrate = 10;
+		toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+
 	}
 }
 
@@ -2843,7 +2849,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	int send_video = state & TOXAV_FRIEND_CALL_STATE_SENDING_V && (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_V);
 	dbg(9, "t_toxav_call_state_cb:002a send_audio=%d send_video=%d global_video_bit_rate=%d\n", send_audio, send_video, (int)global_video_bit_rate);
 	TOXAV_ERR_BIT_RATE_SET bitrate_err = 0;
-	toxav_bit_rate_set(av, friend_number, 0, send_video ? global_video_bit_rate : 0, &bitrate_err);
+	// ** // toxav_bit_rate_set(av, friend_number, 0, send_video ? global_video_bit_rate : 0, &bitrate_err);
 	dbg(9, "t_toxav_call_state_cb:004\n");
 
 	if (bitrate_err)
