@@ -2807,7 +2807,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 		((CallControl *)user_data)->incoming = true;
 
 		TOXAV_ERR_ANSWER err;
-		global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE
+		global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 		int audio_bitrate = 10;
 		int video_bitrate = global_video_bit_rate;
 		friend_to_send_video_to = friend_number;
