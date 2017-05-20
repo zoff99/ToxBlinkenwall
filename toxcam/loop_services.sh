@@ -10,6 +10,6 @@ video_device=$(ls -1 /dev/video*|tail -1)
 
 while [ 1 == 1 ]; do
 	./toxcam_static -d $video_device # > /dev/null 2> /dev/null
-	sleep 10
+	sleep 4
 done
 

@@ -687,6 +687,7 @@ void bootstrap(Tox *tox)
 
 #if 1
 
+	// these nodes seem to be faster!!
     DHT_node nodes[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
@@ -703,6 +704,7 @@ void bootstrap(Tox *tox)
 
 #else
 
+	// more nodes here, but video with TCP sucks
     DHT_node nodes[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
