@@ -3066,31 +3066,31 @@ void *thread_av(void *data)
 					TOXAV_ERR_SEND_FRAME error = 0;
 					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
 						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
-				}
 
-				if (error)
-				{
-					if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+					if (error)
 					{
-						//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
-						//			 av_video_frame.h);
-						dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
-					}
-					else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
-					{
-						//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
-						//	i, friend[i].call_state_self, friend[i].call_state_friend);
-						dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
-					}
-					else
-					{
-						//debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
-						//			friend[i].number, error);
-						dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
+						if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+						{
+							//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
+							//			 av_video_frame.h);
+							dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
+						}
+						else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
+						{
+							//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
+							//	i, friend[i].call_state_self, friend[i].call_state_friend);
+							dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+						}
+						else
+						{
+							//debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
+							//			friend[i].number, error);
+							dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
 
-						// *TODO* if these keep piling up --> just disconnect the call!!
-						// *TODO* if these keep piling up --> just disconnect the call!!
-						// *TODO* if these keep piling up --> just disconnect the call!!
+							// *TODO* if these keep piling up --> just disconnect the call!!
+							// *TODO* if these keep piling up --> just disconnect the call!!
+							// *TODO* if these keep piling up --> just disconnect the call!!
+						}
 					}
 				}
 
