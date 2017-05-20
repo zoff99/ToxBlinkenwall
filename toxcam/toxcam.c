@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 
  * Zoff <zoff@zoff.cc>
  * in 2017
@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 4
-static const char global_version_string[] = "0.99.4";
+#define VERSION_PATCH 5
+static const char global_version_string[] = "0.99.5";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -270,6 +270,7 @@ struct v4l2_format dest_format;
 toxcam_av_video_frame av_video_frame;
 vpx_image_t input;
 int global_video_active = 0;
+
 uint32_t global_audio_bit_rate = 0;
 uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 ToxAV *mytox_av = NULL;
@@ -282,7 +283,7 @@ int toxav_iterate_thread_stop = 0;
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
-uint32_t friend_to_send_video_to = 0;
+uint32_t friend_to_send_video_to = -1;
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
@@ -1466,23 +1467,29 @@ void cmd_kamft(Tox *tox, uint32_t friend_number)
 
 void cmd_snap(Tox *tox, uint32_t friend_number)
 {
-	send_text_message_to_friend(tox, friend_number, "capture single shot, and send to all friends ...");
+	send_text_message_to_friend(tox, friend_number, "*Feature DISABLED*");
 
-	char output_str[1000];
-	run_cmd_return_output(shell_cmd__single_shot, output_str, 1);
+	if (1 == 1 + 1)
+	{
+		send_text_message_to_friend(tox, friend_number, "capture single shot, and send to all friends ...");
+
+		char output_str[1000];
+		run_cmd_return_output(shell_cmd__single_shot, output_str, 1);
 
 #if 0
-	if (strlen(output_str) > 0)
-	{
-		// send_text_message_to_friend(tox, friend_number, "toxcam:%s", output_str);
-	}
-	else
-	{
-		send_text_message_to_friend(tox, friend_number, "ERROR running snap command");
-	}
+		if (strlen(output_str) > 0)
+		{
+			// send_text_message_to_friend(tox, friend_number, "toxcam:%s", output_str);
+		}
+		else
+		{
+			send_text_message_to_friend(tox, friend_number, "ERROR running snap command");
+		}
 #endif
 
-	send_text_message_to_friend(tox, friend_number, "... capture single shot, ready!");
+		send_text_message_to_friend(tox, friend_number, "... capture single shot, ready!");
+
+	}
 }
 
 void cmd_friends(Tox *tox, uint32_t friend_number)
@@ -1533,62 +1540,70 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 	// send_text_message_to_friend(tox, friend_number, "video-call-me not yet implemented!");
 
 	dbg(9, "cmd_vcm:001\n");
-	send_text_message_to_friend(tox, friend_number, "i am trying to send my video ...");
 
-	if (mytox_av != NULL)
+	if (global_video_active == 1)
 	{
-		dbg(9, "cmd_vcm:002\n");
-		if (global_video_bit_rate == 0)
-		{
-			global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-			dbg(9, "cmd_vcm:003\n");
-		}
-		friend_to_send_video_to = friend_number;
-		dbg(9, "cmd_vcm:004\n");
-
-		TOXAV_ERR_CALL error = 0;
-		toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
-		// toxav_call(mytox_av, friend_number, 0, 40, &error);
-		dbg(9, "cmd_vcm:005\n");
-
-		if (error != TOXAV_ERR_CALL_OK)
-		{
-			switch (error)
-			{
-				case TOXAV_ERR_CALL_MALLOC:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_MALLOC\n");
-					break;
-
-				case TOXAV_ERR_CALL_SYNC:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_SYNC\n");
-					break;
-
-				case TOXAV_ERR_CALL_FRIEND_NOT_FOUND:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_FOUND\n");
-					break;
-
-				case TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED\n");
-					break;
-
-				case TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL\n");
-					break;
-
-				case TOXAV_ERR_CALL_INVALID_BIT_RATE:
-					dbg(0, "toxav_call (1):TOXAV_ERR_CALL_INVALID_BIT_RATE\n");
-					break;
-
-				default:
-					dbg(0, "toxav_call (1):*unknown error*\n");
-					break;
-			}
-		}
+		send_text_message_to_friend(tox, friend_number, "there is already a video session active");
 	}
 	else
 	{
-		dbg(9, "cmd_vcm:006\n");
-		send_text_message_to_friend(tox, friend_number, "sending video failed:toxav==NULL");
+		send_text_message_to_friend(tox, friend_number, "i am trying to send my video ...");
+
+		if (mytox_av != NULL)
+		{
+			dbg(9, "cmd_vcm:002\n");
+			if (global_video_bit_rate == 0)
+			{
+				global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+				dbg(9, "cmd_vcm:003\n");
+			}
+			friend_to_send_video_to = friend_number;
+			dbg(9, "cmd_vcm:004\n");
+
+			TOXAV_ERR_CALL error = 0;
+			toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
+			// toxav_call(mytox_av, friend_number, 0, 40, &error);
+			dbg(9, "cmd_vcm:005\n");
+
+			if (error != TOXAV_ERR_CALL_OK)
+			{
+				switch (error)
+				{
+					case TOXAV_ERR_CALL_MALLOC:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_MALLOC\n");
+						break;
+
+					case TOXAV_ERR_CALL_SYNC:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_SYNC\n");
+						break;
+
+					case TOXAV_ERR_CALL_FRIEND_NOT_FOUND:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_FOUND\n");
+						break;
+
+					case TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED\n");
+						break;
+
+					case TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL\n");
+						break;
+
+					case TOXAV_ERR_CALL_INVALID_BIT_RATE:
+						dbg(0, "toxav_call (1):TOXAV_ERR_CALL_INVALID_BIT_RATE\n");
+						break;
+
+					default:
+						dbg(0, "toxav_call (1):*unknown error*\n");
+						break;
+				}
+			}
+		}
+		else
+		{
+			dbg(9, "cmd_vcm:006\n");
+			send_text_message_to_friend(tox, friend_number, "sending video failed:toxav==NULL");
+		}
 	}
 
 	dbg(9, "cmd_vcm:099\n");
@@ -2724,13 +2739,21 @@ void close_cam()
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
-    dbg(9, "Handling CALL callback friendnum=%d audio_enabled=%d video_enabled=%d\n", (int)friend_number, (int)audio_enabled, (int)video_enabled);
-    ((CallControl *)user_data)->incoming = true;
+	if (global_video_active == 1)
+	{
+		dbg(9, "Call already active\n");
+	}
+	else
+	{
+		dbg(9, "Handling CALL callback friendnum=%d audio_enabled=%d video_enabled=%d\n", (int)friend_number, (int)audio_enabled, (int)video_enabled);
+		((CallControl *)user_data)->incoming = true;
+	}
 }
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
     dbg(9, "Handling CALL STATE callback: %d friend_number=%d\n", state, (int)friend_number);
+
     ((CallControl *)user_data)->state = state;
 
 	if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
@@ -2831,6 +2854,20 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
+	if (global_video_active == 1)
+	{
+		if (friend_to_send_video_to == friend_number)
+		{
+		}
+		else
+		{
+			// wrong friend
+		}
+	}
+	else
+	{
+	}
+
     // CallControl *cc = (CallControl *)user_data;
     // frame *f = (frame *)malloc(sizeof(uint16_t) + sample_count * sizeof(int16_t) * channels);
     // memcpy(f->data, pcm, sample_count * sizeof(int16_t) * channels);
@@ -2848,6 +2885,22 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+
+	if (global_video_active == 1)
+	{
+		if (friend_to_send_video_to == friend_number)
+		{
+		}
+		else
+		{
+			// wrong friend
+		}
+	}
+	else
+	{
+	}
+
+
     // ystride = abs(ystride);
     // ustride = abs(ustride);
     // vstride = abs(vstride);
@@ -2924,12 +2977,93 @@ void *thread_av(void *data)
 		v4l_startread();
 	}
 
-	while (toxav_iterate_thread_stop != 1)
+    while (toxav_iterate_thread_stop != 1)
 	{
-		usleep(toxav_iteration_interval(av) * 1000);
-		// yieldcpu(10);
-	}
-	
+		if (global_video_active == 1)
+		{
+			pthread_mutex_lock(&av_thread_lock);
+
+			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
+
+            // capturing is enabled, capture frames
+            int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
+					av_video_frame.w, av_video_frame.h);
+
+			if (r == 1)
+			{
+				// "0" -> [48]
+				// "9" -> [57]
+				// ":" -> [58]
+
+				char* date_time_str = get_current_time_date_formatted();
+				if (date_time_str)
+				{
+
+					text_on_yuf_frame_xy(10, 10, date_time_str);
+					free(date_time_str);
+				}
+
+
+				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
+
+				// dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
+
+				if (friend_to_send_video_to != -1)
+				{
+					TOXAV_ERR_SEND_FRAME error = 0;
+					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
+						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
+				}
+
+				if (error)
+				{
+					if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+					{
+						//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
+						//			 av_video_frame.h);
+						dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
+					}
+					else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
+					{
+						//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
+						//	i, friend[i].call_state_self, friend[i].call_state_friend);
+						dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+					}
+					else
+					{
+						//debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
+						//			friend[i].number, error);
+						dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
+
+						// *TODO* if these keep piling up --> just disconnect the call!!
+						// *TODO* if these keep piling up --> just disconnect the call!!
+						// *TODO* if these keep piling up --> just disconnect the call!!
+					}
+				}
+
+            }
+			else if (r == -1)
+			{
+                // debug_error("uToxVideo:\tErr... something really bad happened trying to get this frame, I'm just going "
+                //            "to plots now!\n");
+                //video_device_stop();
+                //close_video_device(video_device);
+				dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
+            }
+
+            pthread_mutex_unlock(&av_thread_lock);
+			// yieldcpu(1000); // 1 frame every 1 seconds!!
+            yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~2 frames per second */
+            // yieldcpu(80); /* ~12 frames per second */
+            // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
+		}
+		else
+		{
+			yieldcpu(100);
+		}
+    }
+
+
 	if (video_call_enabled == 1)
 	{
 		// end streaming
@@ -2972,151 +3106,14 @@ void *thread_video_av(void *data)
 }
 
 
-
-void *thread_av_XXXXX(void *data)
-{
-    ToxAV *av = (ToxAV *) data;
-	pthread_t id = pthread_self();
-	pthread_mutex_t av_thread_lock;
-
-	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
-	{
-		dbg(0, "Error creating av_thread_lock\n");
-	}
-	else
-	{
-		dbg(2, "av_thread_lock created successfully\n");
-	}
-
-	dbg(2, "AV Thread #%d: starting\n", (int) id);
-
-	if (video_call_enabled == 1)
-	{
-		global_cam_device_fd = init_cam();
-		dbg(2, "AV Thread #%d: init cam\n", (int) id);
-
-		set_av_video_frame();
-
-		// start streaming
-		v4l_startread();
-	}
-
-    while (true)
-	{
-		if (global_video_active == 1)
-		{
-			pthread_mutex_lock(&av_thread_lock);
-
-			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
-
-            // capturing is enabled, capture frames
-            int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
-					av_video_frame.w, av_video_frame.h);
-
-			if (r == 1)
-			{
-				// "0" -> [48]
-				// "9" -> [57]
-				// ":" -> [58]
-
-				char* date_time_str = get_current_time_date_formatted();
-				if (date_time_str)
-				{
-
-					text_on_yuf_frame_xy(10, 10, date_time_str);
-					free(date_time_str);
-				}
-
-
-				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
-
-				// dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
-
-				TOXAV_ERR_SEND_FRAME error = 0;
-				toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
-						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
-
-				if (error)
-				{
-					if (error == TOXAV_ERR_SEND_FRAME_SYNC)
-					{
-						//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
-						//			 av_video_frame.h);
-						dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
-					}
-					else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
-					{
-						//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
-						//	i, friend[i].call_state_self, friend[i].call_state_friend);
-						dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
-					}
-					else
-					{
-						//debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
-						//			friend[i].number, error);
-						dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
-
-						// *TODO* if these keep piling up --> just disconnect the call!!
-						// *TODO* if these keep piling up --> just disconnect the call!!
-						// *TODO* if these keep piling up --> just disconnect the call!!
-					}
-				}
-
-            }
-			else if (r == -1)
-			{
-                // debug_error("uToxVideo:\tErr... something really bad happened trying to get this frame, I'm just going "
-                //            "to plots now!\n");
-                //video_device_stop();
-                //close_video_device(video_device);
-				dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
-            }
-
-			// call toxav_iterate also when sending frames ----------
-			toxav_iterate(av);
-			// call toxav_iterate also when sending frames ----------
-
-            pthread_mutex_unlock(&av_thread_lock);
-			// yieldcpu(1000); // 1 frame every 1 seconds!!
-			yieldcpu(100);
-            // yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~6 frames per second */
-            // yieldcpu(80); /* ~12 frames per second */
-            // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
-            continue;     /* We're running video, so don't sleep for and extra 100 */
-		}
-		else
-		{
-			pthread_mutex_lock(&av_thread_lock);
-			toxav_iterate(av);
-			// dbg(9, "AV Thread #%d running ...\n", (int) id);
-			pthread_mutex_unlock(&av_thread_lock);
-
-		}
-
-		// dbg(9, "AV Thread #%d:normal sleep\n", (int) id);
-
-        usleep(toxav_iteration_interval(av) * 1000);
-		yieldcpu(1000);
-    }
-
-	if (video_call_enabled == 1)
-	{
-		// end streaming
-		v4l_endread();
-	}
-
-
-	// unreachable code
-	dbg(2, "ToxVideo:Clean thread exit!\n");
-}
-
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
 	dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
+	global_video_active = 0;
+	friend_to_send_video_to = -1;
 }
-
 
 
 // ------------------ Tox AV stuff --------------------
