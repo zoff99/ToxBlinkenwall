@@ -684,7 +684,9 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 
 void bootstrap(Tox *tox)
 {
+
 #if 0
+
     DHT_node nodes[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
@@ -698,7 +700,8 @@ void bootstrap(Tox *tox)
         // {"192.168.0.22",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}} ,
         {"biribiri.org",               33445, "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67", {0}}
     };
-#endif
+
+#else
 
     DHT_node nodes[] =
     {
@@ -749,6 +752,8 @@ void bootstrap(Tox *tox)
 		{"95.215.46.114",33445,"5823FB947FF24CF83DDFAC3F3BAA18F96EA2018B16CC08429CB97FA502F40C23", {0}},
 		{"51.15.54.207",33445,"1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
+
+#endif
 
 
     for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++) {
