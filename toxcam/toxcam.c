@@ -499,7 +499,7 @@ void yieldcpu(uint32_t ms)
 
 void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func, const char *message, void *user_data)
 {
-	dbg(9, "%d:%s:%d:%s:%s", (int)level, file, (int)line, func, message);
+	dbg(9, "%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
 }
 
 
