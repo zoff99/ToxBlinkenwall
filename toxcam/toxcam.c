@@ -3152,7 +3152,7 @@ void *thread_av(void *data)
 
 				if (friend_to_send_video_to != -1)
 				{
-					dbg(9, "AV Thread #%d:send frame to friend\n", (int) id);
+					dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
 
 					TOXAV_ERR_SEND_FRAME error = 0;
 					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
@@ -3238,10 +3238,10 @@ void *thread_video_av(void *data)
 
 	while (toxav_video_thread_stop != 1)
 	{
-		// pthread_mutex_lock(&av_thread_lock);
+		pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
 		// dbg(9, "AV video Thread #%d running ...", (int) id);
-		// pthread_mutex_unlock(&av_thread_lock);
+		pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
 
