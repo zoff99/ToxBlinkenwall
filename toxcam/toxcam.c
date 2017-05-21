@@ -497,6 +497,12 @@ void yieldcpu(uint32_t ms)
 }
 
 
+void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func, const char *message, void *user_data)
+{
+	dbg(9, "%d:%s:%d:%s:%s", (int)level, file, (int)line, func, message);
+}
+
+
 Tox *create_tox()
 {
 	Tox *tox;
@@ -521,6 +527,12 @@ Tox *create_tox()
 	options.local_discovery_enabled = true;
 	options.hole_punching_enabled = true;
 	options.tcp_port = tcp_port;
+
+	// ------------------------------------------------------------
+	// set our own handler for c-toxcore logging messages!!
+	options.log_callback = tox_log_cb__custom;
+	// ------------------------------------------------------------
+
 
     FILE *f = fopen(savedata_filename, "rb");
     if (f)
@@ -766,15 +778,63 @@ void bootstrap(Tox *tox)
 #endif
 
 
-	int res = 0;
+	bool res = 0;
     for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
 	{
-        res =sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
+        res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                        nodes[i].key_hex, sizeof(nodes[i].key_hex)-1, NULL, NULL, NULL);
-        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, NULL);
-		dbg(9, "bootstrap:%s %d res=%d\n", nodes[i].ip, nodes[i].port, res);
-		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, NULL); // use also as TCP relay
-		dbg(9, "add_tcp_relay:%s %d res=%d\n", nodes[i].ip, nodes[i].port, res);
+		dbg(9, "sodium_hex2bin:res=%d\n", res);
+
+		TOX_ERR_BOOTSTRAP error;
+        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
+		if (res != true)
+		{
+			if (error == TOX_ERR_BOOTSTRAP_OK)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_NULL)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+			}
+		}
+		else
+		{
+			dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+		}
+
+		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
+		if (res != true)
+		{
+			if (error == TOX_ERR_BOOTSTRAP_OK)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_NULL)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+			}
+		}
+		else
+		{
+			dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+		}
     }
 }
 
