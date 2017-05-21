@@ -103,8 +103,9 @@ typedef struct DHT_node {
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
-#define DEFAULT_GLOBAL_VID_BITRATE 10 // 100 // kb/sec
-#define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
+#define DEFAULT_GLOBAL_VID_BITRATE 10 // kb/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 10 // kb/sec
+#define DEFAULT_FPS_SLEEP_MS 500 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
@@ -271,7 +272,7 @@ toxcam_av_video_frame av_video_frame;
 vpx_image_t input;
 int global_video_active = 0;
 
-uint32_t global_audio_bit_rate = 0;
+uint32_t global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
 uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
@@ -2822,7 +2823,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 		TOXAV_ERR_ANSWER err;
 		global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-		int audio_bitrate = 10;
+		int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
 		int video_bitrate = global_video_bit_rate;
 		friend_to_send_video_to = friend_number;
 		global_video_active = 1;
@@ -3658,7 +3659,7 @@ int main(int argc, char *argv[])
 	global_video_active = 0;
 
 	// valid audio bitrates: [ bit_rate < 6 || bit_rate > 510 ]
-	global_audio_bit_rate = 0;
+	global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
 	global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 
     logfile = fopen(log_filename, "wb");
