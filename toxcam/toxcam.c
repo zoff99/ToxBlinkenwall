@@ -105,7 +105,7 @@ typedef struct DHT_node {
 #define VIDEO_BUFFER_COUNT 3
 #define DEFAULT_GLOBAL_VID_BITRATE 10 // kb/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 10 // kb/sec
-#define DEFAULT_FPS_SLEEP_MS 500 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
+#define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
