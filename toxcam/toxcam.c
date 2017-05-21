@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 5
-static const char global_version_string[] = "0.99.5";
+#define VERSION_PATCH 6
+static const char global_version_string[] = "0.99.6";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -686,7 +686,9 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 void bootstrap(Tox *tox)
 {
 
-#if 0
+#if 1
+
+	dbg(9, "nodeslist:1\n");
 
 	// these nodes seem to be faster!!
     DHT_node nodes[] =
@@ -706,6 +708,8 @@ void bootstrap(Tox *tox)
     };
 
 #else
+
+	dbg(9, "nodeslist:2\n");
 
 	// more nodes here, but video with TCP sucks
     DHT_node nodes[] =
@@ -761,10 +765,15 @@ void bootstrap(Tox *tox)
 #endif
 
 
-    for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++) {
-        sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
+	int res = 0;
+    for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
+	{
+        res =sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                        nodes[i].key_hex, sizeof(nodes[i].key_hex)-1, NULL, NULL, NULL);
-        tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, NULL);
+        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, NULL);
+		dbg(9, "bootstrap:%s %d res=%d\n", nodes[i].ip, nodes[i].port, res);
+		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, NULL); // use also as TCP relay
+		dbg(9, "add_tcp_relay:%s %d res=%d\n", nodes[i].ip, nodes[i].port, res);
     }
 }
 
