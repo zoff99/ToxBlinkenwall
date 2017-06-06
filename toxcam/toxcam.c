@@ -2572,10 +2572,10 @@ int init_cam()
 		dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
 	}
 
-	format.fmt.pix.width = 1280;
-	format.fmt.pix.height = 720;
-	// format.fmt.pix.width = 640;
-	// format.fmt.pix.height = 480;
+	// format.fmt.pix.width = 1280;
+	// format.fmt.pix.height = 720;
+	format.fmt.pix.width = 640;
+	format.fmt.pix.height = 480;
 
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
