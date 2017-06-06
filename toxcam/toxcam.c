@@ -705,7 +705,7 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 void bootstrap(Tox *tox)
 {
 
-#if 0
+#if 1
 
 	dbg(9, "nodeslist:1\n");
 
@@ -730,7 +730,7 @@ void bootstrap(Tox *tox)
 
 	dbg(9, "nodeslist:2\n");
 
-	// more nodes here, but video with TCP sucks
+	// more nodes here, but maybe some issues
     DHT_node nodes[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
