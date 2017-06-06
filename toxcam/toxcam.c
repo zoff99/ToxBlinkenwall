@@ -519,11 +519,17 @@ Tox *create_tox()
 
 	tox_options_default(&options);
 
+	// ----------------------------------------------
 	// uint16_t tcp_port = 33776; // act as TCP relay
-	uint16_t tcp_port = 0; // act as TCP relay
+	uint16_t tcp_port = 0; // DON'T act as TCP relay
+	// ----------------------------------------------
+
+	// ----------------------------------------------
+	// options.udp_enabled = true; // UDP mode
+	options.udp_enabled = false; // TCP mode
+	// ----------------------------------------------
 
 	options.ipv6_enabled = false;
-	options.udp_enabled = true;
 	options.local_discovery_enabled = true;
 	options.hole_punching_enabled = true;
 	options.tcp_port = tcp_port;
