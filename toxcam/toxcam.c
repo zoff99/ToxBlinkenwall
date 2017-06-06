@@ -2961,12 +2961,14 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        void *user_data)
 {
 	dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
+	dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
 
 	((CallControl *)user_data)->video_bit_rate = video_bit_rate;
  
-   /* Just accept what toxav wants the bitrate to be... */
+	/* Just accept what toxav wants the bitrate to be... */
 	TOXAV_ERR_BIT_RATE_SET error = 0;
-	toxav_bit_rate_set(av, friend_number, 0, video_bit_rate, &error);
+	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate, &error);
+	
 
 	if (error)
 	{
