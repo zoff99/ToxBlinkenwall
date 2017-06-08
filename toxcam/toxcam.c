@@ -705,7 +705,7 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 void bootstrap(Tox *tox)
 {
 
-#if 1
+#if 0
 
 	dbg(9, "nodeslist:1\n");
 
