@@ -31,8 +31,8 @@ machine:
     # ---------------------------------------------------
     # c-toxcore v0.1.9
     CTOXCORE_VERSION_HASH: a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
-    LIBSODIUM_VERSION: "tags/1.0.11"
-    LIBSODIUM_BRANCH: "1.0.11"
+    LIBSODIUM_VERSION: "tags/1.0.12"
+    LIBSODIUM_BRANCH: "1.0.12"
     RASPBERRRY_TOOLS_HASH: d820ab9c21969013b4e56c7e9cba25518afcdd44
     
 dependencies:
