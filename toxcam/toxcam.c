@@ -713,15 +713,9 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 
 void bootstrap(Tox *tox)
 {
-	DHT_node nodes[];
-
-	if (switch_nodelist_2 == 0)
-	{
-
-	dbg(9, "nodeslist:1\n");
 
 	// these nodes seem to be faster!!
-    nodes =
+    DHT_node nodes1[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
         {"51.15.37.145",             33445, "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E", {0}},
@@ -735,14 +729,9 @@ void bootstrap(Tox *tox)
         {"198.46.138.44",               33445, "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67", {0}}
     };
 
-	}
-	else
-	{
-
-	dbg(9, "nodeslist:2\n");
 
 	// more nodes here, but maybe some issues
-    nodes =
+    DHT_node nodes2[] =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
         {"136.243.141.187",             443,  "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
@@ -792,6 +781,28 @@ void bootstrap(Tox *tox)
 		{"51.15.54.207",33445,"1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
 
+
+	int nodes_count;
+	if (switch_nodelist_2 == 0)
+	{
+		dbg(9, "nodeslist:1\n");
+		nodes_count = sizeof(nodes1);
+	}
+	else
+	{
+		dbg(9, "nodeslist:2\n");
+		nodes_count = sizeof(nodes2);
+	}
+
+	DHT_node nodes[nodes_count];
+
+	if (switch_nodelist_2 == 0)
+	{
+		nodes = nodes1;
+	}
+	else
+	{
+		nodes = nodes2;
 	}
 
 	bool res = 0;
