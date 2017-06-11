@@ -104,7 +104,7 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
 #define DEFAULT_GLOBAL_VID_BITRATE 20 // kb/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 5 // kb/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 10 // kb/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -531,10 +531,12 @@ Tox *create_tox()
 	if (switch_tcponly == 0)
 	{
 		options.udp_enabled = true; // UDP mode
+		dbg(0, "setting UDP mode\n");
 	}
 	else
 	{
 		options.udp_enabled = false; // TCP mode
+		dbg(0, "setting TCP mode\n");
 	}
 	// ----------------------------------------------
 
@@ -593,9 +595,9 @@ void replace_bad_char_from_string(char *str, const char replace_with)
 
 	if ((str) && (strlen(str) > 0))
 	{
-		for(i = 0; i < strlen(str) ;i++)
+		for(i = 0; (int)i < (int)strlen(str) ;i++)
 		{
-			for(j = 0; j < strlen(bad_chars); j++)
+			for(j = 0; (int)j < (int)strlen(bad_chars); j++)
 			if (str[i] == bad_chars[j])
 			{
 				str[i] = replace_with;
@@ -711,11 +713,11 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
     return strlen(namebuf);
 }
 
-void bootstap_nodes(Tox *tox, DHT_node nodes[])
+void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes)
 {
 
 	bool res = 0;
-    for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
+    for (size_t i = 0; (int)i < (int)number_of_nodes; i ++)
 	{
         res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                        nodes[i].key_hex, sizeof(nodes[i].key_hex)-1, NULL, NULL, NULL);
@@ -846,16 +848,15 @@ void bootstrap(Tox *tox)
     };
 
 
-	int nodes_count;
 	if (switch_nodelist_2 == 0)
 	{
 		dbg(9, "nodeslist:1\n");
-		bootstap_nodes(tox, nodes1);
+		bootstap_nodes(tox, &nodes1, (int)(sizeof(nodes1)/sizeof(DHT_node)));
 	}
 	else
 	{
 		dbg(9, "nodeslist:2\n");
-		bootstap_nodes(tox, nodes2);
+		bootstap_nodes(tox, &nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)));
 	}
 }
 
@@ -3174,7 +3175,7 @@ void *thread_av(void *data)
 
 				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
 
-				if (friend_to_send_video_to != -1)
+				if ((int)friend_to_send_video_to != (int)-1)
 				{
 					dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
 
@@ -3571,7 +3572,7 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text)
 
 	int looper;
 
-	for(looper=0;looper < strlen(text);looper++)
+	for(looper=0;(int)looper < (int)strlen(text);looper++)
 	{
 		uint8_t c = text[looper];
 		if ((c > 0) && (c < 127))
