@@ -713,13 +713,15 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 
 void bootstrap(Tox *tox)
 {
+	DHT_node nodes[];
+
 	if (switch_nodelist_2 == 0)
 	{
 
 	dbg(9, "nodeslist:1\n");
 
 	// these nodes seem to be faster!!
-    DHT_node nodes[] =
+    nodes =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
         {"51.15.37.145",             33445, "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E", {0}},
@@ -740,7 +742,7 @@ void bootstrap(Tox *tox)
 	dbg(9, "nodeslist:2\n");
 
 	// more nodes here, but maybe some issues
-    DHT_node nodes[] =
+    nodes =
     {
         {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
         {"136.243.141.187",             443,  "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
