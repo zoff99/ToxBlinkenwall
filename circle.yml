@@ -38,8 +38,8 @@ machine:
 dependencies:
   pre:
     # -----------------------------------
-    - sudo /etc/init.d/mysql stop
-    - sudo /etc/init.d/postgresql stop
+    - sudo /etc/init.d/mysql stop ; exit 0
+    - sudo /etc/init.d/postgresql stop ; exit 0
     # -----------------------------------
     - sudo apt-get update
     - sudo apt-get install cmake
