@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 6
-static const char global_version_string[] = "0.99.6";
+#define VERSION_PATCH 7
+static const char global_version_string[] = "0.99.7";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -103,8 +103,8 @@ typedef struct DHT_node {
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
-#define DEFAULT_GLOBAL_VID_BITRATE 10 // kb/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 10 // kb/sec
+#define DEFAULT_GLOBAL_VID_BITRATE 20 // kb/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 5 // kb/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -271,6 +271,9 @@ struct v4l2_format dest_format;
 toxcam_av_video_frame av_video_frame;
 vpx_image_t input;
 int global_video_active = 0;
+int switch_nodelist_2 = 0;
+int switch_tcponly = 0;
+
 
 uint32_t global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
 uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
@@ -525,8 +528,14 @@ Tox *create_tox()
 	// ----------------------------------------------
 
 	// ----------------------------------------------
-	options.udp_enabled = true; // UDP mode
-	// options.udp_enabled = false; // TCP mode
+	if (switch_tcponly == 0)
+	{
+		options.udp_enabled = true; // UDP mode
+	}
+	else
+	{
+		options.udp_enabled = false; // TCP mode
+	}
 	// ----------------------------------------------
 
 	options.ipv6_enabled = false;
@@ -704,8 +713,8 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 
 void bootstrap(Tox *tox)
 {
-
-#if 0
+	if (switch_nodelist_2 == 0)
+	{
 
 	dbg(9, "nodeslist:1\n");
 
@@ -721,12 +730,12 @@ void bootstrap(Tox *tox)
         {"185.14.30.213",               443,  "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}},
         {"136.243.141.187",             443,  "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
         {"128.199.199.197",            33445, "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09", {0}},
-        // {"192.168.0.20",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}} ,
-        // {"192.168.0.22",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}} ,
         {"198.46.138.44",               33445, "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67", {0}}
     };
 
-#else
+	}
+	else
+	{
 
 	dbg(9, "nodeslist:2\n");
 
@@ -781,8 +790,7 @@ void bootstrap(Tox *tox)
 		{"51.15.54.207",33445,"1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
 
-#endif
-
+	}
 
 	bool res = 0;
     for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
@@ -3742,7 +3750,7 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:";
+   const char     *short_opt = "hvd:t2";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
@@ -3760,6 +3768,12 @@ int main(int argc, char *argv[])
         break;
       case 'a':
         aflag = 1;
+        break;
+      case '2':
+        switch_nodelist_2 = 1;
+        break;
+      case 't':
+        switch_tcponly = 1;
         break;
       case 'd':
         snprintf(v4l2_device, 399, "%s", optarg);
@@ -3779,6 +3793,8 @@ int main(int argc, char *argv[])
       case 'h':
          printf("Usage: %s [OPTIONS]\n", argv[0]);
          printf("  -d, --videodevice devicefile         file\n");
+         printf("  -t,                                  tcp only mode\n");
+         printf("  -2,                                  use alternate bootnode list\n");
          printf("  -v, --version                        show version\n");
          printf("  -h, --help                           print this help and exit\n");
          printf("\n");
@@ -3824,21 +3840,7 @@ int main(int argc, char *argv[])
     Friends.max_idx = 0;
 
 
-
-
-    // DHT_node nodes_tmp[] =
-    //{
-    //    {"192.168.0.20",   33447, "578E5F044C98290D0368F425E0E957056B30FB995F53DEB21C3E23D7A3B4E679", {0}}
-    //};
-    // sodium_hex2bin(nodes_tmp[0].key_bin, sizeof(nodes_tmp[0].key_bin),
-    //                nodes_tmp[0].key_hex, sizeof(nodes_tmp[0].key_hex)-1, NULL, NULL, NULL);
-
-
     bootstrap(tox);
-    // tox_add_tcp_relay(tox, "192.168.0.20", 33448, nodes_tmp[0].key_bin, NULL); // use TCP relay port here
-    // tox_add_tcp_relay(tox, "192.168.0.22", 33448, nodes_tmp[0].key_bin, NULL); // use TCP relay port here
-
-
 
 
     print_tox_id(tox);
