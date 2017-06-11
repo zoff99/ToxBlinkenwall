@@ -711,6 +711,70 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
     return strlen(namebuf);
 }
 
+void bootstap_nodes(Tox *tox, DHT_node nodes[])
+{
+
+	bool res = 0;
+    for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
+	{
+        res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
+                       nodes[i].key_hex, sizeof(nodes[i].key_hex)-1, NULL, NULL, NULL);
+		dbg(9, "sodium_hex2bin:res=%d\n", res);
+
+		TOX_ERR_BOOTSTRAP error;
+        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
+		if (res != true)
+		{
+			if (error == TOX_ERR_BOOTSTRAP_OK)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_NULL)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
+			{
+				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+			}
+		}
+		else
+		{
+			dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+		}
+
+		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
+		if (res != true)
+		{
+			if (error == TOX_ERR_BOOTSTRAP_OK)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_NULL)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+			}
+			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
+			{
+				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+			}
+		}
+		else
+		{
+			dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+		}
+    }
+}
+
+
 void bootstrap(Tox *tox)
 {
 
@@ -786,84 +850,15 @@ void bootstrap(Tox *tox)
 	if (switch_nodelist_2 == 0)
 	{
 		dbg(9, "nodeslist:1\n");
-		nodes_count = sizeof(nodes1);
+		bootstap_nodes(tox, nodes1);
 	}
 	else
 	{
 		dbg(9, "nodeslist:2\n");
-		nodes_count = sizeof(nodes2);
+		bootstap_nodes(tox, nodes2);
 	}
-
-	DHT_node nodes[nodes_count];
-
-	if (switch_nodelist_2 == 0)
-	{
-		nodes = nodes1;
-	}
-	else
-	{
-		nodes = nodes2;
-	}
-
-	bool res = 0;
-    for (size_t i = 0; i < sizeof(nodes)/sizeof(DHT_node); i ++)
-	{
-        res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
-                       nodes[i].key_hex, sizeof(nodes[i].key_hex)-1, NULL, NULL, NULL);
-		dbg(9, "sodium_hex2bin:res=%d\n", res);
-
-		TOX_ERR_BOOTSTRAP error;
-        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
-		if (res != true)
-		{
-			if (error == TOX_ERR_BOOTSTRAP_OK)
-			{
-				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_NULL)
-			{
-				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
-			{
-				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
-			{
-				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
-			}
-		}
-		else
-		{
-			dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
-		}
-
-		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
-		if (res != true)
-		{
-			if (error == TOX_ERR_BOOTSTRAP_OK)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_NULL)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
-			}
-		}
-		else
-		{
-			dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
-		}
-    }
 }
+
 
 // fill string with toxid in upper case hex.
 // size of toxid_str needs to be: [TOX_ADDRESS_SIZE*2 + 1] !!
