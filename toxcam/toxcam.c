@@ -713,7 +713,7 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
     return strlen(namebuf);
 }
 
-void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes)
+void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_tcp_relay)
 {
 
 	bool res = 0;
@@ -749,29 +749,36 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes)
 			dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
 		}
 
-		res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
-		if (res != true)
+		if (add_as_tcp_relay == 1)
 		{
-			if (error == TOX_ERR_BOOTSTRAP_OK)
+			res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
+			if (res != true)
 			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+				if (error == TOX_ERR_BOOTSTRAP_OK)
+				{
+					dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+				}
+				else if (error == TOX_ERR_BOOTSTRAP_NULL)
+				{
+					dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+				}
+				else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
+				{
+					dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+				}
+				else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
+				{
+					dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+				}
 			}
-			else if (error == TOX_ERR_BOOTSTRAP_NULL)
+			else
 			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-			}
-			else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
-			{
-				dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+				dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
 			}
 		}
 		else
 		{
-			dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+			dbg(2, "Not adding any TCP relays\n");
 		}
     }
 }
@@ -847,16 +854,27 @@ void bootstrap(Tox *tox)
 		{"51.15.54.207",33445,"1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
 
+	// only nodes.tox.chat
+    DHT_node nodes3[] =
+    {
+        {"51.15.37.145",             33445, "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E", {0}}
+    };
+
 
 	if (switch_nodelist_2 == 0)
 	{
 		dbg(9, "nodeslist:1\n");
-		bootstap_nodes(tox, &nodes1, (int)(sizeof(nodes1)/sizeof(DHT_node)));
+		bootstap_nodes(tox, &nodes1, (int)(sizeof(nodes1)/sizeof(DHT_node)), 1);
 	}
-	else
+	else if (switch_nodelist_2 == 2)
+	{
+		dbg(9, "nodeslist:3\n");
+		bootstap_nodes(tox, &nodes3, (int)(sizeof(nodes3)/sizeof(DHT_node)), 0);
+	}
+	else // (switch_nodelist_2 == 1)
 	{
 		dbg(9, "nodeslist:2\n");
-		bootstap_nodes(tox, &nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)));
+		bootstap_nodes(tox, &nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)), 1);
 	}
 }
 
@@ -2475,11 +2493,26 @@ static int xioctl(int fh, unsigned long request, void *arg)
 
 int init_cam()
 {
+	int video_dev_open_error = 0;
 	int fd;
 
 	if ((fd = open(v4l2_device, O_RDWR)) < 0)
 	{
-		dbg(0, "error opening video device\n");
+		dbg(0, "error opening video device[1]\n");
+		video_dev_open_error = 1;
+	}
+
+	if (video_dev_open_error == 1)
+	{
+		if ((fd = open(v4l2_device, O_RDWR)) < 0)
+		{
+			dbg(0, "error opening video device[2]\n");
+			video_dev_open_error = 1;
+		}
+		else
+		{
+			video_dev_open_error = 0;
+		}
 	}
 
 	struct v4l2_capability cap;
@@ -3759,7 +3792,7 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:t2";
+   const char     *short_opt = "hvd:t23";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
@@ -3780,6 +3813,9 @@ int main(int argc, char *argv[])
         break;
       case '2':
         switch_nodelist_2 = 1;
+        break;
+      case '3':
+        switch_nodelist_2 = 2;
         break;
       case 't':
         switch_tcponly = 1;
@@ -3804,6 +3840,7 @@ int main(int argc, char *argv[])
          printf("  -d, --videodevice devicefile         file\n");
          printf("  -t,                                  tcp only mode\n");
          printf("  -2,                                  use alternate bootnode list\n");
+         printf("  -3,                                  use only nodes.tox.chat as bootnode\n");
          printf("  -v, --version                        show version\n");
          printf("  -h, --help                           print this help and exit\n");
          printf("\n");
