@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 7
-static const char global_version_string[] = "0.99.7";
+#define VERSION_PATCH 8
+static const char global_version_string[] = "0.99.8";
 // ----------- version -----------
 // ----------- version -----------
 
