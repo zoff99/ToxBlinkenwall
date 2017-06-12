@@ -271,6 +271,7 @@ struct v4l2_format dest_format;
 toxcam_av_video_frame av_video_frame;
 vpx_image_t input;
 int global_video_active = 0;
+int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
 int switch_tcponly = 0;
 
@@ -2943,6 +2944,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 		int video_bitrate = global_video_bit_rate;
 		friend_to_send_video_to = friend_number;
 		global_video_active = 1;
+		global_send_first_frame = 2;
 
 		dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d\n", (int)friend_number, (int)audio_bitrate, (int)video_bitrate);
 
@@ -3002,11 +3004,13 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		dbg(9, "t_toxav_call_state_cb:004\n");
 		global_video_active = 1;
+		global_send_first_frame = 2;
 	}
 	else
 	{
 		dbg(9, "t_toxav_call_state_cb:005\n");
 		global_video_active = 0;
+		global_send_first_frame = 0;
 	}
 
 	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d\n", friend_number, state, send_audio, send_video);
@@ -3195,6 +3199,13 @@ void *thread_av(void *data)
 
 			if (r == 1)
 			{
+
+				if (global_send_first_frame > 0)
+				{
+					black_yuf_frame_xy();
+					global_send_first_frame--;
+				}
+
 				// "0" -> [48]
 				// "9" -> [57]
 				// ":" -> [58]
@@ -3315,6 +3326,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
 	global_video_active = 0;
+	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
 }
 
@@ -3521,6 +3533,14 @@ void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_
 		}
 	}
 
+}
+
+void black_yuf_frame_xy()
+{
+	const uint8_t r = 0;
+	const uint8_t g = 0;
+	const uint8_t b = 0;
+	left_top_bar_into_yuv_frame(0, 0, av_video_frame.w, av_video_frame.h, r, g, b);
 }
 
 void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state)
@@ -3777,6 +3797,7 @@ int main(int argc, char *argv[])
 {
 	global_want_restart = 0;
 	global_video_active = 0;
+	global_send_first_frame = 0;
 
 	// valid audio bitrates: [ bit_rate < 6 || bit_rate > 510 ]
 	global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
