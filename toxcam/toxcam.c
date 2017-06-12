@@ -104,7 +104,7 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
 #define DEFAULT_GLOBAL_VID_BITRATE 8000 // kbit/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 10 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -3019,12 +3019,12 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 	dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
 	dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
 
-	((CallControl *)user_data)->video_bit_rate = video_bit_rate;
- 
+#if 0
+	((CallControl *)user_data)->video_bit_rate = video_bit_rate; 
 	/* Just accept what toxav wants the bitrate to be... */
 	TOXAV_ERR_BIT_RATE_SET error = 0;
 	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate, &error);
-	
+#endif
 
 	if (error)
 	{
@@ -3032,6 +3032,7 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 	}
 	else
 	{
+#if 0
 		// global_audio_bit_rate = audio_bit_rate;
 		if (video_bit_rate == -1)
 		{
@@ -3041,6 +3042,7 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 			global_video_bit_rate = video_bit_rate;
 		}
 		dbg(0, "ToxAV:Video bitrate changed to %u\n", video_bit_rate);
+#endif
 	}
 
     dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
