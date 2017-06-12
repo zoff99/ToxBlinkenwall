@@ -241,6 +241,7 @@ void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int b
 void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value);
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text);
 void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state);
+void black_yuf_frame_xy();
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v);
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b);
 
@@ -3023,10 +3024,11 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 	dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
 	dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
 
+	TOXAV_ERR_BIT_RATE_SET error = 0;
+
 #if 0
 	((CallControl *)user_data)->video_bit_rate = video_bit_rate; 
 	/* Just accept what toxav wants the bitrate to be... */
-	TOXAV_ERR_BIT_RATE_SET error = 0;
 	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate, &error);
 #endif
 
@@ -3221,7 +3223,7 @@ void *thread_av(void *data)
 
 				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
 
-				if ((int)friend_to_send_video_to != (int)-1)
+				if (friend_to_send_video_to != -1)
 				{
 					dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
 
