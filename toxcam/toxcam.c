@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 8
-static const char global_version_string[] = "0.99.8";
+#define VERSION_PATCH 9
+static const char global_version_string[] = "0.99.9";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -103,7 +103,7 @@ typedef struct DHT_node {
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
-#define DEFAULT_GLOBAL_VID_BITRATE 12000 // kbit/sec
+uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
@@ -3817,13 +3817,13 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:t23";
+   const char     *short_opt = "hvd:t23b:";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
       {"version",       no_argument,       NULL, 'v'},
       {"videodevice",   required_argument, NULL, 'd'},
-      {NULL,            0,                 NULL, 0  }
+      {NULL,            0,                 NULL,  0 }
    };
 
   while((opt = getopt_long(argc, argv, short_opt, long_opt, NULL)) != -1)
@@ -3847,8 +3847,13 @@ int main(int argc, char *argv[])
         break;
       case 'd':
         snprintf(v4l2_device, 399, "%s", optarg);
-        printf("Using Videodevice: %s\n", v4l2_device);
+        // printf("Using Videodevice: %s\n", v4l2_device);
         dbg(3, "Using Videodevice: %s\n", v4l2_device);
+        break;
+      case 'b':
+        DEFAULT_GLOBAL_VID_BITRATE = (uint32_t)atoi(optarg);
+        dbg(3, "Using Videobitrate: %d\n", (int)DEFAULT_GLOBAL_VID_BITRATE);
+        global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         break;
       case 'v':
          printf("ToxCam version: %s\n", global_version_string);
@@ -3863,6 +3868,7 @@ int main(int argc, char *argv[])
       case 'h':
          printf("Usage: %s [OPTIONS]\n", argv[0]);
          printf("  -d, --videodevice devicefile         file\n");
+         printf("  -b bitrate                           video bitrate in kbit/s\n");
          printf("  -t,                                  tcp only mode\n");
          printf("  -2,                                  use alternate bootnode list\n");
          printf("  -3,                                  use only nodes.tox.chat as bootnode\n");
