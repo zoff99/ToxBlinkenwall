@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 
  * Zoff <zoff@zoff.cc>
  * in 2017
@@ -277,8 +277,8 @@ int switch_nodelist_2 = 0;
 int switch_tcponly = 0;
 
 
-uint32_t global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
-uint32_t global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+uint32_t global_audio_bit_rate;
+uint32_t global_video_bit_rate;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
