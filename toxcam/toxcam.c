@@ -1271,24 +1271,24 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
 
 void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 {
-    dbg(9, "friendlist_onFriendAdded:001\n");
+    // dbg(9, "friendlist_onFriendAdded:001\n");
 
     if (Friends.max_idx == 0)
     {
-		dbg(9, "friendlist_onFriendAdded:001.a malloc 1 friend struct, max_id=%d, num=%d\n", (int)Friends.max_idx, (int)num);
+		// dbg(9, "friendlist_onFriendAdded:001.a malloc 1 friend struct, max_id=%d, num=%d\n", (int)Friends.max_idx, (int)num);
         Friends.list = malloc(sizeof(ToxicFriend));
     }
     else
     {
-		dbg(9, "friendlist_onFriendAdded:001.b realloc %d friend struct, max_id=%d, num=%d\n", (int)(Friends.max_idx + 1), (int)Friends.max_idx, (int)num);
+		// dbg(9, "friendlist_onFriendAdded:001.b realloc %d friend struct, max_id=%d, num=%d\n", (int)(Friends.max_idx + 1), (int)Friends.max_idx, (int)num);
         Friends.list = realloc(Friends.list, ((Friends.max_idx + 1) * sizeof(ToxicFriend)));
     }
 
-	dbg(9, "friendlist_onFriendAdded:001.c set friend to all 0 values\n");
+	// dbg(9, "friendlist_onFriendAdded:001.c set friend to all 0 values\n");
     memset(&Friends.list[Friends.max_idx], 0, sizeof(ToxicFriend)); // fill friend with "0" bytes
 
 
-	dbg(2, "friendlist_onFriendAdded:003:%d\n", (int)Friends.max_idx);
+	// dbg(2, "friendlist_onFriendAdded:003:%d\n", (int)Friends.max_idx);
 	Friends.list[Friends.max_idx].num = num;
 	Friends.list[Friends.max_idx].active = true;
 	Friends.list[Friends.max_idx].connection_status = TOX_CONNECTION_NONE;
@@ -1306,7 +1306,7 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 	}
 
 	bin_id_to_string(Friends.list[Friends.max_idx].pub_key, (size_t) TOX_ADDRESS_SIZE, Friends.list[Friends.max_idx].pubkey_string, (size_t) (TOX_ADDRESS_SIZE * 2 + 1));
-	dbg(2, "friend pubkey=%s\n", Friends.list[Friends.max_idx].pubkey_string);
+	// dbg(2, "friend pubkey=%s\n", Friends.list[Friends.max_idx].pubkey_string);
 
 	TOX_ERR_FRIEND_GET_LAST_ONLINE loerr;
 	time_t t = tox_friend_get_last_online(m, num, &loerr);
