@@ -2505,6 +2505,8 @@ int init_cam()
 
 	if (video_dev_open_error == 1)
 	{
+		usleep(20 * 1000); // sleep 20 seconds
+
 		if ((fd = open(v4l2_device, O_RDWR)) < 0)
 		{
 			dbg(0, "error opening video device[2]\n");
@@ -3991,7 +3993,7 @@ int main(int argc, char *argv[])
 	
 	// start toxav thread ------------------------------
 	toxav_iterate_thread_stop = 0;
-    	if (pthread_create(&(tid[0]), NULL, thread_av, (void *)mytox_av) != 0)
+    if (pthread_create(&(tid[0]), NULL, thread_av, (void *)mytox_av) != 0)
 	{
         dbg(0, "AV iterate Thread create failed");
 	}
@@ -4001,7 +4003,7 @@ int main(int argc, char *argv[])
 	}
 
 	toxav_video_thread_stop = 0;
-    	if (pthread_create(&(tid[1]), NULL, thread_video_av, (void *)mytox_av) != 0)
+    if (pthread_create(&(tid[1]), NULL, thread_video_av, (void *)mytox_av) != 0)
 	{
         dbg(0, "AV video Thread create failed");
 	}
