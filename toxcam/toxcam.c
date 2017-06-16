@@ -73,8 +73,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 9
-static const char global_version_string[] = "0.99.9";
+#define VERSION_PATCH 10
+static const char global_version_string[] = "0.99.10";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -105,6 +105,8 @@ typedef struct DHT_node {
 #define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -1728,12 +1730,8 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 
 		if (mytox_av != NULL)
 		{
-			dbg(9, "cmd_vcm:002\n");
-			if (global_video_bit_rate == 0)
-			{
-				global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-				dbg(9, "cmd_vcm:003\n");
-			}
+			dbg(9, "cmd_vcm:003\n");
+			global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 			friend_to_send_video_to = friend_number;
 			dbg(9, "cmd_vcm:004\n");
 
@@ -3033,11 +3031,15 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 
 	TOXAV_ERR_BIT_RATE_SET error = 0;
 
-#if 0
-	((CallControl *)user_data)->video_bit_rate = video_bit_rate; 
-	/* Just accept what toxav wants the bitrate to be... */
-	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate, &error);
-#endif
+
+	uint32_t video_bit_rate_ = video_bit_rate;
+
+	if (video_bit_rate < DEFAULT_GLOBAL_MIN_VID_BITRATE)
+	{
+		video_bit_rate_ = DEFAULT_GLOBAL_MIN_VID_BITRATE;
+	}
+
+	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate_, &error);
 
 	if (error)
 	{
@@ -3045,22 +3047,11 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 	}
 	else
 	{
-#if 0
-		// global_audio_bit_rate = audio_bit_rate;
-		if (video_bit_rate == -1)
-		{
-		}
-		else
-		{
-			global_video_bit_rate = video_bit_rate;
-		}
-		dbg(0, "ToxAV:Video bitrate changed to %u\n", video_bit_rate);
-#endif
+		global_video_bit_rate = video_bit_rate_;
 	}
 
     dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
     dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
-
 }
 
 
