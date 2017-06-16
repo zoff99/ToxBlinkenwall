@@ -734,7 +734,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 		{
 			if (error == TOX_ERR_BOOTSTRAP_OK)
 			{
-				dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+				// dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
 			}
 			else if (error == TOX_ERR_BOOTSTRAP_NULL)
 			{
@@ -751,7 +751,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 		}
 		else
 		{
-			dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+			// dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
 		}
 
 		if (add_as_tcp_relay == 1)
@@ -761,7 +761,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 			{
 				if (error == TOX_ERR_BOOTSTRAP_OK)
 				{
-					dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+					// dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
 				}
 				else if (error == TOX_ERR_BOOTSTRAP_NULL)
 				{
@@ -778,7 +778,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 			}
 			else
 			{
-				dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+				// dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
 			}
 		}
 		else
