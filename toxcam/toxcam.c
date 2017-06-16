@@ -3191,7 +3191,7 @@ void *thread_av(void *data)
 		{
 			pthread_mutex_lock(&av_thread_lock);
 
-			dbg(9, "AV Thread #%d:get frame\n", (int) id);
+			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
 
             // capturing is enabled, capture frames
             int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
@@ -3223,7 +3223,7 @@ void *thread_av(void *data)
 
 				if (friend_to_send_video_to != -1)
 				{
-					dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
+					// dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
 
 					TOXAV_ERR_SEND_FRAME error = 0;
 					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
