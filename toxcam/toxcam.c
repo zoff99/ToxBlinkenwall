@@ -2505,7 +2505,7 @@ int init_cam()
 
 	if (video_dev_open_error == 1)
 	{
-		usleep(20 * 1000); // sleep 20 seconds
+		sleep(20); // sleep 20 seconds
 
 		if ((fd = open(v4l2_device, O_RDWR)) < 0)
 		{
