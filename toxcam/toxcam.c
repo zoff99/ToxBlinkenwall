@@ -3041,7 +3041,7 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 
 	toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate_, &error);
 
-	if (error)
+	if (error != 0)
 	{
 		dbg(0, "ToxAV:Setting new Video bitrate has failed with error #%u\n", error);
 	}
