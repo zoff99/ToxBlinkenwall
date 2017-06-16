@@ -274,6 +274,7 @@ vpx_image_t input;
 int global_video_active = 0;
 int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
+int video_high = 0;
 int switch_tcponly = 0;
 
 
@@ -2624,10 +2625,16 @@ int init_cam()
 		dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
 	}
 
-	// format.fmt.pix.width = 1280;
-	// format.fmt.pix.height = 720;
-	format.fmt.pix.width = 640;
-	format.fmt.pix.height = 480;
+	if (video_high == 1)
+	{
+		format.fmt.pix.width = 1280;
+		format.fmt.pix.height = 720;
+	}
+	else
+	{
+		format.fmt.pix.width = 640;
+		format.fmt.pix.height = 480;
+	}
 
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
@@ -3805,6 +3812,8 @@ int main(int argc, char *argv[])
 	global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
 	global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
 
+	video_high = 0;
+
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
 
@@ -3817,7 +3826,7 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:t23b:";
+   const char     *short_opt = "hvd:t23b:f";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
@@ -3845,6 +3854,9 @@ int main(int argc, char *argv[])
       case 't':
         switch_tcponly = 1;
         break;
+      case 'f':
+        video_high = 1;
+        break;
       case 'd':
         snprintf(v4l2_device, 399, "%s", optarg);
         // printf("Using Videodevice: %s\n", v4l2_device);
@@ -3869,6 +3881,7 @@ int main(int argc, char *argv[])
          printf("Usage: %s [OPTIONS]\n", argv[0]);
          printf("  -d, --videodevice devicefile         file\n");
          printf("  -b bitrate                           video bitrate in kbit/s\n");
+         printf("  -f                                   use 720p video mode\n");
          printf("  -t,                                  tcp only mode\n");
          printf("  -2,                                  use alternate bootnode list\n");
          printf("  -3,                                  use only nodes.tox.chat as bootnode\n");
