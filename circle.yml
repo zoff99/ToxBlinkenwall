@@ -124,11 +124,11 @@ dependencies:
     - . ~/pp;cd $_s_/yasm/;autoreconf -fi
     - . ~/pp;~/do_compile.sh "yasm" --prefix="$_SYSROOT_"/usr --disable-shared --disable-soname-versions --with-sysroot="$_SYSROOT_" --host="$_HOST_" --target="$_TARGET_"
 
-    - . ~/pp;cd $_s_;git clone --depth=1 --branch=v1.6.0 https://github.com/webmproject/libvpx.git
+    - . ~/pp;cd $_s_;git clone --depth=1 --branch=v1.6.1 https://github.com/webmproject/libvpx.git
     - . ~/pp;export CROSS="arm-linux-gnueabihf-" ; ~/do_compile.sh "libvpx" --prefix="$_SYSROOT_"/usr --disable-examples --disable-unit-tests --target=generic-gnu --extra-cflags="--sysroot=$_SYSROOT_"
     - . ~/pp;export CROSS="arm-linux-gnueabihf-" ; ~/do_package.sh "libvpx" --prefix="$INSTALL_DEST"/usr --disable-examples --disable-unit-tests --target=generic-gnu --extra-cflags="--sysroot=$_SYSROOT_"
 
-    - . ~/pp;cd $_s_;git clone --depth=1 --branch=v1.1.3 https://github.com/xiph/opus.git
+    - . ~/pp;cd $_s_;git clone --depth=1 --branch=v1.1.5 https://github.com/xiph/opus.git
     - . ~/pp;cd $_s_/opus/;autoreconf -fi
     - . ~/pp;~/do_compile.sh "opus" --prefix="$_SYSROOT_"/usr --disable-shared --disable-soname-versions --target="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --host="$_TOOL_PREFIX"
     - . ~/pp;~/do_package.sh "opus" --prefix="$INSTALL_DEST"/usr --disable-shared --disable-soname-versions --target="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --host="$_TOOL_PREFIX"
