@@ -14,3 +14,18 @@ Development Snapshot Version (Raspberry PI)
 =
 the latest Development Snapshot can be downloaded from CircleCI, [here](https://circleci.com/api/v1/project/zoff99/ToxCam/latest/artifacts/0/$CIRCLE_ARTIFACTS/RASPI/toxcam_static?filter=successful&branch=master)
 
+install on PI
+=
+
+```
+# as user pi:
+git clone https://github.com/zoff99/ToxCam
+cd ToxCam/toxcam
+chmod u+rwx loop_services.sh update_from_ci.sh scripts/*.sh
+./update_from_ci.sh
+```
+
+```
+sudo sed -i -e "s#exit 0#su - pi bash -c '/home/pi/ToxCam/toxcam/loop_services.sh' > /dev/null 2>/dev/null &\nexit 0#" /etc/rc.local
+```
+
