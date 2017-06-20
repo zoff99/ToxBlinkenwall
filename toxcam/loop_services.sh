@@ -1,4 +1,4 @@
-﻿#! /bin/bash
+#! /bin/bash
 
 #####################################################
 # pick first available video device
