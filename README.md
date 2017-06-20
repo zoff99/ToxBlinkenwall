@@ -32,7 +32,7 @@ then reboot
 now ToxCam should be active already. get the ToxID
 
 ```
-cat toxcam.log|grep MyToxID|cut -d: -f2
+cat /home/pi/ToxCam/toxcam/toxcam.log|grep MyToxID|cut -d: -f3
 ```
 
 note down the ToxID of your ToxCam and add it as friend from another ToxClient.
