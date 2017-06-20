@@ -1,4 +1,4 @@
-﻿#! /bin/bash
+#! /bin/bash
 
 #####################################################
 # update toxcam binary from Circle CI (master branch)
