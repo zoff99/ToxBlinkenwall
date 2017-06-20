@@ -24,8 +24,16 @@ cd ToxCam/toxcam
 chmod u+rwx loop_services.sh update_from_ci.sh scripts/*.sh
 ./update_from_ci.sh
 ```
-
 ```
 sudo sed -i -e "s#exit 0#su - pi bash -c '/home/pi/ToxCam/toxcam/loop_services.sh' > /dev/null 2>/dev/null \&\nexit 0#" /etc/rc.local
 ```
+
+then reboot
+now ToxCam should be active already. get the ToxID
+
+```
+cat toxcam.log|grep MyToxID|cut -d: -f2
+```
+
+note down the ToxID of your ToxCam and add it as friend from another ToxClient.
 
