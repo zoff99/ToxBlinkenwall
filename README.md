@@ -26,6 +26,6 @@ chmod u+rwx loop_services.sh update_from_ci.sh scripts/*.sh
 ```
 
 ```
-sudo sed -i -e "s#exit 0#su - pi bash -c '/home/pi/ToxCam/toxcam/loop_services.sh' > /dev/null 2>/dev/null &\nexit 0#" /etc/rc.local
+sudo sed -i -e "s#exit 0#su - pi bash -c '/home/pi/ToxCam/toxcam/loop_services.sh' > /dev/null 2>/dev/null \&\nexit 0#" /etc/rc.local
 ```
 
