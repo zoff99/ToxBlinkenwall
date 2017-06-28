@@ -1,5 +1,8 @@
 # ToxCam
 
+You can take a PC or RaspberryPi with a camera on it and watch the
+camera stream from anywhere without central server
+
 Build Status
 =
 **CircleCI:** [![CircleCI](https://circleci.com/gh/zoff99/ToxCam/tree/master.png?style=badge)](https://circleci.com/gh/zoff99/ToxCam)
