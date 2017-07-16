@@ -156,49 +156,19 @@ dependencies:
     - . ~/pp;cd $_s_/c-toxcore/;autoreconf -fi
     - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --enable-logging --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
     - . ~/pp;~/do_package.sh "c-toxcore" --prefix="$INSTALL_DEST"/usr --enable-logging --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt
-
-    # --- toxbootstrapd for RASPI ----
-    - . ~/pp;~/do_compile.sh "c-toxcore" --prefix="$_SYSROOT_"/usr --enable-logging --enable-daemon --disable-soname-versions --host="$_TOOL_PREFIX" --with-sysroot="$_SYSROOT_" --disable-testing --disable-rt ; exit 0 # this will fail
-    - . ~/pp; cd /home/ubuntu/build/build ; export V=3 ; /bin/bash ../libtool --tag=CC --mode=link $CC -std=gnu99 -I/home/ubuntu/src//c-toxcore/other/bootstrap_daemon -I"$_SYSROOT_"/usr/include -g -O2 -o tox-bootstrapd ../other/bootstrap_daemon/src/tox_bootstrapd-command_line_arguments.o ../other/bootstrap_daemon/src/tox_bootstrapd-config.o ../other/bootstrap_daemon/src/tox_bootstrapd-log.o ../other/bootstrap_daemon/src/tox_bootstrapd-tox-bootstrapd.o ../other/tox_bootstrapd-bootstrap_node_packets.o libtoxcore.la -L"$_SYSROOT_"/usr/lib -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf -lconfig -lsodium ; exit 0
-    - ls -al /home/ubuntu/build/build/.libs/tox-bootstrapd ; exit 0
-    - file /home/ubuntu/build/build/.libs/tox-bootstrapd ; exit 0
-    # --- toxbootstrapd for RASPI ----
     
     - . ~/pp;mkdir -p $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     - . ~/pp;cp -av "$PKGSDIR"/* $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
-    
-    # --- toxbootstrapd for RASPI ----
-    - . ~/pp;cp -av /home/ubuntu/build/build/.libs/tox-bootstrapd $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/ ; exit 0
-    # --- toxbootstrapd for RASPI ----
 
-    - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; . ~/pp ; $CC -O2 -fPIC -o toxcam toxcam.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
-    - cd toxcam ; ldd toxcam ; exit 0
-    - cd toxcam ; find . -name '*toxcam*' -exec ls -al {} \; 2> /dev/null ; exit 0
-    - cd toxcam ; . ~/pp ; $CC -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -I"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound
-    - cd toxcam ; ls -al toxcam toxcam_static
-    - cd toxcam ;. ~/pp ; cp -av ./toxcam $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
-    - cd toxcam ;. ~/pp ; cp -av ./toxcam_static $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
+    - cd toxblinkenwall ;. ~/pp ; cp -av ./toxblinkenwall $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
 ## ----------- RASPI cross compile ----------------
 
 
 test:
   override:
-    - cd toxcam ; rm -fv toxcam toxcam_static
-    - cd toxcam ; gcc -O2 -fPIC -o toxcam toxcam.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert # -lasound
-    - cd toxcam ; ldd toxcam ; exit 0
-    - find / -name '*libjpeg*' 2> /dev/null ; exit 0
-    - cd toxcam ; gcc -O2 -Wall -Wextra -Wpedantic -o toxcam_static toxcam.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt # -lasound
-    - cd toxcam ; ls -al toxcam toxcam_static
+    - cd toxblinkenwall ; rm -fv toxblinkenwall
+    - cd toxblinkenwall ; gcc -O2 -fPIC -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert # -lasound
+    - cd toxblinkenwall ; ldd toxblinkenwall ; exit 0
     - mkdir -p $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cp -av toxcam/toxcam $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cp -av toxcam/toxcam_static $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
-    - cd toxcam ; ./toxcam_static :
-        background: true
-    - sleep 10
-    - cd toxcam ; cat ./toxcam.log
-    - cd toxcam ; cat ./toxcam.log | grep '\-\-MyToxID\-\-:' | cut -d':' -f 3
-    - sleep 10
-    #- sleep 240
-    - cd toxcam ; cat ./toxcam.log
+    - cp -av toxblinkenwall/toxblinkenwall $CIRCLE_ARTIFACTS/ubuntu_14_04_binaries/
