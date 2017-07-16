@@ -160,6 +160,8 @@ dependencies:
     - . ~/pp;mkdir -p $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
     - . ~/pp;cp -av "$PKGSDIR"/* $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
+    - cd toxblinkenwall ; rm -fv toxblinkenwall
+    - cd toxblinkenwall ; . ~/pp ; $CC -O2 -fPIC -o toxblinkenwall toxblinkenwall.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert # -lasound
     - cd toxblinkenwall ;. ~/pp ; cp -av ./toxblinkenwall $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
 ## ----------- RASPI cross compile ----------------
