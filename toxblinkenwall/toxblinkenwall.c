@@ -3,21 +3,14 @@
  * Zoff <zoff@zoff.cc>
  * in 2017
  *
+ * compile on linux (dynamic):
+ *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert
+ *
+ * run on linux (dynamic):
+ * export LD_LIBRARY_PATH=usr/lib ; ./toxblinkenwall
+ *
  * dirty hack (echobot and toxic were used as blueprint)
  *
- *
- * compile on linux (dynamic):
- *  gcc -O2 -fPIC -Wall -Wextra -Wpedantic -o toxdoorspy toxdoorspy.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
- * compile for debugging (dynamic):
- *  gcc -O0 -g -fPIC -Wall -Wextra -Wpedantic -o toxdoorspy toxdoorspy.c -std=gnu99 -lsodium -I/usr/local/include/ -ltoxcore -ltoxav -lpthread -lvpx -lv4lconvert
- *
- * compile on linux (static):
- *  gcc -O2 -Wall -Wextra -Wpedantic -o toxdoorspy_static toxdoorspy.c -static -std=gnu99 -L/usr/local/lib -I/usr/local/include/ \
-    -lsodium -ltoxcore -ltoxav -ltoxgroup -ltoxmessenger -ltoxfriends -ltoxnetcrypto \
-    -ltoxdht -ltoxnetwork -ltoxcrypto -lsodium -lpthread -static-libgcc -static-libstdc++ \
-    -lopus -lvpx -lm -lpthread -lv4lconvert
- *
-
  *
  *
  */
@@ -73,8 +66,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 10
-static const char global_version_string[] = "0.99.10";
+#define VERSION_PATCH 1
+static const char global_version_string[] = "0.99.1";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -109,8 +102,33 @@ uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
+#define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
+
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 #define c_sleep(x) usleep(1000*x)
+
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+
+#define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
+
+// RGB -> YUV
+#define RGB2Y(R, G, B) CLIP(( (  66 * (R) + 129 * (G) +  25 * (B) + 128) >> 8) +  16)
+#define RGB2U(R, G, B) CLIP(( ( -38 * (R) -  74 * (G) + 112 * (B) + 128) >> 8) + 128)
+#define RGB2V(R, G, B) CLIP(( ( 112 * (R) -  94 * (G) -  18 * (B) + 128) >> 8) + 128)
+
+// YUV -> RGB
+#define C(Y) ( (Y) - 16  )
+#define D(U) ( (U) - 128 )
+#define E(V) ( (V) - 128 )
+
+#define YUV2R(Y, U, V) CLIP(( 298 * C(Y)              + 409 * E(V) + 128) >> 8)
+#define YUV2G(Y, U, V) CLIP(( 298 * C(Y) - 100 * D(U) - 208 * E(V) + 128) >> 8)
+#define YUV2B(Y, U, V) CLIP(( 298 * C(Y) + 516 * D(U)              + 128) >> 8)
+
 
 typedef enum FILE_TRANSFER_STATE {
     FILE_TRANSFER_INACTIVE, // == 0 , this is important
@@ -250,15 +268,22 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
 
 const char *savedata_filename = "savedata.tox";
 const char *savedata_tmp_filename = "savedata.tox.tmp";
-const char *log_filename = "toxcam.log";
+const char *log_filename = "toxblinkenwall.log";
 const char *my_avatar_filename = "avatar.png";
+const char *my_toxid_filename_png = "toxid.png";
+const char *my_toxid_filename_rgba = "toxid.rgba";
 
 char *v4l2_device; // video device filename
+char *framebuffer_device; // framebuffer device filename
 
 const char *shell_cmd__single_shot = "./scripts/single_shot.sh 2> /dev/null";
 const char *shell_cmd__get_cpu_temp = "./scripts/get_cpu_temp.sh 2> /dev/null";
 const char *shell_cmd__get_gpu_temp = "./scripts/get_gpu_temp.sh 2> /dev/null";
 const char *shell_cmd__get_my_number_of_open_files = "cat /proc/sys/fs/file-nr 2> /dev/null";
+const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null";
+const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
+const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
+const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -866,6 +891,8 @@ void bootstrap(Tox *tox)
     };
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
 	if (switch_nodelist_2 == 0)
 	{
 		dbg(9, "nodeslist:1\n");
@@ -881,6 +908,8 @@ void bootstrap(Tox *tox)
 		dbg(9, "nodeslist:2\n");
 		bootstap_nodes(tox, &nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)), 1);
 	}
+#pragma GCC diagnostic pop
+
 }
 
 
@@ -914,6 +943,42 @@ void print_tox_id(Tox *tox)
         fsync(fd);
     }
 }
+
+void show_endless_loading()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__start_endless_loading_anim);
+	system(cmd_str);
+}
+
+void stop_endless_loading()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_loading_anim);
+	system(cmd_str);
+}
+
+void create_tox_id_qrcode(Tox *tox)
+{
+    char tox_id_hex[TOX_ADDRESS_SIZE*2 + 1];
+	get_my_toxid(tox, tox_id_hex);
+
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s \"tox:%s\"", shell_cmd__create_qrcode, tox_id_hex);
+	system(cmd_str);
+}
+
+void show_tox_id_qrcode()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
+	system(cmd_str);
+}
+
 
 int is_friend_online(Tox *tox, uint32_t num)
 {
@@ -1579,16 +1644,16 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
 	switch (my_connection_status)
 	{
 		case TOX_CONNECTION_NONE:
-			send_text_message_to_friend(tox, friend_number, "toxcam status:offline");
+			send_text_message_to_friend(tox, friend_number, "toxblinkenwall status:offline");
 			break;
 		case TOX_CONNECTION_TCP:
-			send_text_message_to_friend(tox, friend_number, "toxcam status:Online, using TCP");
+			send_text_message_to_friend(tox, friend_number, "toxblinkenwall status:Online, using TCP");
 			break;
 		case TOX_CONNECTION_UDP:
-			send_text_message_to_friend(tox, friend_number, "toxcam status:Online, using UDP");
+			send_text_message_to_friend(tox, friend_number, "toxblinkenwall status:Online, using UDP");
 			break;
 		default:
-			send_text_message_to_friend(tox, friend_number, "toxcam status:*unknown*");
+			send_text_message_to_friend(tox, friend_number, "toxblinkenwall status:*unknown*");
 			break;
 	}
 
@@ -1603,7 +1668,7 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
 	run_cmd_return_output(shell_cmd__get_my_number_of_open_files, output_str, 1);
 	if (strlen(output_str) > 0)
 	{
-		send_text_message_to_friend(tox, friend_number, "toxcam open files:%s", output_str);
+		send_text_message_to_friend(tox, friend_number, "toxblinkenwall open files:%s", output_str);
 	}
 	else
 	{
@@ -1614,7 +1679,7 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
 	run_cmd_return_output(shell_cmd__get_cpu_temp, output_str, 1);
 	if (strlen(output_str) > 0)
 	{
-		send_text_message_to_friend(tox, friend_number, "toxcam Cpu temp:%s\xC2\xB0%s", output_str, "C");
+		send_text_message_to_friend(tox, friend_number, "toxblinkenwall Cpu temp:%s\xC2\xB0%s", output_str, "C");
 	}
 	else
 	{
@@ -1624,7 +1689,7 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
 	run_cmd_return_output(shell_cmd__get_gpu_temp, output_str, 1);
 	if (strlen(output_str) > 0)
 	{
-		send_text_message_to_friend(tox, friend_number, "toxcam GPU temp:%s\xC2\xB0%s", output_str, "C");
+		send_text_message_to_friend(tox, friend_number, "toxblinkenwall GPU temp:%s\xC2\xB0%s", output_str, "C");
 	}
 	else
 	{
@@ -1658,7 +1723,7 @@ void cmd_snap(Tox *tox, uint32_t friend_number)
 #if 0
 		if (strlen(output_str) > 0)
 		{
-			// send_text_message_to_friend(tox, friend_number, "toxcam:%s", output_str);
+			// send_text_message_to_friend(tox, friend_number, "toxblinkenwall:%s", output_str);
 		}
 		else
 		{
@@ -1708,7 +1773,7 @@ void cmd_friends(Tox *tox, uint32_t friend_number)
 
 void cmd_restart(Tox *tox, uint32_t friend_number)
 {
-	send_text_message_to_friend(tox, friend_number, "toxcam services will restart ...");
+	send_text_message_to_friend(tox, friend_number, "toxblinkenwall services will restart ...");
 
 	global_want_restart = 1;
 }
@@ -1786,12 +1851,12 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 
 void send_help_to_friend(Tox *tox, uint32_t friend_number)
 {
-	send_text_message_to_friend(tox, friend_number, "=========================\nToxCam version:%s\n=========================", global_version_string);
+	send_text_message_to_friend(tox, friend_number, "=========================\nToxBlinkenwall version:%s\n=========================", global_version_string);
 	// send_text_message_to_friend(tox, friend_number, " commands are:");
-	send_text_message_to_friend(tox, friend_number, " .stats    --> show ToxCam status");
-	send_text_message_to_friend(tox, friend_number, " .friends  --> show ToxCam Friends");
+	send_text_message_to_friend(tox, friend_number, " .stats    --> show ToxBlinkenwall status");
+	send_text_message_to_friend(tox, friend_number, " .friends  --> show ToxBlinkenwall Friends");
 	send_text_message_to_friend(tox, friend_number, " .snap     --> snap a single still image");
-	send_text_message_to_friend(tox, friend_number, " .restart  --> restart ToxCam system");
+	send_text_message_to_friend(tox, friend_number, " .restart  --> restart ToxBlinkenwall system");
 	send_text_message_to_friend(tox, friend_number, " .vcm      --> videocall me");
 }
 
@@ -1834,7 +1899,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			{
 				cmd_snap(tox, friend_number);
 			}
-			else if (strncmp((char*)message, ".restart", strlen((char*)".restart")) == 0) // restart toxcam processes (no reboot)
+			else if (strncmp((char*)message, ".restart", strlen((char*)".restart")) == 0) // restart toxblinkenwall processes (no reboot)
 			{
 				cmd_restart(tox, friend_number);
 			}
@@ -2872,6 +2937,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
     void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
 
+
 /* assumes planes are continuous memory */
 #ifdef V4LCONVERT
     // dbg(9, "V4LCONVERT\n");
@@ -3100,6 +3166,132 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
+
+
+
+#if 1
+			int frame_width_px1 = (int)width;
+			int frame_height_px1 = (int)height;
+
+			int ystride_ = (int)ystride;
+			int ustride_ = (int)ustride;
+			int vstride_ = (int)vstride;
+
+			/*
+			* YUV420 frame with width * height
+			*
+			* @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
+			* @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
+			* @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
+			*/
+			int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
+			int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
+			int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
+
+			int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
+			int frame_height_px = (int) frame_height_px1;
+
+			int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
+
+			int full_width = 640;
+			int full_height = 480;
+			int vid_width = 192;
+			int vid_height = 144;
+
+			uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
+			unsigned long int i, j;
+			for (i = 0; i < full_height; ++i)
+			{
+				for (j = 0; j < full_width; ++j)
+				{
+					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+					point[0] = 0;
+					point[1] = 0;
+					point[2] = 0;
+					point[3] = 0;
+				}
+			}
+
+			float hh = (float)full_height / (float)vid_height;
+			float ww = (float)full_width / (float)vid_width;
+
+			for (i = 0; i < vid_height; ++i)
+			{
+				for (j = 0; j < vid_width; ++j)
+				{
+					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+
+					int i_src = (int)((float)i * hh);
+					int j_src = (int)((float)j * ww);
+
+#if 0
+					if (i_src >= vid_height)
+					{
+						i_src = vid_height - 1;
+					}
+
+					if (j_src >= vid_width)
+					{
+						j_src = vid_width - 1;
+					}
+#endif
+
+					int yx = y[(i_src * abs(ystride)) + j_src];
+					int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+					int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+
+					point[0] = YUV2B(yx, ux, vx); // B
+					point[1] = YUV2G(yx, ux, vx); // G
+					point[2] = YUV2R(yx, ux, vx); // R
+					point[3] = 0; // A
+				}
+			}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+			ystride = abs(ystride);
+			ustride = abs(ustride);
+			vstride = abs(vstride);
+
+			uint16_t *img_data = (uint16_t *)malloc(height * width * 6);
+
+			unsigned long int i, j;
+
+			for (i = 0; i < height; ++i)
+			{
+				for (j = 0; j < width; ++j)
+				{
+					uint8_t *point = (uint8_t *) img_data + 3 * ((i * width) + j);
+					int yx = y[(i * ystride) + j];
+					int ux = u[((i / 2) * ustride) + (j / 2)];
+					int vx = v[((i / 2) * vstride) + (j / 2)];
+
+#ifdef SWAP_R_AND_B_COLOR
+					point[0] = YUV2B(yx, ux, vx);
+					point[1] = YUV2G(yx, ux, vx);
+					point[2] = YUV2R(yx, ux, vx);
+#else
+					point[0] = YUV2R(yx, ux, vx);
+					point[1] = YUV2G(yx, ux, vx);
+					point[2] = YUV2B(yx, ux, vx);
+#endif
+				}
+			}
+#endif
+
+
 		}
 		else
 		{
@@ -3193,6 +3385,17 @@ void *thread_av(void *data)
 		{
 			pthread_mutex_lock(&av_thread_lock);
 
+
+
+
+
+// ----------------- for sending video -----------------
+// ----------------- for sending video -----------------
+// ----------------- for sending video -----------------
+#if 0
+
+
+
 			// dbg(9, "AV Thread #%d:get frame\n", (int) id);
 
             // capturing is enabled, capture frames
@@ -3273,6 +3476,12 @@ void *thread_av(void *data)
             yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~4 frames per second */
             // yieldcpu(80); /* ~12 frames per second */
             // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
+
+#endif
+// ----------------- for sending video -----------------
+// ----------------- for sending video -----------------
+// ----------------- for sending video -----------------
+
 		}
 		else
 		{
@@ -3593,24 +3802,6 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
 	yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total + (size_total / 4)] = v;
 }
 
-
-
-#define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
-
-// RGB -> YUV
-#define RGB2Y(R, G, B) CLIP(( (  66 * (R) + 129 * (G) +  25 * (B) + 128) >> 8) +  16)
-#define RGB2U(R, G, B) CLIP(( ( -38 * (R) -  74 * (G) + 112 * (B) + 128) >> 8) + 128)
-#define RGB2V(R, G, B) CLIP(( ( 112 * (R) -  94 * (G) -  18 * (B) + 128) >> 8) + 128)
-
-// YUV -> RGB
-#define C(Y) ( (Y) - 16  )
-#define D(U) ( (U) - 128 )
-#define E(V) ( (V) - 128 )
-
-#define YUV2R(Y, U, V) CLIP(( 298 * C(Y)              + 409 * E(V) + 128) >> 8)
-#define YUV2G(Y, U, V) CLIP(( 298 * C(Y) - 100 * D(U) - 208 * E(V) + 128) >> 8)
-#define YUV2B(Y, U, V) CLIP(( 298 * C(Y) + 516 * D(U)              + 128) >> 8)
-
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v)
 {
 	*y = RGB2Y(r, g, b);
@@ -3797,6 +3988,8 @@ void sigint_handler(int signo)
 
 int main(int argc, char *argv[])
 {
+	show_endless_loading();
+
 	global_want_restart = 0;
 	global_video_active = 0;
 	global_send_first_frame = 0;
@@ -3814,12 +4007,16 @@ int main(int argc, char *argv[])
 	memset(v4l2_device, 0, 400);
 	snprintf(v4l2_device, 399, "%s", "/dev/video0");
 
+	framebuffer_device = malloc(400);
+	memset(framebuffer_device, 0, 400);
+	snprintf(framebuffer_device, 399, "%s", "/dev/fb0");
+
 	int aflag = 0;
 	char *cvalue = NULL;
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:t23b:f";
+   const char     *short_opt = "hvd:t23b:fu:";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
@@ -3852,8 +4049,11 @@ int main(int argc, char *argv[])
         break;
       case 'd':
         snprintf(v4l2_device, 399, "%s", optarg);
-        // printf("Using Videodevice: %s\n", v4l2_device);
         dbg(3, "Using Videodevice: %s\n", v4l2_device);
+        break;
+      case 'u':
+        snprintf(framebuffer_device, 399, "%s", optarg);
+        dbg(3, "Using Framebufferdevice: %s\n", framebuffer_device);
         break;
       case 'b':
         DEFAULT_GLOBAL_VID_BITRATE = (uint32_t)atoi(optarg);
@@ -3861,7 +4061,7 @@ int main(int argc, char *argv[])
         global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         break;
       case 'v':
-         printf("ToxCam version: %s\n", global_version_string);
+         printf("ToxBlinkenwall version: %s\n", global_version_string);
             if (logfile)
             {
                 fclose(logfile);
@@ -3873,6 +4073,7 @@ int main(int argc, char *argv[])
       case 'h':
          printf("Usage: %s [OPTIONS]\n", argv[0]);
          printf("  -d, --videodevice devicefile         file\n");
+         printf("  -u devicefile                        file\n");
          printf("  -b bitrate                           video bitrate in kbit/s\n");
          printf("  -f                                   use 720p video mode\n");
          printf("  -t,                                  tcp only mode\n");
@@ -3914,10 +4115,10 @@ int main(int argc, char *argv[])
 	Tox *tox = create_tox();
 	global_start_time = time(NULL);
 
-    const char *name = "ToxCam";
+    const char *name = "ToxBlinkenwall";
     tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
 
-    const char *status_message = "This is your ToxCam";
+    const char *status_message = "Metalab Blinkenwall";
     tox_self_set_status_message(tox, (uint8_t *)status_message, strlen(status_message), NULL);
 
     Friends.max_idx = 0;
@@ -3927,6 +4128,7 @@ int main(int argc, char *argv[])
 
 
     print_tox_id(tox);
+	create_tox_id_qrcode(tox);
 
     // init callbacks ----------------------------------
     tox_callback_friend_request(tox, friend_request_cb);
@@ -3965,16 +4167,20 @@ int main(int argc, char *argv[])
 			break;
         }
         c_sleep(20);
-	loop_counter++;
-		
-	if (loop_counter > (50 * 20))
-	{
-		loop_counter = 0;
-		// if not yet online, bootstrap every 20 seconds
-		dbg(2, "Tox NOT online yet, bootstrapping again\n");
-		bootstrap(tox);
-	}
+		loop_counter++;
+			
+		if (loop_counter > (50 * 20))
+		{
+			loop_counter = 0;
+			// if not yet online, bootstrap every 20 seconds
+			dbg(2, "Tox NOT online yet, bootstrapping again\n");
+			bootstrap(tox);
+		}
     }
+
+	stop_endless_loading();
+	yieldcpu(700);
+	show_tox_id_qrcode(tox);
 
 
     TOXAV_ERR_NEW rc;
@@ -4069,4 +4275,5 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
 
