@@ -3062,12 +3062,18 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		dbg(9, "Call with friend %d finished\n", friend_number);
 		global_video_active = 0;
+
+		show_tox_id_qrcode();
+
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	{
 		dbg(9, "Call with friend %d errored\n", friend_number);
 		global_video_active = 0;
+
+		show_tox_id_qrcode();
+
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -3111,6 +3117,9 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		dbg(9, "t_toxav_call_state_cb:005\n");
 		global_video_active = 0;
 		global_send_first_frame = 0;
+
+		show_tox_id_qrcode();
+
 	}
 
 	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d\n", friend_number, state, send_audio, send_video);
@@ -3545,6 +3554,9 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
+
+	show_tox_id_qrcode();
+
 	global_video_active = 0;
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
@@ -4189,7 +4201,7 @@ int main(int argc, char *argv[])
 
 	stop_endless_loading();
 	yieldcpu(700);
-	show_tox_id_qrcode(tox);
+	show_tox_id_qrcode();
 
 
     TOXAV_ERR_NEW rc;
