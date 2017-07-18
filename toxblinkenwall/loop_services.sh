@@ -10,7 +10,12 @@ function clean_up {
 cd $(dirname "$0")
 export LD_LIBRARY_PATH=usr/lib
 
+sudo /etc/init.d/lightdm start
+sleep 10
+
 trap clean_up SIGHUP SIGINT SIGTERM
+scripts/init.sh
+sleep 2
 scripts/create_gfx.sh
 
 while [ 1 == 1 ]; do

@@ -43,6 +43,7 @@
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
+#include <linux/fb.h>
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
@@ -264,6 +265,9 @@ void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state);
 void black_yuf_frame_xy();
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v);
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b);
+void fb_copy_frame_to_fb(void* videoframe);
+void fb_fill_black();
+
 
 
 const char *savedata_filename = "savedata.tox";
@@ -273,8 +277,8 @@ const char *my_avatar_filename = "avatar.png";
 const char *my_toxid_filename_png = "toxid.png";
 const char *my_toxid_filename_rgba = "toxid.rgba";
 
-char *v4l2_device; // video device filename
-char *framebuffer_device; // framebuffer device filename
+char *v4l2_device = NULL; // video device filename
+char *framebuffer_device = NULL; // framebuffer device filename
 
 const char *shell_cmd__single_shot = "./scripts/single_shot.sh 2> /dev/null";
 const char *shell_cmd__get_cpu_temp = "./scripts/get_cpu_temp.sh 2> /dev/null";
@@ -290,6 +294,11 @@ const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
 const char *global_overlay_timestamp_format = "%Y-%m-%d %H:%M:%S";
 uint64_t global_start_time;
 int global_cam_device_fd = 0;
+int global_framebuffer_device_fd = 0;
+struct fb_var_screeninfo var_framebuffer_info;
+struct fb_fix_screeninfo var_framebuffer_fix_info;
+size_t framebuffer_screensize = 0;
+unsigned char *framebuffer_mappedmem = NULL;
 uint32_t n_buffers;
 struct buffer *buffers = NULL;
 uint16_t video_width = 0;
@@ -2570,7 +2579,7 @@ int init_cam()
 
 	if (video_dev_open_error == 1)
 	{
-		sleep(20); // sleep 20 seconds
+		sleep(1); // sleep 20 seconds // speedup for now!!
 
 		if ((fd = open(v4l2_device, O_RDWR)) < 0)
 		{
@@ -2583,6 +2592,9 @@ int init_cam()
 		}
 	}
 
+
+	// if (video_dev_open_error == 0)
+	{
 	struct v4l2_capability cap;
 	struct v4l2_cropcap    cropcap;
     // struct v4l2_crop       crop;
@@ -2812,8 +2824,9 @@ int init_cam()
 	}
 
 	return fd;
-}
 
+	}
+}
 
 int v4l_startread()
 {
@@ -2975,6 +2988,24 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
 void close_cam()
 {
+
+	// close framebuffer device
+	dbg(2, "munmaping Framebuffer\n");
+	if (framebuffer_mappedmem != NULL)
+	{
+		int res = munmap(framebuffer_mappedmem, (size_t)framebuffer_screensize);
+		framebuffer_mappedmem = NULL;
+		dbg(9, "munmap Framebuffer error\n");
+	}
+
+	dbg(2, "closing Framebuffer\n");
+	if (global_framebuffer_device_fd > 0)
+	{
+		close(global_framebuffer_device_fd);
+		global_framebuffer_device_fd = 0;
+	}
+
+
 #ifdef V4LCONVERT
 	v4lconvert_destroy(v4lconvert_data);
 #endif
@@ -3036,12 +3067,18 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		dbg(9, "Call with friend %d finished\n", friend_number);
 		global_video_active = 0;
+
+		show_tox_id_qrcode();
+
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	{
 		dbg(9, "Call with friend %d errored\n", friend_number);
 		global_video_active = 0;
+
+		show_tox_id_qrcode();
+
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -3085,6 +3122,9 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		dbg(9, "t_toxav_call_state_cb:005\n");
 		global_video_active = 0;
 		global_send_first_frame = 0;
+
+		show_tox_id_qrcode();
+
 	}
 
 	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d\n", friend_number, state, send_audio, send_video);
@@ -3166,132 +3206,95 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
+			// zzzzzz
 
-
-
-#if 1
-			int frame_width_px1 = (int)width;
-			int frame_height_px1 = (int)height;
-
-			int ystride_ = (int)ystride;
-			int ustride_ = (int)ustride;
-			int vstride_ = (int)vstride;
-
-			/*
-			* YUV420 frame with width * height
-			*
-			* @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
-			* @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
-			* @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
-			*/
-			int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
-			int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
-			int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
-
-			int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
-			int frame_height_px = (int) frame_height_px1;
-
-			int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
-
-			int full_width = 640;
-			int full_height = 480;
-			int vid_width = 192;
-			int vid_height = 144;
-
-			uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
-			unsigned long int i, j;
-			for (i = 0; i < full_height; ++i)
+			if (global_framebuffer_device_fd != 0)
 			{
-				for (j = 0; j < full_width; ++j)
-				{
-					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-					point[0] = 0;
-					point[1] = 0;
-					point[2] = 0;
-					point[3] = 0;
-				}
-			}
 
-			float hh = (float)full_height / (float)vid_height;
-			float ww = (float)full_width / (float)vid_width;
-
-			for (i = 0; i < vid_height; ++i)
-			{
-				for (j = 0; j < vid_width; ++j)
-				{
-					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-
-					int i_src = (int)((float)i * hh);
-					int j_src = (int)((float)j * ww);
+				dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
 
 #if 0
-					if (i_src >= vid_height)
-					{
-						i_src = vid_height - 1;
-					}
 
-					if (j_src >= vid_width)
-					{
-						j_src = vid_width - 1;
-					}
-#endif
+				int frame_width_px1 = (int)width;
+				int frame_height_px1 = (int)height;
 
-					int yx = y[(i_src * abs(ystride)) + j_src];
-					int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
-					int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+				int ystride_ = (int)ystride;
+				int ustride_ = (int)ustride;
+				int vstride_ = (int)vstride;
 
-					point[0] = YUV2B(yx, ux, vx); // B
-					point[1] = YUV2G(yx, ux, vx); // G
-					point[2] = YUV2R(yx, ux, vx); // R
-					point[3] = 0; // A
-				}
-			}
+				/*
+				* YUV420 frame with width * height
+				*
+				* @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
+				* @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
+				* @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
+				*/
+				int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
+				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
+				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
-#endif
+				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
+				int frame_height_px = (int) frame_height_px1;
 
+				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
+				int full_width = 640;
+				int full_height = 480;
+				int vid_width = 192;
+				int vid_height = 144;
 
-
-
-
-
-
-
-
-
-
-#if 0
-			ystride = abs(ystride);
-			ustride = abs(ustride);
-			vstride = abs(vstride);
-
-			uint16_t *img_data = (uint16_t *)malloc(height * width * 6);
-
-			unsigned long int i, j;
-
-			for (i = 0; i < height; ++i)
-			{
-				for (j = 0; j < width; ++j)
+				uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
+				unsigned long int i, j;
+				for (i = 0; i < full_height; ++i)
 				{
-					uint8_t *point = (uint8_t *) img_data + 3 * ((i * width) + j);
-					int yx = y[(i * ystride) + j];
-					int ux = u[((i / 2) * ustride) + (j / 2)];
-					int vx = v[((i / 2) * vstride) + (j / 2)];
-
-#ifdef SWAP_R_AND_B_COLOR
-					point[0] = YUV2B(yx, ux, vx);
-					point[1] = YUV2G(yx, ux, vx);
-					point[2] = YUV2R(yx, ux, vx);
-#else
-					point[0] = YUV2R(yx, ux, vx);
-					point[1] = YUV2G(yx, ux, vx);
-					point[2] = YUV2B(yx, ux, vx);
-#endif
+					for (j = 0; j < full_width; ++j)
+					{
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+						point[0] = 0;
+						point[1] = 0;
+						point[2] = 0;
+						point[3] = 0;
+					}
 				}
-			}
+
+				float hh = (float)full_height / (float)vid_height;
+				float ww = (float)full_width / (float)vid_width;
+
+				for (i = 0; i < vid_height; ++i)
+				{
+					for (j = 0; j < vid_width; ++j)
+					{
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+
+						int i_src = (int)((float)i * hh);
+						int j_src = (int)((float)j * ww);
+
+						if (i_src >= vid_height)
+						{
+							i_src = vid_height - 1;
+						}
+
+						if (j_src >= vid_width)
+						{
+							j_src = vid_width - 1;
+						}
+
+						int yx = y[(i_src * abs(ystride)) + j_src];
+						int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+						int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+
+						point[0] = YUV2B(yx, ux, vx); // B
+						point[1] = YUV2G(yx, ux, vx); // G
+						point[2] = YUV2R(yx, ux, vx); // R
+						point[3] = 0; // A
+					}
+				}
+
 #endif
+				// clear framebuffer (black color)
+				fb_fill_black();
 
-
+			}
 		}
 		else
 		{
@@ -3302,41 +3305,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 	}
 
-
-    // ystride = abs(ystride);
-    // ustride = abs(ustride);
-    // vstride = abs(vstride);
-
-    // uint16_t *img_data = (uint16_t *)malloc(height * width * 6);
-
-    // unsigned long int i, j;
-
-    // for (i = 0; i < height; ++i)
-	// {
-        // for (j = 0; j < width; ++j)
-		// {
-            // uint8_t *point = (uint8_t *) img_data + 3 * ((i * width) + j);
-            // int yx = y[(i * ystride) + j];
-            // int ux = u[((i / 2) * ustride) + (j / 2)];
-            // int vx = v[((i / 2) * vstride) + (j / 2)];
-
-            // point[0] = YUV2R(yx, ux, vx);
-            // point[1] = YUV2G(yx, ux, vx);
-            // point[2] = YUV2B(yx, ux, vx);
-        // }
-    // }
-
-
-    // CvMat mat = cvMat(height, width, CV_8UC3, img_data);
-
-    // CvSize sz;
-    // sz.height = height;
-    // sz.width = width;
-
-    // IplImage *header = cvCreateImageHeader(sz, 1, 3);
-    // IplImage *img = cvGetImage(&mat, header);
-    // cvShowImage(vdout, img);
-    // free(img_data);
 }
 
 void set_av_video_frame()
@@ -3351,6 +3319,25 @@ void set_av_video_frame()
 
     dbg(2,"ToxVideo:av_video_frame set\n");
 }
+
+void fb_copy_frame_to_fb(void* videoframe)
+{
+	if (framebuffer_mappedmem != NULL)
+	{
+		memcpy(framebuffer_mappedmem, videoframe, framebuffer_screensize);
+	}
+}
+
+void fb_fill_black()
+{
+	dbg(0, "fb_fill_black:001:%p\n", framebuffer_mappedmem);
+	if (framebuffer_mappedmem != NULL)
+	{
+		dbg(0, "fb_fill_black:002\n");
+		memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
+	}
+}
+
 
 void *thread_av(void *data)
 {
@@ -3369,7 +3356,7 @@ void *thread_av(void *data)
 	}
 
 	dbg(2, "AV Thread #%d: starting\n", (int) id);
-	
+
 	if (video_call_enabled == 1)
 	{
 		global_cam_device_fd = init_cam();
@@ -3377,15 +3364,67 @@ void *thread_av(void *data)
 		set_av_video_frame();
 		// start streaming
 		v4l_startread();
+
+
+		// zzzzzz
+		fprintf(stderr, "framebuffer_device=%p\n", framebuffer_device);
+		fprintf(stderr, "framebuffer_device=%s\n", framebuffer_device);
+
+
+		global_framebuffer_device_fd = 0;
+
+		if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
+		{
+			dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
+		}
+		else
+		{
+			dbg(2, "The Framebuffer device opened: %d\n", (int)global_framebuffer_device_fd);
+		}
+
+		// Get variable screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_VSCREENINFO, &var_framebuffer_info))
+		{
+			dbg(0, "Error reading Framebuffer info\n");
+		}
+
+		dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres, var_framebuffer_info.bits_per_pixel);
+
+		// Get fixed screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
+		{
+			dbg(0, "Error reading Framebuffer fixed information\n");
+		}
+
+		// map framebuffer to user memory
+		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
+
+		framebuffer_mappedmem = NULL;
+		framebuffer_mappedmem = (char*)mmap(NULL,
+                    (size_t)framebuffer_screensize,
+                    PROT_READ | PROT_WRITE,
+                    MAP_SHARED,
+                    global_framebuffer_device_fd, 0);
+
+		if (framebuffer_mappedmem == NULL)
+		{
+			dbg(0, "Failed to mmap Framebuffer\n");
+		}
+		else
+		{
+			dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
+		}
+
 	}
+
+
+
 
     while (toxav_iterate_thread_stop != 1)
 	{
 		if (global_video_active == 1)
 		{
 			pthread_mutex_lock(&av_thread_lock);
-
-
 
 
 
@@ -3522,7 +3561,7 @@ void *thread_video_av(void *data)
 	{
 		pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
-		// dbg(9, "AV video Thread #%d running ...", (int) id);
+		// dbg(9, "AV video Thread #%d running ...\n", (int) id);
 		pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
@@ -3536,6 +3575,9 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
+
+	show_tox_id_qrcode();
+
 	global_video_active = 0;
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
@@ -4011,6 +4053,10 @@ int main(int argc, char *argv[])
 	memset(framebuffer_device, 0, 400);
 	snprintf(framebuffer_device, 399, "%s", "/dev/fb0");
 
+	// zzzzzz
+	fprintf(stderr, "framebuffer_device=%p\n", framebuffer_device);
+	fprintf(stderr, "framebuffer_device=%s\n", framebuffer_device);
+
 	int aflag = 0;
 	char *cvalue = NULL;
 	int index;
@@ -4167,8 +4213,8 @@ int main(int argc, char *argv[])
 			break;
         }
         c_sleep(20);
+
 		loop_counter++;
-			
 		if (loop_counter > (50 * 20))
 		{
 			loop_counter = 0;
@@ -4180,7 +4226,7 @@ int main(int argc, char *argv[])
 
 	stop_endless_loading();
 	yieldcpu(700);
-	show_tox_id_qrcode(tox);
+	show_tox_id_qrcode();
 
 
     TOXAV_ERR_NEW rc;
@@ -4206,29 +4252,27 @@ int main(int argc, char *argv[])
 	// start toxav thread ------------------------------
 	pthread_t tid[2]; // 0 -> toxav_iterate thread, 1 -> video send thread
 
-	
 	// start toxav thread ------------------------------
 	toxav_iterate_thread_stop = 0;
     if (pthread_create(&(tid[0]), NULL, thread_av, (void *)mytox_av) != 0)
 	{
-        dbg(0, "AV iterate Thread create failed");
+        dbg(0, "AV iterate Thread create failed\n");
 	}
 	else
 	{
-        dbg(2, "AV iterate Thread successfully created");
+        dbg(2, "AV iterate Thread successfully created\n");
 	}
 
 	toxav_video_thread_stop = 0;
     if (pthread_create(&(tid[1]), NULL, thread_video_av, (void *)mytox_av) != 0)
 	{
-        dbg(0, "AV video Thread create failed");
+        dbg(0, "AV video Thread create failed\n");
 	}
 	else
 	{
-        dbg(2, "AV video Thread successfully created");
+        dbg(2, "AV video Thread successfully created\n");
 	}
 	// start toxav thread ------------------------------
-	
 
 
 	// start audio recoding stuff ----------------------
@@ -4275,5 +4319,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
 
 
