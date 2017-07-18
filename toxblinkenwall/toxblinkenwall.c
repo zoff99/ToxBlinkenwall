@@ -267,6 +267,7 @@ void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b);
 void fb_copy_frame_to_fb(void* videoframe);
 void fb_fill_black();
+void fb_fill_xxx();
 
 
 
@@ -2996,7 +2997,6 @@ void close_cam()
 	{
 		int res = munmap(framebuffer_mappedmem, (size_t)framebuffer_screensize);
 		framebuffer_mappedmem = NULL;
-	
 		dbg(9, "munmap Framebuffer error\n");
 	}
 
@@ -3056,6 +3056,10 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 		dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d\n", (int)friend_number, (int)audio_bitrate, (int)video_bitrate);
 
 		toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+
+		// clear screen on CALL ANSWER
+		fb_fill_black();
+
 	}
 }
 
@@ -3115,6 +3119,10 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
 	if (send_video == 1)
 	{
+		// clear screen on CALL START
+		fb_fill_black();
+
+
 		dbg(9, "t_toxav_call_state_cb:004\n");
 		global_video_active = 1;
 		global_send_first_frame = 2;
@@ -3294,7 +3302,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 #endif
 				// clear framebuffer (black color)
-				fb_fill_black();
+				fb_fill_xxx();
+
 
 			}
 		}
@@ -3332,11 +3341,18 @@ void fb_copy_frame_to_fb(void* videoframe)
 
 void fb_fill_black()
 {
-	dbg(0, "fb_fill_black:001:%p\n", framebuffer_mappedmem);
 	if (framebuffer_mappedmem != NULL)
 	{
-		dbg(0, "fb_fill_black:002\n");
 		memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
+	}
+}
+
+
+void fb_fill_xxx()
+{
+	if (framebuffer_mappedmem != NULL)
+	{
+		memset(framebuffer_mappedmem, 0xa3, framebuffer_screensize);
 	}
 }
 
