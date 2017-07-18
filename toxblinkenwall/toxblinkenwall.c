@@ -265,6 +265,9 @@ void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int* state);
 void black_yuf_frame_xy();
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v);
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g, uint8_t b);
+void fb_copy_frame_to_fb(void* videoframe);
+void fb_fill_black();
+
 
 
 const char *savedata_filename = "savedata.tox";
@@ -3286,41 +3289,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 	}
 
-
-    // ystride = abs(ystride);
-    // ustride = abs(ustride);
-    // vstride = abs(vstride);
-
-    // uint16_t *img_data = (uint16_t *)malloc(height * width * 6);
-
-    // unsigned long int i, j;
-
-    // for (i = 0; i < height; ++i)
-	// {
-        // for (j = 0; j < width; ++j)
-		// {
-            // uint8_t *point = (uint8_t *) img_data + 3 * ((i * width) + j);
-            // int yx = y[(i * ystride) + j];
-            // int ux = u[((i / 2) * ustride) + (j / 2)];
-            // int vx = v[((i / 2) * vstride) + (j / 2)];
-
-            // point[0] = YUV2R(yx, ux, vx);
-            // point[1] = YUV2G(yx, ux, vx);
-            // point[2] = YUV2B(yx, ux, vx);
-        // }
-    // }
-
-
-    // CvMat mat = cvMat(height, width, CV_8UC3, img_data);
-
-    // CvSize sz;
-    // sz.height = height;
-    // sz.width = width;
-
-    // IplImage *header = cvCreateImageHeader(sz, 1, 3);
-    // IplImage *img = cvGetImage(&mat, header);
-    // cvShowImage(vdout, img);
-    // free(img_data);
 }
 
 void set_av_video_frame()
@@ -3340,7 +3308,7 @@ void fb_copy_frame_to_fb(void* videoframe)
 {
 	if (framebuffer_mappedmem > 0)
 	{
-		memcpy(framebuffer_mappedmem, frame, framebuffer_screensize);
+		memcpy(framebuffer_mappedmem, videoframe, framebuffer_screensize);
 	}
 }
 
