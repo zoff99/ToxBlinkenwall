@@ -313,6 +313,8 @@ int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
 int video_high = 0;
 int switch_tcponly = 0;
+int full_width = 640;
+int full_height = 480;
 
 
 uint32_t global_audio_bit_rate;
@@ -3223,7 +3225,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
 
-#if 0
+#if 1
 
 				int frame_width_px1 = (int)width;
 				int frame_height_px1 = (int)height;
@@ -3248,50 +3250,59 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
-				int full_width = 640;
-				int full_height = 480;
+
+				full_width = var_framebuffer_info.xres;
+				full_height = var_framebuffer_info.yres;
+				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 				int vid_width = 192;
 				int vid_height = 144;
 
-				uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
+
+				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
+				uint8_t *bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
 				unsigned long int i, j;
-				for (i = 0; i < full_height; ++i)
-				{
-					for (j = 0; j < full_width; ++j)
-					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-						point[0] = 0;
-						point[1] = 0;
-						point[2] = 0;
-						point[3] = 0;
-					}
-				}
+				// for (i = 0; i < full_height; ++i)
+				// {
+				// 	for (j = 0; j < full_width; ++j)
+				// 	{
+				// 		uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+				// 		point[0] = 0;
+				// 		point[1] = 0;
+				// 		point[2] = 0;
+				// 		point[3] = 0;
+				// 	}
+				// }
 
 				float hh = (float)full_height / (float)vid_height;
 				float ww = (float)full_width / (float)vid_width;
 
+				int i_src;
+				int j_src;
+				int yx;
+				int ux;
+				int vx;
 				for (i = 0; i < vid_height; ++i)
 				{
 					for (j = 0; j < vid_width; ++j)
 					{
 						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
 
-						int i_src = (int)((float)i * hh);
-						int j_src = (int)((float)j * ww);
+						i_src = (int)((float)i * hh);
+						j_src = (int)((float)j * ww);
 
-						if (i_src >= vid_height)
-						{
-							i_src = vid_height - 1;
-						}
+						//if (i_src >= vid_height)
+						//{
+						//	i_src = vid_height - 1;
+						//}
 
-						if (j_src >= vid_width)
-						{
-							j_src = vid_width - 1;
-						}
+						//if (j_src >= vid_width)
+						//{
+						//	j_src = vid_width - 1;
+						//}
 
-						int yx = y[(i_src * abs(ystride)) + j_src];
-						int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
-						int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+						yx = y[(i_src * abs(ystride)) + j_src];
+						ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+						vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
 
 						point[0] = YUV2B(yx, ux, vx); // B
 						point[1] = YUV2G(yx, ux, vx); // G
@@ -3300,9 +3311,16 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 					}
 				}
 
+
+				if (bf_out_data != NULL)
+				{
+					fb_copy_frame_to_fb(bf_out_data);
+					free(bf_out_data);
+					bf_out_data = NULL;
+				}
 #endif
-				// clear framebuffer (black color)
-				fb_fill_xxx();
+				// clear framebuffer (black xxx)
+				// fb_fill_xxx();
 
 
 			}
@@ -3382,11 +3400,6 @@ void *thread_av(void *data)
 		set_av_video_frame();
 		// start streaming
 		v4l_startread();
-
-
-		// zzzzzz
-		fprintf(stderr, "framebuffer_device=%p\n", framebuffer_device);
-		fprintf(stderr, "framebuffer_device=%s\n", framebuffer_device);
 
 
 		global_framebuffer_device_fd = 0;
@@ -4070,10 +4083,6 @@ int main(int argc, char *argv[])
 	framebuffer_device = malloc(400);
 	memset(framebuffer_device, 0, 400);
 	snprintf(framebuffer_device, 399, "%s", "/dev/fb0");
-
-	// zzzzzz
-	fprintf(stderr, "framebuffer_device=%p\n", framebuffer_device);
-	fprintf(stderr, "framebuffer_device=%s\n", framebuffer_device);
 
 	int aflag = 0;
 	char *cvalue = NULL;
