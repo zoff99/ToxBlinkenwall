@@ -43,6 +43,7 @@
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
+#include <linux/fb.h>
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
@@ -290,6 +291,11 @@ const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
 const char *global_overlay_timestamp_format = "%Y-%m-%d %H:%M:%S";
 uint64_t global_start_time;
 int global_cam_device_fd = 0;
+int global_framebuffer_device_fd = 0;
+struct fb_var_screeninfo var_framebuffer_info;
+struct fb_fix_screeninfo var_framebuffer_fix_info;
+size_t framebuffer_screensize = 0;
+unsigned char *framebuffer_mappedmem = 0;
 uint32_t n_buffers;
 struct buffer *buffers = NULL;
 uint16_t video_width = 0;
@@ -2975,6 +2981,23 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
 void close_cam()
 {
+
+	// close framebuffer device
+	dbg(2, "munmaping Framebuffer\n");
+	if ((int)framebuffer_mappedmem != -1)
+	{
+		int res = munmap(framebuffer_mappedmem, (size_t)framebuffer_screensize);
+		dbg(9, "munmap Framebuffer error\n");
+	}
+
+	dbg(2, "closing Framebuffer\n");
+	if (global_framebuffer_device_fd > 0)
+	{
+		close(global_framebuffer_device_fd);
+		global_framebuffer_device_fd = 0;
+	}
+
+
 #ifdef V4LCONVERT
 	v4lconvert_destroy(v4lconvert_data);
 #endif
@@ -3167,131 +3190,92 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 		if (friend_to_send_video_to == friend_number)
 		{
 
-
-
-#if 1
-			int frame_width_px1 = (int)width;
-			int frame_height_px1 = (int)height;
-
-			int ystride_ = (int)ystride;
-			int ustride_ = (int)ustride;
-			int vstride_ = (int)vstride;
-
-			/*
-			* YUV420 frame with width * height
-			*
-			* @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
-			* @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
-			* @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
-			*/
-			int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
-			int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
-			int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
-
-			int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
-			int frame_height_px = (int) frame_height_px1;
-
-			int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
-
-			int full_width = 640;
-			int full_height = 480;
-			int vid_width = 192;
-			int vid_height = 144;
-
-			uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
-			unsigned long int i, j;
-			for (i = 0; i < full_height; ++i)
-			{
-				for (j = 0; j < full_width; ++j)
-				{
-					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-					point[0] = 0;
-					point[1] = 0;
-					point[2] = 0;
-					point[3] = 0;
-				}
-			}
-
-			float hh = (float)full_height / (float)vid_height;
-			float ww = (float)full_width / (float)vid_width;
-
-			for (i = 0; i < vid_height; ++i)
-			{
-				for (j = 0; j < vid_width; ++j)
-				{
-					uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-
-					int i_src = (int)((float)i * hh);
-					int j_src = (int)((float)j * ww);
-
 #if 0
-					if (i_src >= vid_height)
-					{
-						i_src = vid_height - 1;
-					}
+			// zzzzzz
 
-					if (j_src >= vid_width)
-					{
-						j_src = vid_width - 1;
-					}
-#endif
-
-					int yx = y[(i_src * abs(ystride)) + j_src];
-					int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
-					int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
-
-					point[0] = YUV2B(yx, ux, vx); // B
-					point[1] = YUV2G(yx, ux, vx); // G
-					point[2] = YUV2R(yx, ux, vx); // R
-					point[3] = 0; // A
-				}
-			}
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-#if 0
-			ystride = abs(ystride);
-			ustride = abs(ustride);
-			vstride = abs(vstride);
-
-			uint16_t *img_data = (uint16_t *)malloc(height * width * 6);
-
-			unsigned long int i, j;
-
-			for (i = 0; i < height; ++i)
+			if (global_framebuffer_device_fd != 0)
 			{
-				for (j = 0; j < width; ++j)
+
+				int frame_width_px1 = (int)width;
+				int frame_height_px1 = (int)height;
+
+				int ystride_ = (int)ystride;
+				int ustride_ = (int)ustride;
+				int vstride_ = (int)vstride;
+
+				/*
+				* YUV420 frame with width * height
+				*
+				* @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
+				* @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
+				* @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
+				*/
+				int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
+				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
+				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
+
+				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
+				int frame_height_px = (int) frame_height_px1;
+
+				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
+
+				int full_width = 640;
+				int full_height = 480;
+				int vid_width = 192;
+				int vid_height = 144;
+
+				uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
+				unsigned long int i, j;
+				for (i = 0; i < full_height; ++i)
 				{
-					uint8_t *point = (uint8_t *) img_data + 3 * ((i * width) + j);
-					int yx = y[(i * ystride) + j];
-					int ux = u[((i / 2) * ustride) + (j / 2)];
-					int vx = v[((i / 2) * vstride) + (j / 2)];
-
-#ifdef SWAP_R_AND_B_COLOR
-					point[0] = YUV2B(yx, ux, vx);
-					point[1] = YUV2G(yx, ux, vx);
-					point[2] = YUV2R(yx, ux, vx);
-#else
-					point[0] = YUV2R(yx, ux, vx);
-					point[1] = YUV2G(yx, ux, vx);
-					point[2] = YUV2B(yx, ux, vx);
-#endif
+					for (j = 0; j < full_width; ++j)
+					{
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+						point[0] = 0;
+						point[1] = 0;
+						point[2] = 0;
+						point[3] = 0;
+					}
 				}
-			}
+
+				float hh = (float)full_height / (float)vid_height;
+				float ww = (float)full_width / (float)vid_width;
+
+				for (i = 0; i < vid_height; ++i)
+				{
+					for (j = 0; j < vid_width; ++j)
+					{
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+
+						int i_src = (int)((float)i * hh);
+						int j_src = (int)((float)j * ww);
+
+						if (i_src >= vid_height)
+						{
+							i_src = vid_height - 1;
+						}
+
+						if (j_src >= vid_width)
+						{
+							j_src = vid_width - 1;
+						}
+
+						int yx = y[(i_src * abs(ystride)) + j_src];
+						int ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+						int vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+
+						point[0] = YUV2B(yx, ux, vx); // B
+						point[1] = YUV2G(yx, ux, vx); // G
+						point[2] = YUV2R(yx, ux, vx); // R
+						point[3] = 0; // A
+					}
+				}
+
 #endif
+				// clear framebuffer (black color)
+				fb_fill_black();
 
-
+			}
 		}
 		else
 		{
@@ -3352,6 +3336,23 @@ void set_av_video_frame()
     dbg(2,"ToxVideo:av_video_frame set\n");
 }
 
+void fb_copy_frame_to_fb(void* videoframe)
+{
+	if (framebuffer_mappedmem > 0)
+	{
+		memcpy(framebuffer_mappedmem, frame, framebuffer_screensize);
+	}
+}
+
+void fb_fill_black()
+{
+	if (framebuffer_mappedmem > 0)
+	{
+		memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
+	}
+}
+
+
 void *thread_av(void *data)
 {
 	ToxAV *av = (ToxAV *) data;
@@ -3377,15 +3378,55 @@ void *thread_av(void *data)
 		set_av_video_frame();
 		// start streaming
 		v4l_startread();
+
+
+		global_framebuffer_device_fd = 0;
+		global_framebuffer_device_fd = open(framebuffer_device, O_RDWR);
+		if (global_framebuffer_device_fd == -1)
+		{
+			dbg(0, "Error: cannot open Framebuffer device.\n");
+		}
+		dbg(2, "The Framebuffer device opened.\n");
+
+		// Get variable screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_VSCREENINFO, &var_framebuffer_info))
+		{
+			dbg(0, "Error reading Framebuffer info.\n");
+		}
+
+		dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres, var_framebuffer_info.bits_per_pixel);
+
+		// Get fixed screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
+		{
+			dbg(0, "Error reading Framebuffer fixed information.\n");
+		}
+
+		// map framebuffer to user memory
+		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
+
+		unsigned char *framebuffer_mappedmem = 0;
+		framebuffer_mappedmem = (char*)mmap(NULL, 
+                    (size_t)framebuffer_screensize, 
+                    PROT_READ | PROT_WRITE, 
+                    MAP_SHARED, 
+                    global_framebuffer_device_fd, 0);
+
+		if ((int)framebuffer_mappedmem == -1)
+		{
+			dbg(0, "Failed to mmap Framebuffer\n");
+		}
+
 	}
+
+
+
 
     while (toxav_iterate_thread_stop != 1)
 	{
 		if (global_video_active == 1)
 		{
 			pthread_mutex_lock(&av_thread_lock);
-
-
 
 
 
