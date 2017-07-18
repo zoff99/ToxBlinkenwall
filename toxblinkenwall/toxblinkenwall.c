@@ -3192,12 +3192,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
-
-#if 0
 			// zzzzzz
 
 			if (global_framebuffer_device_fd != 0)
 			{
+
+#if 0
 
 				int frame_width_px1 = (int)width;
 				int frame_height_px1 = (int)height;
