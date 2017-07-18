@@ -2991,10 +2991,12 @@ void close_cam()
 
 	// close framebuffer device
 	dbg(2, "munmaping Framebuffer\n");
+
 	if (framebuffer_mappedmem != NULL)
 	{
 		int res = munmap(framebuffer_mappedmem, (size_t)framebuffer_screensize);
 		framebuffer_mappedmem = NULL;
+	
 		dbg(9, "munmap Framebuffer error\n");
 	}
 
