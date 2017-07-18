@@ -3285,7 +3285,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				{
 					for (j = 0; j < vid_width; ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j);
 
 						i_src = (int)((float)i * hh);
 						j_src = (int)((float)j * ww);
