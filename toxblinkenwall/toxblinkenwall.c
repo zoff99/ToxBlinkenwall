@@ -67,8 +67,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 1
-static const char global_version_string[] = "0.99.1";
+#define VERSION_PATCH 2
+static const char global_version_string[] = "0.99.2";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -268,7 +268,7 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
 void fb_copy_frame_to_fb(void* videoframe);
 void fb_fill_black();
 void fb_fill_xxx();
-
+void show_video_calling();
 
 
 const char *savedata_filename = "savedata.tox";
@@ -289,6 +289,7 @@ const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null"
 const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
+const char *shell_cmd__show_video_calling = "./scrtips/show_video_calling.sh 2> /dev/null"
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -954,6 +955,14 @@ void print_tox_id(Tox *tox)
         int fd = fileno(logfile);
         fsync(fd);
     }
+}
+
+void show_video_calling()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
+	system(cmd_str);
 }
 
 void show_endless_loading()
@@ -3061,6 +3070,8 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 		// clear screen on CALL ANSWER
 		fb_fill_black();
+		// show funny face
+		show_video_calling();
 
 	}
 }
@@ -3123,6 +3134,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		// clear screen on CALL START
 		fb_fill_black();
+		// show funny face
+		show_video_calling();
 
 
 		dbg(9, "t_toxav_call_state_cb:004\n");
@@ -3218,14 +3231,10 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
-			// zzzzzz
-
 			if (global_framebuffer_device_fd != 0)
 			{
 
 				dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
-
-#if 1
 
 				int frame_width_px1 = (int)width;
 				int frame_height_px1 = (int)height;
@@ -3250,6 +3259,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
+				int horizontal_stride_pixels = 0;
+				int horizontal_stride_pixels_half = 0;
+				if (abs(ystride_) > frame_width_px1)
+				{
+					horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
+					horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
+					dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1);
+					dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
+				}
 
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
@@ -3276,6 +3294,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				float hh = (float)full_height / (float)vid_height;
 				float ww = (float)full_width / (float)vid_width;
 
+				int horizontal_stride_pixels_half_resized = 0;
+				if (ww > 0)
+				{
+					horizontal_stride_pixels_half_resized = (int)((float)horizontal_stride_pixels_half / ww);
+					dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
+				}
+
 				int i_src;
 				int j_src;
 				int yx;
@@ -3283,22 +3308,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int vx;
 				for (i = 0; i < vid_height; ++i)
 				{
-					for (j = 0; j < vid_width; ++j)
+					for (j = 0; j < (vid_width - (2 * horizontal_stride_pixels_half_resized)); ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j);
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j + horizontal_stride_pixels_half_resized);
 
 						i_src = (int)((float)i * hh);
 						j_src = (int)((float)j * ww);
-
-						//if (i_src >= vid_height)
-						//{
-						//	i_src = vid_height - 1;
-						//}
-
-						//if (j_src >= vid_width)
-						//{
-						//	j_src = vid_width - 1;
-						//}
 
 						yx = y[(i_src * abs(ystride)) + j_src];
 						ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
@@ -3318,11 +3333,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 					free(bf_out_data);
 					bf_out_data = NULL;
 				}
-#endif
+
 				// clear framebuffer (black xxx)
 				// fb_fill_xxx();
-
-
 			}
 		}
 		else
@@ -3462,7 +3475,7 @@ void *thread_av(void *data)
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
-#if 0
+#if 1
 
 
 
