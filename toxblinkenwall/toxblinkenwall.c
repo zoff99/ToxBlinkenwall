@@ -1,5 +1,5 @@
 /*
- * 
+ *
  * Zoff <zoff@zoff.cc>
  * in 2017
  *
@@ -289,7 +289,7 @@ const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null"
 const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
-const char *shell_cmd__show_video_calling = "./scrtips/show_video_calling.sh 2> /dev/null"
+const char *shell_cmd__show_video_calling = "./scrtips/show_video_calling.sh 2> /dev/null";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -3640,12 +3640,12 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 
 
 
-/** 
+/**
  * 8x8 monochrome bitmap fonts for rendering
  * Author: Daniel Hepper <daniel@hepper.net>
- * 
+ *
  * License: Public Domain
- * 
+ *
  * Based on:
  * // Summary: font8x8.h
  * // 8x8 monochrome bitmap fonts for rendering
@@ -3656,7 +3656,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
  * //
  * // License:
  * //     Public Domain
- * 
+ *
  * Fetched from: http://dimensionalrift.homelinux.net/combuster/mos3/?p=viewsource&file=/modules/gfx/font8_8.asm
  **/
 
@@ -3993,7 +3993,7 @@ void init_sound_device()
 		snd_pcm_hw_params_t *hw_params;
 
 		if ((err = snd_pcm_open (&audio_capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-			dbg(9, "cannot open audio device %s (%s)\n", 
+			dbg(9, "cannot open audio device %s (%s)\n",
 				 audio_device,
 				 snd_strerror (err));
 			//exit (1);
