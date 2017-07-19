@@ -29,3 +29,8 @@ convert_img "loading_bar_25"
 convert_img "loading_bar_50"
 convert_img "loading_bar_75"
 convert_img "loading_bar_100"
+
+convert_img "video_calling_001"
+convert_img "video_calling_002"
+convert_img "video_calling_003"
+convert_img "video_calling_004"
