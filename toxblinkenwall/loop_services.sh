@@ -19,15 +19,23 @@ sleep 4
 trap clean_up SIGHUP SIGINT SIGTERM
 
 chmod u+x scripts/*.sh
+chmod u+x toxblinkenwall
 scripts/stop_loading_endless.sh
 scripts/init.sh
 sleep 2
 scripts/create_gfx.sh
 
 while [ 1 == 1 ]; do
+	#####################################################
+	# pick first available video device
+	# change for your needs here!
+	video_device=$(ls -1 /dev/video*|tail -1)
+	#
+	#####################################################
+
 	scripts/stop_loading_endless.sh
 	scripts/init.sh
-	./toxblinkenwall
+	./toxblinkenwall -d "$video_device"
 	sleep 10
 done
 

@@ -96,7 +96,7 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 3
+#define VIDEO_BUFFER_COUNT 2 // 3 buffers on your camera!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
@@ -289,7 +289,7 @@ const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null"
 const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
-const char *shell_cmd__show_video_calling = "./scrtips/show_video_calling.sh 2> /dev/null";
+const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -965,6 +965,8 @@ void show_video_calling()
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
 	system(cmd_str);
+
+	yieldcpu(600);
 }
 
 void show_endless_loading()
@@ -2593,7 +2595,7 @@ int init_cam()
 
 	if (video_dev_open_error == 1)
 	{
-		sleep(1); // sleep 20 seconds // speedup for now!!
+		sleep(20); // sleep 20 seconds
 
 		if ((fd = open(v4l2_device, O_RDWR)) < 0)
 		{
@@ -2607,8 +2609,6 @@ int init_cam()
 	}
 
 
-	// if (video_dev_open_error == 0)
-	{
 	struct v4l2_capability cap;
 	struct v4l2_cropcap    cropcap;
     // struct v4l2_crop       crop;
@@ -2835,11 +2835,11 @@ int init_cam()
             dbg(0, "mmap error %d, %s\n", errno, strerror(errno));
         }
 
+
 	}
 
 	return fd;
 
-	}
 }
 
 int v4l_startread()
@@ -3259,6 +3259,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
+				dbg(9, "frame_width_px=%d frame_height_px=%d\n", (int)frame_width_px, (int)frame_height_px);
+
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
 				int horizontal_stride_pixels = 0;
@@ -3267,7 +3269,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				{
 					horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
 					horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
-					dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1);
+					dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
 					dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
 				}
 
@@ -3277,7 +3279,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
 				uint8_t *bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
+				memset(bf_out_data, 0, framebuffer_screensize); // clear buffer
 				unsigned long int i, j;
+
 				// for (i = 0; i < full_height; ++i)
 				// {
 				// 	for (j = 0; j < full_width; ++j)
@@ -3296,7 +3300,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
 				{
-					horizontal_stride_pixels_half_resized = (int)((float)horizontal_stride_pixels_half / ww);
+					horizontal_stride_pixels_half_resized = 1 + (int)((float)horizontal_stride_pixels_half / ww);
 					dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
 				}
 
@@ -3305,11 +3309,25 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int yx;
 				int ux;
 				int vx;
+
+				 for (i = 0; i < vid_height; ++i)
+				 {
+				 	for (j = 0; j < vid_width; ++j)
+				 	{
+						// fill with very dark blue
+				 		uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j);
+				 		point[0] = 97; // B
+				 		point[1] = 17; // G
+				 		point[2] = 13; // R
+				 		point[3] = 0; // A
+				 	}
+				 }
+
 				for (i = 0; i < vid_height; ++i)
 				{
-					for (j = 0; j < (vid_width - (2 * horizontal_stride_pixels_half_resized)); ++j)
+					for (j = 0; j < (vid_width - (4 * horizontal_stride_pixels_half_resized)); ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j + horizontal_stride_pixels_half_resized);
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j + (2 * horizontal_stride_pixels_half_resized));
 
 						i_src = (int)((float)i * hh);
 						j_src = (int)((float)j * ww);
