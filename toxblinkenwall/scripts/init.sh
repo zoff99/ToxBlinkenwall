@@ -18,9 +18,9 @@ export real_width=$[ $stride_ / $tmp1 ]
 export fb_device=$(ls -1 /dev/fb*|tail -1)
 ##### -------------------------------------
 
-##### --- only on the PI ---
+# ---- only for RASPI ----
 sudo /etc/init.d/lightdm stop
-##### --- only on the PI ---
+# ---- only for RASPI ----
 
 ##### --- remove cursor ---
 printf 'setterm --cursor off > /dev/tty0\nexit\n' | sudo bash
