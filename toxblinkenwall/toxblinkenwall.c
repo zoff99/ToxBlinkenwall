@@ -314,8 +314,10 @@ int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
 int video_high = 0;
 int switch_tcponly = 0;
-int full_width = 640;
-int full_height = 480;
+int full_width = 640; // gets set later, this is just as last resort
+int full_height = 480; // gets set later, this is just as last resort
+int vid_width = 192; // ------- blinkenwall resolution -------
+int vid_height = 144; // ------- blinkenwall resolution -------
 
 
 uint32_t global_audio_bit_rate;
@@ -3272,9 +3274,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
-				int vid_width = 192;
-				int vid_height = 144;
-
 
 				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
 				uint8_t *bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
