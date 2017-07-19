@@ -11,10 +11,14 @@ function clean_up {
 cd $(dirname "$0")
 export LD_LIBRARY_PATH=usr/lib
 
+# ---- only for RASPI ----
 sudo /etc/init.d/lightdm start
 sleep 4
+# ---- only for RASPI ----
 
 trap clean_up SIGHUP SIGINT SIGTERM
+
+chmod u+x scripts/*.sh
 scripts/stop_loading_endless.sh
 scripts/init.sh
 sleep 2
