@@ -4,7 +4,7 @@
  * in 2017
  *
  * compile on linux (dynamic):
- *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert
+ *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert -lao
  *
  * run on linux (dynamic):
  * export LD_LIBRARY_PATH=usr/lib ; ./toxblinkenwall
@@ -47,11 +47,15 @@
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
+#define HAVE_LIBAO 1
 
 #ifdef HAVE_SOUND
 #include <alsa/asoundlib.h>
 #endif
 
+#ifdef HAVE_LIBAO
+#include <ao/ao.h>
+#endif
 
 
 #ifdef V4LCONVERT
@@ -320,6 +324,9 @@ int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
 uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
+ao_device *_ao_device = NULL;
+ao_sample_format _ao_format;
+int _ao_default_driver = -1;
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
@@ -3027,6 +3034,13 @@ void close_cam()
 		bf_out_data = NULL;
 	}
 
+#ifdef HAVE_LIBAO
+	if (_ao_device != NULL)
+	{
+		ao_close(_ao_device);
+	}
+	ao_shutdown();
+#endif
 
 
 #ifdef V4LCONVERT
@@ -3209,6 +3223,14 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
+#ifdef HAVE_LIBAO
+			// play audio to default audio device --------------
+			if (_ao_device != NULL)
+			{
+				ao_play( _ao_device, (char *)pcm, (size_t)(sample_count * channels * 2) );
+			}
+			// play audio to default audio device --------------
+#endif
 		}
 		else
 		{
@@ -3513,7 +3535,30 @@ void *thread_av(void *data)
 			dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
 		}
 
+
+#ifdef HAVE_LIBAO
+		// initialize sound output via libao ------------------
+		ao_initialize();
+		_ao_default_driver = ao_default_driver_id();
+		memset(&_ao_format, 0, sizeof(_ao_format));
+		_ao_format.bits = 16;
+		_ao_format.channels = 1;
+		_ao_format.rate = 48000;
+		_ao_format.byte_format = AO_FMT_LITTLE;
+
+		_ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
+
+		if (_ao_device == NULL)
+		{
+			dbg(0, "Error opening sound output device\n");
+		}
+		else
+		{
+		}
+		// initialize sound output via libao ------------------
+#endif
 	}
+
 
 
 	// --- ok, here camera and screen is ready to go
