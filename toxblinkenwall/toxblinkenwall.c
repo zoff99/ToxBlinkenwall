@@ -67,8 +67,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 2
-static const char global_version_string[] = "0.99.2";
+#define VERSION_PATCH 3
+static const char global_version_string[] = "0.99.3";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -4128,7 +4128,7 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
-   const char     *short_opt = "hvd:t23b:fu:";
+   const char     *short_opt = "hvd:t23b:fu:j:k:";
    struct option   long_opt[] =
    {
       {"help",          no_argument,       NULL, 'h'},
@@ -4172,6 +4172,14 @@ int main(int argc, char *argv[])
         dbg(3, "Using Videobitrate: %d\n", (int)DEFAULT_GLOBAL_VID_BITRATE);
         global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         break;
+      case 'j':
+        vid_width = (int)atoi(optarg);
+        dbg(3, "Using Wall Pixels X: %d\n", (int)vid_width);
+        break;
+      case 'k':
+        vid_height = (int)atoi(optarg);
+        dbg(3, "Using Wall Pixels Y: %d\n", (int)vid_height);
+        break;
       case 'v':
          printf("ToxBlinkenwall version: %s\n", global_version_string);
             if (logfile)
@@ -4187,6 +4195,8 @@ int main(int argc, char *argv[])
          printf("  -d, --videodevice devicefile         file\n");
          printf("  -u devicefile                        file\n");
          printf("  -b bitrate                           video bitrate in kbit/s\n");
+         printf("  -j pixels                            wall x pixels\n");
+         printf("  -k pixels                            wall y pixels\n");
          printf("  -f                                   use 720p video mode\n");
          printf("  -t,                                  tcp only mode\n");
          printf("  -2,                                  use alternate bootnode list\n");
