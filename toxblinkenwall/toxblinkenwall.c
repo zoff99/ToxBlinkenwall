@@ -318,6 +318,7 @@ int full_width = 640; // gets set later, this is just as last resort
 int full_height = 480; // gets set later, this is just as last resort
 int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
+uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
 
 uint32_t global_audio_bit_rate;
@@ -3020,6 +3021,13 @@ void close_cam()
 		global_framebuffer_device_fd = 0;
 	}
 
+	if (bf_out_data != NULL)
+	{
+		free(bf_out_data);
+		bf_out_data = NULL;
+	}
+
+
 
 #ifdef V4LCONVERT
 	v4lconvert_destroy(v4lconvert_data);
@@ -3280,8 +3288,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
 
 				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
-				uint8_t *bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
-				memset(bf_out_data, 0, framebuffer_screensize); // clear buffer
+				if (bf_out_data == NULL)
+				{
+					bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
+					memset(bf_out_data, 0, framebuffer_screensize); // clear buffer
+				}
+
 				unsigned long int i, j;
 
 				// for (i = 0; i < full_height; ++i)
@@ -3296,8 +3308,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				// 	}
 				// }
 
-				float hh = (float)full_height / (float)vid_height;
 				float ww = (float)full_width / (float)vid_width;
+				float hh = (float)full_height / (float)vid_height;
+				dbg(9, "ww=%f hh=%f\n", ww, hh);
 
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
@@ -3316,29 +3329,44 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				 {
 				 	for (j = 0; j < vid_width; ++j)
 				 	{
-						// fill with very dark blue
+						// fill with very color
 			uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
 			+ j);
-				 		point[0] = 97; // B
-				 		point[1] = 17; // G
-				 		point[2] = 13; // R
+				 		point[0] = 45; // B
+				 		point[1] = 38; // G
+				 		point[2] = 38; // R
 				 		point[3] = 0; // A
 				 	}
 				 }
 
 
-			// * ((i * full_width) + j
+
+				// should we use "ww" here as fator? we will see on the real "blinkenwall" ...
+				//
+				// int inaccurate_horizonal_delta=(int)(4*ww);
+				// int inaccurate_horizonal_delta_sort_of_half=(int)(2*ww);
+				//
+				int inaccurate_horizonal_delta=(int)(8);
+				int inaccurate_horizonal_delta_sort_of_half=(int)(4);
 
 				for (i = 0; i < vid_height; ++i)
 				{
-					for (j = 0; j < (vid_width - (4 * horizontal_stride_pixels_half_resized)); ++j)
+					for (j = 0; j < (vid_width -	(4 *
+				(horizontal_stride_pixels_half_resized+inaccurate_horizonal_delta)
+									)
+							); ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4
-			* ((i * (int)var_framebuffer_fix_info.line_length/4) + j
-			+ (2 * horizontal_stride_pixels_half_resized));
 
-						i_src = (int)((float)i * hh);
+			uint8_t *point = (uint8_t *) bf_out_data + 4 *
+			(
+				(i * (int)var_framebuffer_fix_info.line_length/4) + j +
+				(2 * horizontal_stride_pixels_half_resized) +
+				inaccurate_horizonal_delta_sort_of_half
+			);
+
+
 						j_src = (int)((float)j * ww);
+						i_src = (int)((float)i * hh);
 
 						yx = y[(i_src * abs(ystride)) + j_src];
 						ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
@@ -3355,8 +3383,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				if (bf_out_data != NULL)
 				{
 					fb_copy_frame_to_fb(bf_out_data);
-					free(bf_out_data);
-					bf_out_data = NULL;
+					// free(bf_out_data);
+					// bf_out_data = NULL;
 				}
 
 				// clear framebuffer (black xxx)
@@ -3487,6 +3515,12 @@ void *thread_av(void *data)
 
 	}
 
+
+	// --- ok, here camera and screen is ready to go
+	// --- now show QR code
+	stop_endless_loading();
+	yieldcpu(700);
+	show_tox_id_qrcode();
 
 
 
@@ -4300,9 +4334,11 @@ int main(int argc, char *argv[])
 		}
     }
 
-	stop_endless_loading();
-	yieldcpu(700);
-	show_tox_id_qrcode();
+	// -- here tox node is online, but video is not yet ready!!
+	// -- do this later
+	// stop_endless_loading();
+	// yieldcpu(700);
+	// show_tox_id_qrcode();
 
 
     TOXAV_ERR_NEW rc;
