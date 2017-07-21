@@ -12,8 +12,10 @@ cd $(dirname "$0")
 export LD_LIBRARY_PATH=usr/lib
 
 # ---- only for RASPI ----
-sudo /etc/init.d/lightdm start
-sleep 4
+if [ "$IS_ON""x" == "RASPI""x" ]; then
+	sudo /etc/init.d/lightdm start
+	sleep 4
+fi
 # ---- only for RASPI ----
 
 trap clean_up SIGHUP SIGINT SIGTERM
@@ -35,7 +37,8 @@ while [ 1 == 1 ]; do
 
 	scripts/stop_loading_endless.sh
 	scripts/init.sh
-	./toxblinkenwall -d "$video_device"
+	. scripts/vars.sh
+	./toxblinkenwall -d "$video_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 10
 done
 
