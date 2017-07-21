@@ -7,7 +7,7 @@ export FB_HEIGHT=480
 if [ "$IS_ON""x" == "RASPI""x" ]; then
   export BKWALL_WIDTH=640
   export BKWALL_HEIGHT=480
-else if [ "$IS_ON""x" == "BLINKENWALL""x" ]; then
+elif [ "$IS_ON""x" == "BLINKENWALL""x" ]; then
   export BKWALL_WIDTH=192
   export BKWALL_HEIGHT=144
 fi
