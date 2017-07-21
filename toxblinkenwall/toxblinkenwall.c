@@ -3354,9 +3354,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 						// fill with very color
 			uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
 			+ j);
-				 		point[0] = 45; // B
-				 		point[1] = 38; // G
-				 		point[2] = 38; // R
+				 		point[0] = 40; // B
+				 		point[1] = 28; // G
+				 		point[2] = 28; // R
 				 		point[3] = 0; // A
 				 	}
 				 }
@@ -3368,8 +3368,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				// int inaccurate_horizonal_delta=(int)(4*ww);
 				// int inaccurate_horizonal_delta_sort_of_half=(int)(2*ww);
 				//
-				int inaccurate_horizonal_delta=(int)(8);
-				int inaccurate_horizonal_delta_sort_of_half=(int)(4);
+				int inaccurate_horizonal_delta=(int)((float)8/ww);
+				int inaccurate_horizonal_delta_sort_of_half=(int)((float)4/ww);
 
 				for (i = 0; i < vid_height; ++i)
 				{
