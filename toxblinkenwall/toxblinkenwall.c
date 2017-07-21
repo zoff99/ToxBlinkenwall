@@ -3277,6 +3277,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				full_height = var_framebuffer_info.yres;
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 
+				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
+
 				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
 				uint8_t *bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
 				memset(bf_out_data, 0, framebuffer_screensize); // clear buffer
@@ -3315,7 +3317,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				 	for (j = 0; j < vid_width; ++j)
 				 	{
 						// fill with very dark blue
-				 		uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j);
+			uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
+			+ j);
 				 		point[0] = 97; // B
 				 		point[1] = 17; // G
 				 		point[2] = 13; // R
@@ -3323,11 +3326,16 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				 	}
 				 }
 
+
+			// * ((i * full_width) + j
+
 				for (i = 0; i < vid_height; ++i)
 				{
 					for (j = 0; j < (vid_width - (4 * horizontal_stride_pixels_half_resized)); ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * full_width) + j + (2 * horizontal_stride_pixels_half_resized));
+						uint8_t *point = (uint8_t *) bf_out_data + 4
+			* ((i * (int)var_framebuffer_fix_info.line_length/4) + j
+			+ (2 * horizontal_stride_pixels_half_resized));
 
 						i_src = (int)((float)i * hh);
 						j_src = (int)((float)j * ww);
@@ -3459,6 +3467,7 @@ void *thread_av(void *data)
 
 		// map framebuffer to user memory
 		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
+		dbg(9, "framebuffer_screensize=%d\n", (int)framebuffer_screensize);
 
 		framebuffer_mappedmem = NULL;
 		framebuffer_mappedmem = (char*)mmap(NULL,
