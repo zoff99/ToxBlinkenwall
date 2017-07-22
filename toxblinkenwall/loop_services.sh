@@ -41,6 +41,13 @@ while [ 1 == 1 ]; do
 	scripts/init.sh
 	. scripts/vars.sh
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
-	sleep 10
+	sleep 5
+	# ---- only for RASPI ----
+	if [ "$IS_ON""x" == "RASPI""x" ]; then
+		# stop gfx UI
+		sudo /etc/init.d/lightdm start
+		sleep 2
+	fi
+	# ---- only for RASPI ----
 done
 
