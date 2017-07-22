@@ -4329,6 +4329,7 @@ void sigint_handler(int signo)
     	printf("received SIGINT, pid=%d\n", getpid());
     	tox_loop_running = 0;
 
+#if 0
 		kill_all_file_transfers(tox);
 		close_cam();
 		toxav_kill(mytox_av);
@@ -4339,6 +4340,9 @@ void sigint_handler(int signo)
 			fclose(logfile);
 			logfile = NULL;
 		}
+
+		exit(77);
+#endif
 
 		exit(77);
     }
@@ -4633,8 +4637,8 @@ int main(int argc, char *argv[])
 
 
     kill_all_file_transfers(tox);
-	close_cam();
-	toxav_kill(mytox_av);
+    close_cam();
+    toxav_kill(mytox_av);
     tox_kill(tox);
 
     if (logfile)

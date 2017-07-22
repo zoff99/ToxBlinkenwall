@@ -3,7 +3,7 @@
 function clean_up
 {
 	pkill toxblinkenwall
-	sleep 1
+	sleep 3
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
 	# Perform program exit cleanup of framebuffer
