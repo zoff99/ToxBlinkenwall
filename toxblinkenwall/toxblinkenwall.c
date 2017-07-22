@@ -2032,14 +2032,21 @@ void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint
 		}
 		else
 		{
-			FILE *some_file = NULL;
-			some_file = fopen(cmd__image_filename_full_path, "wb"); 
+			int fd_ = 0;
+			fd_ = open(cmd__image_filename_full_path, O_RDWR | O_CREAT | S_IWUSR | S_IRUSR);
 
-			if (some_file)
+			if (fd_ != -1)
 			{
-				fseek(some_file, (long)position, SEEK_SET);
-				fwrite(data, length, 1, some_file);
-				fclose(some_file);
+				FILE *some_file = fdopen(fd_);
+				// some_file = fopen(cmd__image_filename_full_path, "a+b"); 
+
+				if (some_file)
+				{
+					fseek(some_file, (long)position, SEEK_SET);
+					fwrite(data, length, 1, some_file);
+					fclose(some_file);
+					close(fd_);
+				}
 			}
 		}
 	}
