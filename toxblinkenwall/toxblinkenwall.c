@@ -3323,6 +3323,16 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
 {
+	// zzzzzzzz
+
+	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
+	{
+		// we are in a call with someone else already
+		dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+		return;
+	}
+
+
 	dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
 	dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
 
