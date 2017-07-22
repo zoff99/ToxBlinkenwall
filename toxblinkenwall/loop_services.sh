@@ -1,7 +1,11 @@
 #! /bin/bash
 
-function clean_up {
-
+function clean_up
+{
+	pkill toxblinkenwall
+	sleep 1
+	pkill -9 toxblinkenwall
+	pkill -9 toxblinkenwall
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
 	scripts/cleanup_fb.sh
