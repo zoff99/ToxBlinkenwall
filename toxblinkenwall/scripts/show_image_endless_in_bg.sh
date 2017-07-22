@@ -14,7 +14,7 @@ rm -f "$touchfile"
 identify "$img"
 err_=$?
 
-if [ $err -q 1 ]; then
+if [ $err_ -eq 1 ]; then
 	# error not an known image format
 	rm -f "$img"
 	rm -f "$gfx_dir"/_anim/*
