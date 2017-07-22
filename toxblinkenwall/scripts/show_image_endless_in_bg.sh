@@ -28,6 +28,15 @@ while [ true ]; do
 			cur_frame=0
 			while [ $frames_ ]; do
 					# echo "$cur_frame"":"
+
+					# convert for use in framebuffer -----------------
+					convert "$gfx_dir"/_anim/animframe."$cur_frame".png -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir"/_anim/animframe.2."$cur_frame".png
+					convert "$gfx_dir"/_anim/animframe.2."$cur_frame".png -channel rgba -alpha on -set colorspace RGB -separate -swap 0,2 -combine -define png:color-type=6 "$gfx_dir"/_anim/animframe.3."$cur_frame".png
+					# ------------- swap B and R channels -------------
+					convert "$gfx_dir"/_anim/animframe.3."$cur_frame".png -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir"/_anim/animframe."$cur_frame".rgba
+					rm -f "$gfx_dir"/_anim/animframe.2."$cur_frame".png "$gfx_dir"/_anim/animframe.3."$cur_frame".png
+					# convert for use in framebuffer -----------------
+
 					# echo ${delayArr[$cur_frame]}
 					delayArr[$cur_frame]=$(printf "scale=3\n${delayArr[$cur_frame]} / 100 \n"|bc)
 					# echo ${delayArr[$cur_frame]}
@@ -47,7 +56,7 @@ while [ true ]; do
 							# show frame
 							sleep ${delayArr[$cur_frame]}
 
-							cat "$img" > "$fb_device"
+							cat "$gfx_dir"/_anim/animframe."$cur_frame".rgba > "$fb_device"
 
 							cur_frame=$[ $cur_frame + 1 ]
 							if [ "$cur_frame""x" == "$numframes""x" ]; then
