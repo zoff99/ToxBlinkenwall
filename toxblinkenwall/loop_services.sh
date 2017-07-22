@@ -13,8 +13,11 @@ export LD_LIBRARY_PATH=usr/lib
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
+	# camera module not loaded automatically
+	sudo modprobe bcm2835_v4l2
+	# stop gfx UI
 	sudo /etc/init.d/lightdm start
-	sleep 4
+	sleep 2
 fi
 # ---- only for RASPI ----
 
