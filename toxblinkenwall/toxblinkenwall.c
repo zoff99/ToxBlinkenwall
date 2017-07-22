@@ -3253,6 +3253,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		dbg(9, "Call with friend %d finished\n", friend_number);
 		global_video_active = 0;
+		friend_to_send_video_to = -1;
 
 		show_tox_id_qrcode();
 		return;
@@ -3261,6 +3262,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		dbg(9, "Call with friend %d errored\n", friend_number);
 		global_video_active = 0;
+		friend_to_send_video_to = -1;
 
 		show_tox_id_qrcode();
 		return;
@@ -3312,6 +3314,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		dbg(9, "t_toxav_call_state_cb:005\n");
 		global_video_active = 0;
 		global_send_first_frame = 0;
+		friend_to_send_video_to = -1;
 
 		show_tox_id_qrcode();
 	}
@@ -3875,11 +3878,12 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
 
-	show_tox_id_qrcode();
-
 	global_video_active = 0;
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
+
+	show_tox_id_qrcode();
+
 }
 
 
@@ -4324,6 +4328,19 @@ void sigint_handler(int signo)
     {
     	printf("received SIGINT, pid=%d\n", getpid());
     	tox_loop_running = 0;
+
+		kill_all_file_transfers(tox);
+		close_cam();
+		toxav_kill(mytox_av);
+		tox_kill(tox);
+
+		if (logfile)
+		{
+			fclose(logfile);
+			logfile = NULL;
+		}
+
+		exit(77);
     }
 }
 
