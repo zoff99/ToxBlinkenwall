@@ -11,6 +11,18 @@ rm -f "$touchfile"
 
 . $(dirname "$0")/vars.sh
 
+identify "$img"
+err_=$?
+
+if [ $err -q 1 ]; then
+	# error not an known image format
+	rm -f "$img"
+	rm -f "$gfx_dir"/_anim/*
+	rm -Rf "$gfx_dir"/_anim/
+	exit
+fi
+
+
 $(dirname "$0")/show_loading_endless_in_bg.sh
 
 while [ true ]; do
