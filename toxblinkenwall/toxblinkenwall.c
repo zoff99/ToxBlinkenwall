@@ -3236,6 +3236,15 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
+	// zzzzzzzz
+
+	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
+	{
+		// we are in a call with someone else already
+		dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+		return;
+	}
+
     dbg(9, "Handling CALL STATE callback: %d friend_number=%d\n", state, (int)friend_number);
 
     ((CallControl *)user_data)->state = state;
@@ -3246,7 +3255,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		global_video_active = 0;
 
 		show_tox_id_qrcode();
-
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
@@ -3255,7 +3263,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		global_video_active = 0;
 
 		show_tox_id_qrcode();
-
 		return;
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -3296,7 +3303,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		// show funny face
 		show_video_calling();
 
-
 		dbg(9, "t_toxav_call_state_cb:004\n");
 		global_video_active = 1;
 		global_send_first_frame = 2;
@@ -3308,7 +3314,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		global_send_first_frame = 0;
 
 		show_tox_id_qrcode();
-
 	}
 
 	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d\n", friend_number, state, send_audio, send_video);
