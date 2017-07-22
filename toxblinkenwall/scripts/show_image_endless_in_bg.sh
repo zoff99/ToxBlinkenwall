@@ -11,6 +11,8 @@ rm -f "$touchfile"
 
 . $(dirname "$0")/vars.sh
 
+$(dirname "$0")/show_loading_endless_in_bg.sh
+
 while [ true ]; do
 
 	frame_count=$(identify -format %n "$img")
@@ -47,6 +49,9 @@ while [ true ]; do
 			done
 			# get real delay ----
 
+			$(dirname "$0")/stop_loading_endless.sh
+			sleep 1
+
 			# play loop ----
 			while [ true ]; do
 					frames_=true
@@ -68,6 +73,8 @@ while [ true ]; do
 								rm -f "$gfx_dir"/_anim/*
 								rm -Rf "$gfx_dir"/_anim/
 								rm -f "$img"
+								$(dirname "$0")/stop_loading_endless.sh
+								sleep 1
 								cat /dev/zero > "$fb_device"
 								exit
 							fi
@@ -79,6 +86,8 @@ while [ true ]; do
 						rm -f "$gfx_dir"/_anim/*
 						rm -Rf "$gfx_dir"/_anim/
 						rm -f "$img"
+						$(dirname "$0")/stop_loading_endless.sh
+						sleep 1
 						cat /dev/zero > "$fb_device"
 						exit
 					fi
@@ -87,8 +96,26 @@ while [ true ]; do
 			# get real delay ----
 
 	else # single frame image
-			cat "$img" > "$fb_device"
+
+			# convert for use in framebuffer -----------------
+			mkdir -p "$gfx_dir"/_anim/
+			rm -f "$gfx_dir"/_anim/*
+			cur_frame=0
+			convert "$img" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir"/_anim/animframe.2."$cur_frame".png
+			convert "$gfx_dir"/_anim/animframe.2."$cur_frame".png -channel rgba -alpha on -set colorspace RGB -separate -swap 0,2 -combine -define png:color-type=6 "$gfx_dir"/_anim/animframe.3."$cur_frame".png
+			# ------------- swap B and R channels -------------
+			convert "$gfx_dir"/_anim/animframe.3."$cur_frame".png -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir"/_anim/animframe."$cur_frame".rgba
+			rm -f "$gfx_dir"/_anim/animframe.2."$cur_frame".png "$gfx_dir"/_anim/animframe.3."$cur_frame".png
+			# convert for use in framebuffer -----------------
+
+			$(dirname "$0")/stop_loading_endless.sh
+			sleep 1
+
+			cat "$gfx_dir"/_anim/animframe."$cur_frame".rgba > "$fb_device"
 			rm -f "$img"
+			rm -f "$gfx_dir"/_anim/*
+			rm -Rf "$gfx_dir"/_anim/
+			$(dirname "$0")/stop_loading_endless.sh
 			exit
 	fi
 done
