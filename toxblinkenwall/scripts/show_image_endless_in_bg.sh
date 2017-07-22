@@ -115,7 +115,6 @@ while [ true ]; do
 			rm -f "$img"
 			rm -f "$gfx_dir"/_anim/*
 			rm -Rf "$gfx_dir"/_anim/
-			$(dirname "$0")/stop_loading_endless.sh
 			exit
 	fi
 done
