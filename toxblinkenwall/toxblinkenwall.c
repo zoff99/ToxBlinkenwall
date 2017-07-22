@@ -100,7 +100,7 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 3 // x buffers on your camera!
+#define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
@@ -282,7 +282,7 @@ const char *my_avatar_filename = "avatar.png";
 const char *my_toxid_filename_png = "toxid.png";
 const char *my_toxid_filename_rgba = "toxid.rgba";
 
-char *v4l2_device = NULL; // video device filename
+char *v4l2_device; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
 
 const char *shell_cmd__single_shot = "./scripts/single_shot.sh 2> /dev/null";
@@ -309,7 +309,7 @@ struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
 size_t framebuffer_screensize = 0;
 unsigned char *framebuffer_mappedmem = NULL;
-uint32_t n_buffers = 0;
+uint32_t n_buffers;
 struct buffer *buffers = NULL;
 uint16_t video_width = 0;
 uint16_t video_height = 0;
@@ -2945,8 +2945,8 @@ int init_cam()
 
 	buffers = calloc(bufrequest.count, sizeof(*buffers));
 
-	dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
-	dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
+	// dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
+	// dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
 
 	for (n_buffers = 0; n_buffers < bufrequest.count; ++n_buffers)
 	{
@@ -2958,14 +2958,14 @@ int init_cam()
 		bufferinfo.memory = V4L2_MEMORY_MMAP;
 		bufferinfo.index = n_buffers;
 
-        	if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &bufferinfo))
+        if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &bufferinfo))
 		{
-        	    dbg(9, "VIDIOC_QUERYBUF (2) error %d, %s\n", errno, strerror(errno));
-        	}
-		else
-		{
-        	    dbg(9, "VIDIOC_QUERYBUF (2) *OK*  %d, %s\n", errno, strerror(errno));
-		}
+            dbg(9, "VIDIOC_QUERYBUF (2) error %d, %s\n", errno, strerror(errno));
+        }
+		// else
+		//{
+        //    dbg(9, "VIDIOC_QUERYBUF (2) *OK*  %d, %s\n", errno, strerror(errno));
+		//}
 
 /*
 		if (ioctl(fd, VIDIOC_QUERYBUF, &bufferinfo) < 0)
@@ -2974,24 +2974,22 @@ int init_cam()
 		}
 */
 
-        	buffers[n_buffers].length = bufferinfo.length;
-        	buffers[n_buffers].start  = mmap(NULL /* start anywhere */, bufferinfo.length, PROT_READ | PROT_WRITE /* required */,
+        buffers[n_buffers].length = bufferinfo.length;
+        buffers[n_buffers].start  = mmap(NULL /* start anywhere */, bufferinfo.length, PROT_READ | PROT_WRITE /* required */,
                                         MAP_SHARED /* recommended */, fd, bufferinfo.m.offset);
 
-        	if (MAP_FAILED == buffers[n_buffers].start)
+        if (MAP_FAILED == buffers[n_buffers].start)
 		{
-        	    dbg(0, "mmap error %d, %s\n", errno, strerror(errno));
-        	}
-
-		dbg(0, "VIDIOC_REQBUFS number of buffers[2a]=%d\n", (int)n_buffers);
+            dbg(0, "mmap error %d, %s\n", errno, strerror(errno));
+        }
 
 	}
 
-	dbg(0, "VIDIOC_REQBUFS number of buffers[2b]=%d\n", (int)n_buffers);
+	// dbg(0, "VIDIOC_REQBUFS number of buffers[2b]=%d\n", (int)n_buffers);
 
 	return fd;
-
 }
+
 
 int v4l_startread()
 {
@@ -2999,7 +2997,7 @@ int v4l_startread()
     size_t i;
     enum v4l2_buf_type type;
 
-    dbg(0, "VIDIOC_REQBUFS number of buffers[2x]=%d\n", (int)n_buffers);
+    // dbg(0, "VIDIOC_REQBUFS number of buffers[2x]=%d\n", (int)n_buffers);
 
     for (i = 0; i < n_buffers; ++i)
 	{
@@ -3017,10 +3015,10 @@ int v4l_startread()
             dbg(9, "VIDIOC_QBUF (3) error %d, %s\n", errno, strerror(errno));
             return 0;
         }
-	else
-	{
-            dbg(9, "VIDIOC_QBUF (3) *OK*  %d, %s\n", errno, strerror(errno));
-	}
+	// else
+	//{
+    //        dbg(9, "VIDIOC_QBUF (3) *OK*  %d, %s\n", errno, strerror(errno));
+	//}
     }
 
     type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -3120,7 +3118,6 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 	// dbg(9, "buf.index=%d\n", (int)buf.index);
 
     void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
-
 
 /* assumes planes are continuous memory */
 #ifdef V4LCONVERT
@@ -3603,7 +3600,7 @@ void set_av_video_frame()
     av_video_frame.h = input.d_h;
 	//av_video_frame.bit_depth = input.bit_depth;
 
-    // dbg(2,"ToxVideo:av_video_frame set\n");
+    dbg(2,"ToxVideo:av_video_frame set\n");
 }
 
 void fb_copy_frame_to_fb(void* videoframe)
@@ -3649,7 +3646,7 @@ void *thread_av(void *data)
 	}
 
 	dbg(2, "AV Thread #%d: starting\n", (int) id);
-
+	
 	if (video_call_enabled == 1)
 	{
 		global_cam_device_fd = init_cam();
@@ -3749,7 +3746,7 @@ void *thread_av(void *data)
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
-#if 1
+
 
 
 
@@ -3834,7 +3831,7 @@ void *thread_av(void *data)
             // yieldcpu(80); /* ~12 frames per second */
             // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
 
-#endif
+
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
@@ -3879,7 +3876,7 @@ void *thread_video_av(void *data)
 	{
 		pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
-		// dbg(9, "AV video Thread #%d running ...\n", (int) id);
+		// dbg(9, "AV video Thread #%d running ...", (int) id);
 		pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
@@ -3893,7 +3890,6 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
-
 	global_video_active = 0;
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
