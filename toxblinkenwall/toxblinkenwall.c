@@ -296,6 +296,7 @@ const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endle
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
 const char *shell_cmd__start_endless_image_anim = "./scripts/show_image_endless_in_bg.sh"; // needs image filename paramter
 const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.sh 2> /dev/null";
+const char *cmd__image_filename_full_path = "./tmp/image.dat";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -338,6 +339,10 @@ int global_blink_state = 0;
 
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
+
+int incoming_filetransfers = 0;
+uint32_t incoming_filetransfers_friendnumber = -1;
+uint32_t incoming_filetransfers_filenumber = -1;
 
 // -- hardcoded --
 // -- hardcoded --
@@ -979,13 +984,13 @@ void show_video_calling()
 	yieldcpu(600);
 }
 
-void show_endless_image(char* image_filename_full_path)
+void show_endless_image()
 {
 	if (image_filename_full_path)
 	{
 		char cmd_str[1000];
 		CLEAR(cmd_str);
-		snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, image_filename_full_path);
+		snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
 		system(cmd_str);
 	}
 }
@@ -2008,12 +2013,40 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint64_t position,
                         const uint8_t *data, size_t length, void *user_data)
 {
-    struct FileTransfer *ft = get_file_transfer_struct(friendnumber, filenumber);
-
-    if (!ft)
+	if ((incoming_filetransfers_friendnumber == friendnumber) && (incoming_filetransfers_filenumber = filenumber))
 	{
-        return;
+
+		// struct FileTransfer *ft = get_file_transfer_struct(friendnumber, filenumber);
+
+		// if (!ft)
+		// {
+		//    return;
+		//}
+
+		if (length == 0)
+		{
+			// file transfer finished --------------
+			// show image
+			show_endless_image();
+			incoming_filetransfers_friendnumber = -1;
+			incoming_filetransfers_filenumber = -1;
+			incoming_filetransfers = 0;
+			// file transfer finished --------------
+		}
+		else
+		{
+			FILE *some_file = NULL;
+			some_file = fopen(cmd__image_filename_full_path, "wb"); 
+
+			if (some_file)
+			{
+				fseek(some_file, (long)position, SEEK_SET);
+				fwrite(data, length, 1, some_file);
+				fclose(some_file);
+			}
+		}
 	}
+	// zzzzzzzzzzz
 }
 
 
@@ -2029,10 +2062,28 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
     }
     else
     {
-        // cancel all filetransfers. we don't want to receive files
-        tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
-        dbg(9, "on_file_recv:003:cancel incoming file\n");
-        return;
+		if (incoming_filetransfers > 0)
+		{
+			// only ever 1 incoming filetransfer!
+			tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+		}
+		else
+		{
+			if (file_size < 10 * 1024 * 1024) // only accept files up to 10 Mbytes in size
+			{
+				stop_endless_image();
+
+				incoming_filetransfers++;
+				unlink(cmd__image_filename_full_path); // just in case there are some old leftover bytes there
+				incoming_filetransfers_friendnumber = friendnumber;
+				incoming_filetransfers_filenumber = filenumber;
+				tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_RESUME, NULL);
+			}
+			else
+			{
+				tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+			}
+		}
     }
 }
 
@@ -2212,6 +2263,37 @@ void on_avatar_file_control(Tox *m, struct FileTransfer *ft, TOX_FILE_CONTROL co
 void on_file_control(Tox *m, uint32_t friendnumber, uint32_t filenumber, TOX_FILE_CONTROL control,
                      void *userdata)
 {
+	// zzzzzzz
+
+	if ((incoming_filetransfers_friendnumber == friendnumber) && (incoming_filetransfers_filenumber = filenumber))
+	{
+		// incoming data file transfer -----------
+		switch (control)
+		{
+			case TOX_FILE_CONTROL_RESUME:
+			{
+				break;
+			}
+
+			case TOX_FILE_CONTROL_PAUSE:
+			{
+				break;
+			}
+
+			case TOX_FILE_CONTROL_CANCEL:
+			{
+				incoming_filetransfers_friendnumber = -1;
+				incoming_filetransfers_filenumber = -1;
+				unlink(cmd__image_filename_full_path); // remove leftover data
+				incoming_filetransfers = 0;
+				break;
+			}
+		}
+		// incoming data file transfer -----------
+		return;
+	}
+
+
     struct FileTransfer *ft = get_file_transfer_struct(friendnumber, filenumber);
 
     if (!ft)
@@ -2494,6 +2576,7 @@ int check_file_signature(const char *signature, size_t size, FILE *fp)
 void kill_all_file_transfers_friend(Tox *m, uint32_t friendnum)
 {
 }
+
 void kill_all_file_transfers(Tox *m)
 {
 }
@@ -2560,15 +2643,19 @@ void avatar_unset(Tox *m)
 int check_number_of_files_to_resend_to_friend(Tox *m, uint32_t friendnum, int friendlistnum)
 {
 }
+
 void resend_zip_files_and_send(Tox *m, uint32_t friendnum, int friendlistnum)
 {
 }
+
 void process_friends_dir(Tox *m, uint32_t friendnum, int friendlistnum)
 {
 }
+
 void check_friends_dir(Tox *m)
 {
 }
+
 void check_dir(Tox *m)
 {
 }
@@ -3115,6 +3202,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 		toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
 
 		// clear screen on CALL ANSWER
+		stop_endless_image();
 		fb_fill_black();
 		// show funny face
 		show_video_calling();
@@ -3179,6 +3267,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	if (send_video == 1)
 	{
 		// clear screen on CALL START
+		stop_endless_image();
 		fb_fill_black();
 		// show funny face
 		show_video_calling();
@@ -4206,6 +4295,8 @@ int main(int argc, char *argv[])
 	global_want_restart = 0;
 	global_video_active = 0;
 	global_send_first_frame = 0;
+
+	incoming_filetransfers = 0;
 
 	// valid audio bitrates: [ bit_rate < 6 || bit_rate > 510 ]
 	global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
