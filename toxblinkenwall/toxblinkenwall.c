@@ -100,7 +100,7 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 2 // 3 buffers on your camera!
+#define VIDEO_BUFFER_COUNT 3 // x buffers on your camera!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
@@ -309,7 +309,7 @@ struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
 size_t framebuffer_screensize = 0;
 unsigned char *framebuffer_mappedmem = NULL;
-uint32_t n_buffers;
+uint32_t n_buffers = 0;
 struct buffer *buffers = NULL;
 uint16_t video_width = 0;
 uint16_t video_height = 0;
@@ -2945,6 +2945,9 @@ int init_cam()
 
 	buffers = calloc(bufrequest.count, sizeof(*buffers));
 
+	dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
+	dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
+
 	for (n_buffers = 0; n_buffers < bufrequest.count; ++n_buffers)
 	{
 		struct v4l2_buffer bufferinfo;
@@ -2955,10 +2958,14 @@ int init_cam()
 		bufferinfo.memory = V4L2_MEMORY_MMAP;
 		bufferinfo.index = n_buffers;
 
-        if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &bufferinfo))
+        	if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &bufferinfo))
 		{
-            dbg(9, "VIDIOC_QUERYBUF (2) error %d, %s\n", errno, strerror(errno));
-        }
+        	    dbg(9, "VIDIOC_QUERYBUF (2) error %d, %s\n", errno, strerror(errno));
+        	}
+		else
+		{
+        	    dbg(9, "VIDIOC_QUERYBUF (2) *OK*  %d, %s\n", errno, strerror(errno));
+		}
 
 /*
 		if (ioctl(fd, VIDIOC_QUERYBUF, &bufferinfo) < 0)
@@ -2967,17 +2974,20 @@ int init_cam()
 		}
 */
 
-        buffers[n_buffers].length = bufferinfo.length;
-        buffers[n_buffers].start  = mmap(NULL /* start anywhere */, bufferinfo.length, PROT_READ | PROT_WRITE /* required */,
+        	buffers[n_buffers].length = bufferinfo.length;
+        	buffers[n_buffers].start  = mmap(NULL /* start anywhere */, bufferinfo.length, PROT_READ | PROT_WRITE /* required */,
                                         MAP_SHARED /* recommended */, fd, bufferinfo.m.offset);
 
-        if (MAP_FAILED == buffers[n_buffers].start)
+        	if (MAP_FAILED == buffers[n_buffers].start)
 		{
-            dbg(0, "mmap error %d, %s\n", errno, strerror(errno));
-        }
+        	    dbg(0, "mmap error %d, %s\n", errno, strerror(errno));
+        	}
 
+		dbg(0, "VIDIOC_REQBUFS number of buffers[2a]=%d\n", (int)n_buffers);
 
 	}
+
+	dbg(0, "VIDIOC_REQBUFS number of buffers[2b]=%d\n", (int)n_buffers);
 
 	return fd;
 
@@ -2988,6 +2998,8 @@ int v4l_startread()
     dbg(9, "start cam\n");
     size_t i;
     enum v4l2_buf_type type;
+
+    dbg(0, "VIDIOC_REQBUFS number of buffers[2x]=%d\n", (int)n_buffers);
 
     for (i = 0; i < n_buffers; ++i)
 	{
@@ -3001,10 +3013,14 @@ int v4l_startread()
         buf.index  = i;
 
         if (-1 == xioctl(global_cam_device_fd, VIDIOC_QBUF, &buf))
-		{
+	{
             dbg(9, "VIDIOC_QBUF (3) error %d, %s\n", errno, strerror(errno));
             return 0;
         }
+	else
+	{
+            dbg(9, "VIDIOC_QBUF (3) *OK*  %d, %s\n", errno, strerror(errno));
+	}
     }
 
     type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -3419,7 +3435,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 			if (global_framebuffer_device_fd != 0)
 			{
 
-				dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
+				// dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
 
 				int frame_width_px1 = (int)width;
 				int frame_height_px1 = (int)height;
@@ -3442,7 +3458,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
-				dbg(9, "frame_width_px=%d frame_height_px=%d\n", (int)frame_width_px, (int)frame_height_px);
+				// dbg(9, "frame_width_px=%d frame_height_px=%d\n", (int)frame_width_px, (int)frame_height_px);
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
@@ -3452,15 +3468,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				{
 					horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
 					horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
-					dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
-					dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
+					// dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
+					// dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
 				}
 
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 
-				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
+				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
 
 				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
 				if (bf_out_data == NULL)
@@ -3485,13 +3501,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				float ww = (float)full_width / (float)vid_width;
 				float hh = (float)full_height / (float)vid_height;
-				dbg(9, "ww=%f hh=%f\n", ww, hh);
+				// dbg(9, "ww=%f hh=%f\n", ww, hh);
 
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
 				{
 					horizontal_stride_pixels_half_resized = 1 + (int)((float)horizontal_stride_pixels_half / ww);
-					dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
+					// dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
 				}
 
 				int i_src;
@@ -3587,7 +3603,7 @@ void set_av_video_frame()
     av_video_frame.h = input.d_h;
 	//av_video_frame.bit_depth = input.bit_depth;
 
-    dbg(2,"ToxVideo:av_video_frame set\n");
+    // dbg(2,"ToxVideo:av_video_frame set\n");
 }
 
 void fb_copy_frame_to_fb(void* videoframe)
@@ -4343,8 +4359,6 @@ void sigint_handler(int signo)
 
 		exit(77);
 #endif
-
-		exit(77);
     }
 }
 
