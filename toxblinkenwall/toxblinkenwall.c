@@ -40,14 +40,15 @@
 #include <tox/tox.h>
 #include <tox/toxav.h>
 
+#include <linux/fb.h>
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
-#include <linux/fb.h>
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
-#define HAVE_LIBAO 1
+// #define HAVE_LIBAO 1
+// #define HAVE_FRAMEBUFFER 1
 
 #ifdef HAVE_SOUND
 #include <alsa/asoundlib.h>
@@ -328,9 +329,11 @@ int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
 uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
+#ifdef HAVE_LIBAO
 ao_device *_ao_device = NULL;
 ao_sample_format _ao_format;
 int _ao_default_driver = -1;
+#endif
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
@@ -3157,6 +3160,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 void close_cam()
 {
 
+#ifdef HAVE_FRAMEBUFFER
 	// close framebuffer device
 	dbg(2, "munmaping Framebuffer\n");
 
@@ -3179,6 +3183,7 @@ void close_cam()
 		free(bf_out_data);
 		bf_out_data = NULL;
 	}
+#endif
 
 #ifdef HAVE_LIBAO
 	if (_ao_device != NULL)
@@ -3425,6 +3430,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         void *user_data)
 {
 
+#ifdef HAVE_FRAMEBUFFER
+
 	if (global_video_active == 1)
 	{
 		if (friend_to_send_video_to == friend_number)
@@ -3588,6 +3595,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 	}
 
+#endif
 }
 
 void set_av_video_frame()
@@ -3646,17 +3654,12 @@ void *thread_av(void *data)
 	}
 
 	dbg(2, "AV Thread #%d: starting\n", (int) id);
-	
+
 	if (video_call_enabled == 1)
 	{
-		global_cam_device_fd = init_cam();
-		dbg(2, "AV Thread #%d: init cam\n", (int) id);
-		set_av_video_frame();
-		// start streaming
-		v4l_startread();
-
-
 		global_framebuffer_device_fd = 0;
+
+#ifdef HAVE_FRAMEBUFFER
 
 		if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
 		{
@@ -3701,6 +3704,7 @@ void *thread_av(void *data)
 			dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
 		}
 
+#endif
 
 #ifdef HAVE_LIBAO
 		// initialize sound output via libao ------------------
@@ -3723,6 +3727,19 @@ void *thread_av(void *data)
 		}
 		// initialize sound output via libao ------------------
 #endif
+
+
+
+		// --------------- start up the camera ---------------
+		// --------------- start up the camera ---------------
+		global_cam_device_fd = init_cam();
+		dbg(2, "AV Thread #%d: init cam\n", (int) id);
+		set_av_video_frame();
+		// start streaming
+		v4l_startread();
+		// --------------- start up the camera ---------------
+		// --------------- start up the camera ---------------
+
 	}
 
 
@@ -3859,25 +3876,25 @@ void *thread_video_av(void *data)
 	ToxAV *av = (ToxAV *) data;
 
 	pthread_t id = pthread_self();
-	pthread_mutex_t av_thread_lock;
+	// pthread_mutex_t av_thread_lock;
 
-	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
-	{
-		dbg(0, "Error creating video av_thread_lock\n");
-	}
-	else
-	{
-		dbg(2, "av_thread_lock video created successfully\n");
-	}
+	//if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
+	//{
+	//	dbg(0, "Error creating video av_thread_lock\n");
+	//}
+	//else
+	//{
+	//	dbg(2, "av_thread_lock video created successfully\n");
+	//}
 
 	dbg(2, "AV video Thread #%d: starting\n", (int) id);
 
 	while (toxav_video_thread_stop != 1)
 	{
-		pthread_mutex_lock(&av_thread_lock);
+		// pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
 		// dbg(9, "AV video Thread #%d running ...", (int) id);
-		pthread_mutex_unlock(&av_thread_lock);
+		// pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
 
