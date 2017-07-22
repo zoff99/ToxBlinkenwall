@@ -58,6 +58,7 @@ while [ true ]; do
 								# cleanup
 								rm -f "$gfx_dir"/_anim/*
 								rm -Rf "$gfx_dir"/_anim/
+								rm -f "$img"
 								cat /dev/zero > "$fb_device"
 								exit
 							fi
@@ -68,6 +69,7 @@ while [ true ]; do
 						# cleanup
 						rm -f "$gfx_dir"/_anim/*
 						rm -Rf "$gfx_dir"/_anim/
+						rm -f "$img"
 						cat /dev/zero > "$fb_device"
 						exit
 					fi
@@ -77,11 +79,12 @@ while [ true ]; do
 
 	else # single frame image
 			cat "$img" > "$fb_device"
+			rm -f "$img"
 			exit
 	fi
 done
 
 }
 
-background &
+background "$1" &
 
