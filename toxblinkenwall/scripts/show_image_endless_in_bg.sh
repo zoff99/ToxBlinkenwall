@@ -11,6 +11,15 @@ rm -f "$touchfile"
 
 . $(dirname "$0")/vars.sh
 
+# ---------- DEBUG --------------
+# ---------- DEBUG --------------
+# ---------- DEBUG --------------
+# ls -al "$img"
+# cp -av "$img" ~/curimg.dat
+# ---------- DEBUG --------------
+# ---------- DEBUG --------------
+# ---------- DEBUG --------------
+
 identify "$img"
 err_=$?
 
