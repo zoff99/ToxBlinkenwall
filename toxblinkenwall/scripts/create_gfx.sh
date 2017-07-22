@@ -23,3 +23,5 @@ convert_img "video_calling_001"
 convert_img "video_calling_002"
 convert_img "video_calling_003"
 convert_img "video_calling_004"
+
+convert_img "tox_bw_clients"

@@ -291,6 +291,7 @@ const char *shell_cmd__get_gpu_temp = "./scripts/get_gpu_temp.sh 2> /dev/null";
 const char *shell_cmd__get_my_number_of_open_files = "cat /proc/sys/fs/file-nr 2> /dev/null";
 const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null";
 const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
+const char *shell_cmd__show_clients = "./scripts/show_clients.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
@@ -1033,6 +1034,14 @@ void show_tox_id_qrcode()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
+	system(cmd_str);
+}
+
+void show_tox_client_application_download_links()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_clients);
 	system(cmd_str);
 }
 
@@ -1910,11 +1919,13 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
 {
 	send_text_message_to_friend(tox, friend_number, "=========================\nToxBlinkenwall version:%s\n=========================", global_version_string);
 	// send_text_message_to_friend(tox, friend_number, " commands are:");
-	send_text_message_to_friend(tox, friend_number, " .stats    --> show ToxBlinkenwall status");
-	send_text_message_to_friend(tox, friend_number, " .friends  --> show ToxBlinkenwall Friends");
-	send_text_message_to_friend(tox, friend_number, " .snap     --> snap a single still image");
-	send_text_message_to_friend(tox, friend_number, " .restart  --> restart ToxBlinkenwall system");
-	send_text_message_to_friend(tox, friend_number, " .vcm      --> videocall me");
+	send_text_message_to_friend(tox, friend_number, " .stats       --> show ToxBlinkenwall status");
+	send_text_message_to_friend(tox, friend_number, " .friends     --> show ToxBlinkenwall Friends");
+	// send_text_message_to_friend(tox, friend_number, " .snap     --> snap a single still image");
+	send_text_message_to_friend(tox, friend_number, " .showclients --> show Clientapp links");
+	send_text_message_to_friend(tox, friend_number, " .showqr      --> show ToxID");
+	send_text_message_to_friend(tox, friend_number, " .restart     --> restart ToxBlinkenwall system");
+	send_text_message_to_friend(tox, friend_number, " .vcm          --> videocall me");
 }
 
 //void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
@@ -1952,10 +1963,18 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			{
 				cmd_friends(tox, friend_number);
 			}
-			else if (strncmp((char*)message, ".snap", strlen((char*)".snap")) == 0)
+			else if (strncmp((char*)message, ".showclients", strlen((char*)".showclients")) == 0)
 			{
-				cmd_snap(tox, friend_number);
+				show_tox_client_application_download_links();
 			}
+			else if (strncmp((char*)message, ".showqr", strlen((char*)".showqr")) == 0)
+			{
+				show_tox_id_qrcode();
+			}
+			//else if (strncmp((char*)message, ".snap", strlen((char*)".snap")) == 0)
+			//{
+			//	cmd_snap(tox, friend_number);
+			//}
 			else if (strncmp((char*)message, ".restart", strlen((char*)".restart")) == 0) // restart toxblinkenwall processes (no reboot)
 			{
 				cmd_restart(tox, friend_number);
