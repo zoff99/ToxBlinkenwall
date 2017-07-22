@@ -294,6 +294,8 @@ const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
+const char *shell_cmd__start_endless_image_anim = "./scripts/show_image_endless_in_bg.sh"; // needs image filename paramter
+const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.sh 2> /dev/null";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -976,6 +978,26 @@ void show_video_calling()
 
 	yieldcpu(600);
 }
+
+void show_endless_image(char* image_filename_full_path)
+{
+	if (image_filename_full_path)
+	{
+		char cmd_str[1000];
+		CLEAR(cmd_str);
+		snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, image_filename_full_path);
+		system(cmd_str);
+	}
+}
+
+void stop_endless_image()
+{
+	char cmd_str[1000];
+    CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_image_anim);
+	system(cmd_str);
+}
+
 
 void show_endless_loading()
 {
