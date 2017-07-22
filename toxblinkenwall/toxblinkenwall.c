@@ -298,7 +298,9 @@ const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endle
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
 const char *shell_cmd__start_endless_image_anim = "./scripts/show_image_endless_in_bg.sh"; // needs image filename paramter
 const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.sh 2> /dev/null";
+const char *shell_cmd__show_text_as_image = "./scripts/show_text_as_image.sh"; // needs text as parameter. Caution filter out any bad characters!!
 const char *cmd__image_filename_full_path = "./tmp/image.dat";
+const char *cmd__image_text_full_path = "./tmp/text.dat";
 int global_want_restart = 0;
 const char *global_timestamp_format = "%H:%M:%S";
 const char *global_long_timestamp_format = "%Y-%m-%d %H:%M:%S";
@@ -986,6 +988,80 @@ void show_video_calling()
 	system(cmd_str);
 
 	yieldcpu(600);
+}
+
+void show_text_as_image(const char *display_text)
+{
+	char cmd_str[1000];
+	CLEAR(cmd_str);
+
+	char display_text2[210];
+	CLEAR(display_text2);
+
+	const char* s = display_text;
+	s=s + 6; // remove leading ".text " from input string
+
+	int i=0;
+	while (*s)
+	{
+		if (*s == '&')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == '"')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == '\\')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == '\'')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == '%')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == '|')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else if (*s == ';')
+		{
+			display_text2[i]= '_';
+			i++;
+		}
+		else
+		{
+			display_text2[i]= *s;
+			i++;
+		}
+		s++;
+	}
+	display_text2[i] = '\0';
+
+	dbg(0, "in=%s out=%s\n", display_text, display_text2);
+
+	FILE *fp = fopen(cmd__image_text_full_path, "ab");
+	if (fp != NULL)
+	{
+		fputs(display_text2, fp);
+		fclose(fp);
+
+		// snprintf(cmd_str, sizeof(cmd_str), "%s '%s'", shell_cmd__show_text_as_image, display_text2);
+		snprintf(cmd_str, sizeof(cmd_str), "%s ''", shell_cmd__show_text_as_image);
+		system(cmd_str);
+
+		unlink(cmd__image_text_full_path);
+	}
 }
 
 void show_endless_image()
@@ -1927,6 +2003,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
 	// send_text_message_to_friend(tox, friend_number, " .snap     --> snap a single still image");
 	send_text_message_to_friend(tox, friend_number, " .showclients --> show Clientapp links");
 	send_text_message_to_friend(tox, friend_number, " .showqr      --> show ToxID");
+	send_text_message_to_friend(tox, friend_number, " .text <text> --> show Text on Wall");
 	send_text_message_to_friend(tox, friend_number, " .restart     --> restart ToxBlinkenwall system");
 	send_text_message_to_friend(tox, friend_number, " .vcm          --> videocall me");
 }
@@ -1973,6 +2050,10 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			else if (strncmp((char*)message, ".showqr", strlen((char*)".showqr")) == 0)
 			{
 				show_tox_id_qrcode();
+			}
+			else if (strncmp((char*)message, ".text", strlen((char*)".text")) == 0)
+			{
+				show_text_as_image(message);
 			}
 			//else if (strncmp((char*)message, ".snap", strlen((char*)".snap")) == 0)
 			//{
