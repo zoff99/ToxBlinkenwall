@@ -986,13 +986,10 @@ void show_video_calling()
 
 void show_endless_image()
 {
-	if (image_filename_full_path)
-	{
-		char cmd_str[1000];
-		CLEAR(cmd_str);
-		snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
-		system(cmd_str);
-	}
+	char cmd_str[1000];
+	CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
+	system(cmd_str);
 }
 
 void stop_endless_image()
