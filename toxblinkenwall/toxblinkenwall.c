@@ -2037,7 +2037,7 @@ void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint
 
 			if (fd_ != -1)
 			{
-				FILE *some_file = fdopen(fd_);
+				FILE *some_file = fdopen(fd_, "w+b");
 				// some_file = fopen(cmd__image_filename_full_path, "a+b"); 
 
 				if (some_file)
