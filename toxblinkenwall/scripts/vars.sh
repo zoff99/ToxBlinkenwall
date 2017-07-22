@@ -25,3 +25,9 @@ export real_width=$[ $stride_ / $tmp1 ]
 export fb_device=$(ls -1 /dev/fb*|tail -1)
 ##### -------------------------------------
 
+#####################################################
+# pick first available video device
+# change for your needs here!
+export video_device=$(ls -1 /dev/video*|tail -1)
+#
+#####################################################
