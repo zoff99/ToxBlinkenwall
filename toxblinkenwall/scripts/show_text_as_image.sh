@@ -3,9 +3,7 @@
 
 gfx_dir=~/ToxBlinkenwall/toxblinkenwall/texttmp/
 file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
-# text_="$1" # Caution!! C-program must filter out bad characters!! or else bad stuff may happen!!
-# font_=' -font Candice '
-font_=''
+font_=' -font DejaVu-Sans-Mono-Bold-Oblique '
 
 . $(dirname "$0")/vars.sh
 
