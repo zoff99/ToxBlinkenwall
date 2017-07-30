@@ -1040,6 +1040,11 @@ void show_text_as_image(const char *display_text)
 			display_text2[i]= safe_char;
 			i++;
 		}
+		else if (*s == '_')
+		{
+			display_text2[i]= safe_char;
+			i++;
+		}
 		else
 		{
 			display_text2[i]= *s;
