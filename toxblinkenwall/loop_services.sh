@@ -13,7 +13,7 @@ function clean_up
 }
 
 cd $(dirname "$0")
-export LD_LIBRARY_PATH=usr/lib
+export LD_LIBRARY_PATH=~/inst/lib/
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
@@ -25,7 +25,7 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 fi
 # ---- only for RASPI ----
 
-trap clean_up SIGHUP SIGINT SIGTERM
+trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 
 chmod u+x scripts/*.sh
 chmod u+x toxblinkenwall
