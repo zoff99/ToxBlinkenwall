@@ -998,6 +998,7 @@ void show_text_as_image(const char *display_text)
 	char display_text2[210];
 	CLEAR(display_text2);
 
+	const char safe_char = ' ';
 	const char* s = display_text;
 	s=s + 6; // remove leading ".text " from input string
 
@@ -1006,37 +1007,37 @@ void show_text_as_image(const char *display_text)
 	{
 		if (*s == '&')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == '"')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == '\\')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == '\'')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == '%')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == '|')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else if (*s == ';')
 		{
-			display_text2[i]= '_';
+			display_text2[i]= safe_char;
 			i++;
 		}
 		else
