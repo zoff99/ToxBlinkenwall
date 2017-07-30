@@ -80,6 +80,9 @@ verbose=true
 # audio test program
 gcc a.c -lao -ldl -lm -o a
 
+cd $_HOME_
+ln -s ToxBlinkenwall/toxblinkenwall/initscript.sh
+
 echo 'IS_ON=BLINKENWALL
 export IS_ON
 ' >> $_HOME_/.profile
