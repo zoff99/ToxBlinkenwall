@@ -995,7 +995,9 @@ void show_text_as_image(const char *display_text)
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 
-	char display_text2[5005];
+	int MAX_TEXT_ON_IMAGE_LEN = 300;
+
+	char display_text2[MAX_TEXT_ON_IMAGE_LEN + 10];
 	CLEAR(display_text2);
 
 	const char safe_char = ' ';
@@ -1005,7 +1007,7 @@ void show_text_as_image(const char *display_text)
 	int i=0;
 	while (*s)
 	{
-		if (i > 4997)
+		if (i > MAX_TEXT_ON_IMAGE_LEN)
 		{
 			break;
 		}
@@ -1057,9 +1059,14 @@ void show_text_as_image(const char *display_text)
 		}
 		s++;
 	}
-	display_text2[i] = '\0';
+
+	// display_text2[i] = '\0';
 
 	dbg(0, "in=%s out=%s\n", display_text, display_text2);
+	if ((display_text) && (display_text2))
+	{
+		dbg(0, "in=%d out=%d\n", (int)strlen(display_text), (int)strlen(display_text2));
+	}
 
 	FILE *fp = fopen(cmd__image_text_full_path, "ab");
 	if (fp != NULL)

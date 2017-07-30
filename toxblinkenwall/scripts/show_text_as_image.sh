@@ -8,6 +8,8 @@ function background
 gfx_dir=~/ToxBlinkenwall/toxblinkenwall/texttmp/
 file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
 font_=' -font DejaVu-Sans-Oblique '
+split_long_words_and_lines_at=26
+cut_at_lines=12
 
 . $(dirname "$0")/vars.sh
 
@@ -23,6 +25,15 @@ rm -f "$gfx_dir"/*
 cur_frame=0
 
 # echo '' >> "$file_with_text"
+
+# rm -f "$file_with_text""_tmp"
+# cat "$file_with_text" | fold -w "$split_long_words_and_lines_at" -s | head -"$cut_at_lines" > "$file_with_text""_tmp"
+# cat "$file_with_text" | head -"$cut_at_lines" > "$file_with_text""_tmp"
+# mv "$file_with_text""_tmp" "$file_with_text"
+
+# ls -al "$file_with_text" >> /tmp/aa.txt
+# cat "$file_with_text" >> /tmp/aa.txt
+
 convert -background black -fill blue ${font_} \
 	-size "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" \
 	-gravity Center caption:@"$file_with_text" "$gfx_dir"/caption.png
@@ -41,6 +52,7 @@ sleep 1
 cat "$gfx_dir"/animframe."$cur_frame".rgba > "$fb_device"
 rm -f "$gfx_dir"/caption.png
 rm -f "$gfx_dir"/*
+rm -f "$file_with_text""_tmp"
 rm -f "$file_with_text"
 
 }
