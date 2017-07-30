@@ -84,3 +84,14 @@ echo 'IS_ON=BLINKENWALL
 export IS_ON
 ' >> $_HOME_/.profile
 ```
+
+#### Install on the RaspberryPI
+
+it is the same procedure except the last command should be this:
+
+```
+echo 'IS_ON=RASPI
+export IS_ON
+' >> $_HOME_/.profile
+```
+
