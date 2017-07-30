@@ -1060,7 +1060,7 @@ void show_text_as_image(const char *display_text)
 		snprintf(cmd_str, sizeof(cmd_str), "%s ''", shell_cmd__show_text_as_image);
 		system(cmd_str);
 
-		unlink(cmd__image_text_full_path);
+		// unlink(cmd__image_text_full_path);
 	}
 }
 

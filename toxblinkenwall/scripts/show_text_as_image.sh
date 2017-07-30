@@ -1,9 +1,13 @@
 #! /bin/bash
 
+function background
+{
+
+# set -x
 
 gfx_dir=~/ToxBlinkenwall/toxblinkenwall/texttmp/
 file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
-font_=' -font DejaVu-Sans-Mono-Bold-Oblique '
+font_=' -font DejaVu-Sans-Oblique '
 
 . $(dirname "$0")/vars.sh
 
@@ -37,3 +41,9 @@ sleep 1
 cat "$gfx_dir"/animframe."$cur_frame".rgba > "$fb_device"
 rm -f "$gfx_dir"/caption.png
 rm -f "$gfx_dir"/*
+rm -f "$file_with_text"
+
+}
+
+background &
+
