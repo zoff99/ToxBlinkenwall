@@ -10,11 +10,11 @@ echo $_HOME_
 cd $_HOME_/ToxBlinkenwall/toxblinkenwall/
 
 # ------------- install packages -------------
-sudo apt-get install libjpeg-dev libpng-dev imagemagick htop mc fbset cmake qrencode
-sudo apt-get install libqrencode-dev vim nano wget git make
-sudo apt-get install autotools-dev libtool bc libv4l-dev libv4lconvert0 v4l-conf v4l-utils
-sudo apt-get install libopus-dev libvpx-dev pkg-config libjpeg-dev libpulse-dev libconfig-dev
-sudo apt-get install automake checkinstall check yasm
+sudo apt-get --yes --force-yes install libjpeg-dev libpng-dev imagemagick htop mc fbset cmake qrencode
+sudo apt-get --yes --force-yes install libqrencode-dev vim nano wget git make
+sudo apt-get --yes --force-yes install autotools-dev libtool bc libv4l-dev libv4lconvert0 v4l-conf v4l-utils
+sudo apt-get --yes --force-yes install libopus-dev libvpx-dev pkg-config libjpeg-dev libpulse-dev libconfig-dev
+sudo apt-get --yes --force-yes install automake checkinstall check yasm
 
 export _SRC_=$_HOME_/src/
 export _INST_=$_HOME_/inst/
