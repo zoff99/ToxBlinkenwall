@@ -995,7 +995,7 @@ void show_text_as_image(const char *display_text)
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 
-	char display_text2[210];
+	char display_text2[5005];
 	CLEAR(display_text2);
 
 	const char safe_char = ' ';
@@ -1005,6 +1005,11 @@ void show_text_as_image(const char *display_text)
 	int i=0;
 	while (*s)
 	{
+		if (i > 4997)
+		{
+			break;
+		}
+
 		if (*s == '&')
 		{
 			display_text2[i]= safe_char;
