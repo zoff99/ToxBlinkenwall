@@ -9,6 +9,8 @@ font_=''
 
 . $(dirname "$0")/vars.sh
 
+$(dirname "$0")/stop_image_endless.sh
+sleep 3
 $(dirname "$0")/show_loading_endless_in_bg.sh
 
 mkdir -p "$gfx_dir"
