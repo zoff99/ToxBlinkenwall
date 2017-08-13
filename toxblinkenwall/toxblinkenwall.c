@@ -3866,7 +3866,7 @@ void *thread_av(void *data)
 	// --- ok, here camera and screen is ready to go
 	// --- now show QR code
 	stop_endless_loading();
-	yieldcpu(700);
+	yieldcpu(700); // TODO: wait for qr-code file to be created (it is done in background!)
 	show_tox_id_qrcode();
 
 
@@ -4699,11 +4699,6 @@ int main(int argc, char *argv[])
     }
 
 	// -- here tox node is online, but video is not yet ready!!
-	// -- do this later
-	// stop_endless_loading();
-	// yieldcpu(700);
-	// show_tox_id_qrcode();
-
 
     TOXAV_ERR_NEW rc;
 	dbg(2, "new Tox AV\n");
@@ -4758,8 +4753,6 @@ int main(int argc, char *argv[])
 	close_sound_device();
 #endif
 	// start audio recoding stuff ----------------------
-
-
 
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
