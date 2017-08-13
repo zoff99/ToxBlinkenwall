@@ -995,7 +995,7 @@ void print_tox_id(Tox *tox)
 	if (fp)
 	{
 		fprintf(fp, "%s", tox_id_hex);
-		close(fp);
+		fclose(fp);
 	}
 	// write ToxID to toxid text file -----------
 }
@@ -1754,7 +1754,7 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
 
     update_savedata_file(tox);
 
-	tox_self_set_nospam(tox_global, generate_random_uint32());
+	tox_self_set_nospam(tox, generate_random_uint32());
     update_savedata_file(tox);
 
 	// new nospam created -> generate new QR code image
