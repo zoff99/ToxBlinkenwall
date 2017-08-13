@@ -72,8 +72,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 3
-static const char global_version_string[] = "0.99.3";
+#define VERSION_PATCH 4
+static const char global_version_string[] = "0.99.4";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -102,7 +102,7 @@ typedef struct DHT_node {
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
-uint32_t DEFAULT_GLOBAL_VID_BITRATE = 5000; // kbit/sec
+uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
@@ -282,6 +282,7 @@ const char *log_filename = "toxblinkenwall.log";
 const char *my_avatar_filename = "avatar.png";
 const char *my_toxid_filename_png = "toxid.png";
 const char *my_toxid_filename_rgba = "toxid.rgba";
+const char *my_toxid_filename_txt = "toxid.txt";
 
 char *v4l2_device; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
@@ -435,8 +436,18 @@ void dbg(int level, const char *fmt, ...)
 }
 
 
+uint32_t generate_random_uint32()
+{
+	uint32_t r;
+	struct timeval time;
+	gettimeofday(&time,NULL);
+	srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
 
-
+	rand();
+	rand();
+	r = rand();
+	return r;
+}
 
 
 // linked list ----------
@@ -978,6 +989,15 @@ void print_tox_id(Tox *tox)
         int fd = fileno(logfile);
         fsync(fd);
     }
+
+	// write ToxID to toxid text file -----------
+	FILE *fp = fopen(my_toxid_filename_txt, "wb");
+	if (fp)
+	{
+		fprintf(fp, "%s", tox_id_hex);
+		close(fp);
+	}
+	// write ToxID to toxid text file -----------
 }
 
 void show_video_calling()
@@ -1733,6 +1753,13 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
     friendlist_onFriendAdded(tox, friendnum, 0);
 
     update_savedata_file(tox);
+
+	tox_self_set_nospam(tox_global, generate_random_uint32());
+    update_savedata_file(tox);
+
+	// new nospam created -> generate new QR code image
+    print_tox_id(tox);
+	create_tox_id_qrcode(tox);
 }
 
 /* ssssshhh I stole this from ToxBot, don't tell anyone.. */
@@ -2172,7 +2199,6 @@ void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint
 			}
 		}
 	}
-	// zzzzzzzzzzz
 }
 
 
@@ -2389,8 +2415,6 @@ void on_avatar_file_control(Tox *m, struct FileTransfer *ft, TOX_FILE_CONTROL co
 void on_file_control(Tox *m, uint32_t friendnumber, uint32_t filenumber, TOX_FILE_CONTROL control,
                      void *userdata)
 {
-	// zzzzzzz
-
 	if ((incoming_filetransfers_friendnumber == friendnumber) && (incoming_filetransfers_filenumber = filenumber))
 	{
 		// incoming data file transfer -----------
@@ -3353,8 +3377,6 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
-	// zzzzzzzz
-
 	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
 	{
 		// we are in a call with someone else already
@@ -3443,8 +3465,6 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
 {
-	// zzzzzzzz
-
 	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
 	{
 		// we are in a call with someone else already
