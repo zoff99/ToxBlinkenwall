@@ -20,8 +20,13 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 	# camera module not loaded automatically
 	sudo modprobe bcm2835_v4l2
 	# stop gfx UI
-	sudo /etc/init.d/lightdm start
-	sleep 2
+	# sudo /etc/init.d/lightdm start
+	# sleep 2
+
+	sudo sed -i -e 's#BLANK_TIME=.*#BLANK_TIME=0#' /etc/kbd/config
+	sudo sed -i -e 's#POWERDOWN_TIME=.*#POWERDOWN_TIME=0#' /etc/kbd/config
+	sudo setterm -blank 0 > /dev/null 2>&1
+	sudo setterm -powerdown 0 > /dev/null 2>&1
 fi
 # ---- only for RASPI ----
 
@@ -44,9 +49,10 @@ while [ 1 == 1 ]; do
 	sleep 5
 	# ---- only for RASPI ----
 	if [ "$IS_ON""x" == "RASPI""x" ]; then
+		:
 		# stop gfx UI
-		sudo /etc/init.d/lightdm start
-		sleep 2
+		# sudo /etc/init.d/lightdm start
+		# sleep 2
 	fi
 	# ---- only for RASPI ----
 done
