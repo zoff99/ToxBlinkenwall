@@ -103,9 +103,9 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 8 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
-#define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_AUD_BITRATE 8 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
@@ -283,6 +283,7 @@ const char *my_avatar_filename = "avatar.png";
 const char *my_toxid_filename_png = "toxid.png";
 const char *my_toxid_filename_rgba = "toxid.rgba";
 const char *my_toxid_filename_txt = "toxid.txt";
+const char *image_createqr_touchfile = "./toxid_ready.txt";
 
 char *v4l2_device; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
@@ -350,6 +351,8 @@ int toxav_iterate_thread_stop = 0;
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
 uint32_t incoming_filetransfers_filenumber = -1;
+int global_is_qrcode_showing_on_screen = 0;
+int global_qrcode_was_updated = 0;
 
 // -- hardcoded --
 // -- hardcoded --
@@ -1104,6 +1107,8 @@ void show_text_as_image(const char *display_text)
 
 void show_endless_image()
 {
+	global_is_qrcode_showing_on_screen = 0;
+
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
@@ -1121,6 +1126,8 @@ void stop_endless_image()
 
 void show_endless_loading()
 {
+	global_is_qrcode_showing_on_screen = 0;
+
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__start_endless_loading_anim);
@@ -1140,10 +1147,37 @@ void create_tox_id_qrcode(Tox *tox)
     char tox_id_hex[TOX_ADDRESS_SIZE*2 + 1];
 	get_my_toxid(tox, tox_id_hex);
 
+	dbg(2, "ToxID:%s\n", tox_id_hex);
+
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s \"tox:%s\"", shell_cmd__create_qrcode, tox_id_hex);
 	system(cmd_str);
+
+	global_qrcode_was_updated = 1;
+}
+
+void delete_qrcode_generate_touchfile()
+{
+	unlink(image_createqr_touchfile);
+}
+
+int is_qrcode_generated()
+{
+	int is_ready = 0;
+
+	FILE *file = NULL;
+	file = fopen(image_createqr_touchfile, "r");
+	if (file)
+	{
+		fclose(file);
+		is_ready = 1;
+	}
+	else
+	{
+	}
+
+	return is_ready;
 }
 
 void show_tox_id_qrcode()
@@ -1152,6 +1186,8 @@ void show_tox_id_qrcode()
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 	system(cmd_str);
+
+	global_is_qrcode_showing_on_screen = 1;
 }
 
 void show_tox_client_application_download_links()
@@ -1759,6 +1795,7 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
 
 	// new nospam created -> generate new QR code image
     print_tox_id(tox);
+	delete_qrcode_generate_touchfile();
 	create_tox_id_qrcode(tox);
 }
 
@@ -2090,6 +2127,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			}
 			else if (strncmp((char*)message, ".showclients", strlen((char*)".showclients")) == 0)
 			{
+				global_is_qrcode_showing_on_screen = 0;
 				show_tox_client_application_download_links();
 			}
 			else if (strncmp((char*)message, ".showqr", strlen((char*)".showqr")) == 0)
@@ -2098,6 +2136,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			}
 			else if (strncmp((char*)message, ".text", strlen((char*)".text")) == 0)
 			{
+				global_is_qrcode_showing_on_screen = 0;
 				show_text_as_image(message);
 			}
 			//else if (strncmp((char*)message, ".snap", strlen((char*)".snap")) == 0)
@@ -2106,6 +2145,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			//}
 			else if (strncmp((char*)message, ".restart", strlen((char*)".restart")) == 0) // restart toxblinkenwall processes (no reboot)
 			{
+				global_is_qrcode_showing_on_screen = 0;
 				cmd_restart(tox, friend_number);
 			}
 			else if (strncmp((char*)message, ".vcm", strlen((char*)".vcm")) == 0) // video call me!
@@ -3438,6 +3478,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
 	if (send_video == 1)
 	{
+		global_is_qrcode_showing_on_screen = 0;
+
 		// clear screen on CALL START
 		stop_endless_image();
 		fb_fill_black();
@@ -4648,6 +4690,7 @@ int main(int argc, char *argv[])
 
 
     print_tox_id(tox);
+	delete_qrcode_generate_touchfile();
 	create_tox_id_qrcode(tox);
 
     // init callbacks ----------------------------------
@@ -4771,6 +4814,21 @@ int main(int argc, char *argv[])
 		{
 			check_dir(tox);
 			check_friends_dir(tox);
+
+			if ((global_qrcode_was_updated == 1) && (global_is_qrcode_showing_on_screen == 1))
+			{
+				dbg(2, "QR code changed, waiting for update ...\n");
+
+				if (is_qrcode_generated() == 1)
+				{
+					dbg(2, "update QR code on screen\n");
+					global_qrcode_was_updated = 0;
+					delete_qrcode_generate_touchfile();
+					// fb_fill_black();
+					show_tox_id_qrcode();
+				}
+			}
+
 		}
     }
 
