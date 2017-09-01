@@ -25,7 +25,7 @@ export LD_LIBRARY_PATH=$_INST_/lib/
 
 
 cd $_SRC_
-git clone --depth=1 --branch=1.0.12 https://github.com/jedisct1/libsodium.git
+git clone --depth=1 --branch=1.0.13 https://github.com/jedisct1/libsodium.git
 cd libsodium
 ./autogen.sh
 ./configure --prefix=$_INST_ --disable-shared --disable-soname-versions --enable-minimal
@@ -40,7 +40,7 @@ make -j 4
 make install
 
 cd $_SRC_
-git clone --depth=1 --branch=v1.1.5 https://github.com/xiph/opus.git
+git clone --depth=1 --branch=v1.2.1 https://github.com/xiph/opus.git
 cd opus
 ./autogen.sh
 ./configure --prefix=$_INST_ --disable-shared
@@ -48,9 +48,11 @@ make -j 4
 make install
 
 cd $_SRC_
-git clone https://github.com/TokTok/c-toxcore
+# git clone https://github.com/TokTok/c-toxcore
+git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
-git checkout a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
+# git checkout a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
+git checkout f73b345c21fae0e0e56fae86dc82f63188a00aca
 ./autogen.sh
 
 export CFLAGS=-I$_INST_/include/
