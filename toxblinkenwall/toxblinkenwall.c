@@ -4067,14 +4067,24 @@ void *thread_video_av(void *data)
 
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
+	int really_in_call = 0;
+	
+	if (global_video_active != 0)
+	{
+		really_in_call = 1;
+	}
+	
 	dbg(9, "av_local_disconnect\n");
-    TOXAV_ERR_CALL_CONTROL error = 0;
-    toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
+	TOXAV_ERR_CALL_CONTROL error = 0;
+	toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
 	global_video_active = 0;
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
 
-	show_tox_id_qrcode();
+	if (really_in_call == 1)
+	{
+		show_tox_id_qrcode();
+	}
 }
 
 
