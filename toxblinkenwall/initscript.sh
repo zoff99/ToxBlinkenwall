@@ -5,6 +5,10 @@ cmd_grep2='toxblinkenwall'
 
 procs="$(pgrep -f "$cmd_grep")"
 
+# to really have VARs also when run from sudo
+cd
+. .profile
+
 command="$1"
 
 if [ "$command""x" == "startx" ]; then
