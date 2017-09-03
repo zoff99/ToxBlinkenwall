@@ -1183,9 +1183,11 @@ int is_qrcode_generated()
 void show_tox_id_qrcode()
 {
 	char cmd_str[1000];
-    CLEAR(cmd_str);
+	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 	system(cmd_str);
+
+	dbg(2, "show_tox_id_qrcode()");
 
 	global_is_qrcode_showing_on_screen = 1;
 }
@@ -4073,7 +4075,6 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	friend_to_send_video_to = -1;
 
 	show_tox_id_qrcode();
-
 }
 
 
