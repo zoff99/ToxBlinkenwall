@@ -301,6 +301,7 @@ const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> 
 const char *shell_cmd__start_endless_image_anim = "./scripts/show_image_endless_in_bg.sh"; // needs image filename paramter
 const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.sh 2> /dev/null";
 const char *shell_cmd__show_text_as_image = "./scripts/show_text_as_image.sh"; // needs text as parameter. Caution filter out any bad characters!!
+const char *shell_cmd__show_text_as_image_stop = "./scripts/show_text_as_image_stop.sh";
 const char *cmd__image_filename_full_path = "./tmp/image.dat";
 const char *cmd__image_text_full_path = "./tmp/text.dat";
 int global_want_restart = 0;
