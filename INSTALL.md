@@ -28,7 +28,7 @@ cd $_SRC_
 git clone --depth=1 --branch=1.0.13 https://github.com/jedisct1/libsodium.git
 cd libsodium
 ./autogen.sh
-./configure --prefix=$_INST_ --disable-shared --disable-soname-versions --enable-minimal
+./configure --prefix=$_INST_ --disable-shared --disable-soname-versions # --enable-minimal
 make -j 4
 make install
 
