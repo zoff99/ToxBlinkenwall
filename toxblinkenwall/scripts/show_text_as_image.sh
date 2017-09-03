@@ -1,5 +1,18 @@
 #! /bin/bash
 
+function background2
+{
+        file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
+
+        . $(dirname "$0")/vars.sh
+        $(dirname "$0")/stop_image_endless.sh
+
+        mv "$file_with_text" /tmp/toxmessage.txt
+
+        # openGL text stuff ------
+        # openGL text stuff ------
+}
+
 function background
 {
 
@@ -57,5 +70,8 @@ rm -f "$file_with_text"
 
 }
 
-background &
-
+if [ "$IS_ON""x" == "RASPI""x" ]; then
+	background &
+else
+	background2 &
+fi
