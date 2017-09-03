@@ -1187,7 +1187,7 @@ void show_tox_id_qrcode()
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 	system(cmd_str);
 
-	dbg(2, "show_tox_id_qrcode()");
+	dbg(2, "show_tox_id_qrcode()\n");
 
 	global_is_qrcode_showing_on_screen = 1;
 }
