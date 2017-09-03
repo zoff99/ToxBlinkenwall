@@ -274,6 +274,7 @@ void fb_copy_frame_to_fb(void* videoframe);
 void fb_fill_black();
 void fb_fill_xxx();
 void show_video_calling();
+void show_text_as_image_stop();
 
 
 const char *savedata_filename = "savedata.tox";
@@ -1106,10 +1107,20 @@ void show_text_as_image(const char *display_text)
 	}
 }
 
+void show_text_as_image_stop()
+{
+	char cmd_str[1000];
+	CLEAR(cmd_str);
+	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_text_as_image_stop);
+	system(cmd_str);		
+}
+
 void show_endless_image()
 {
 	global_is_qrcode_showing_on_screen = 0;
 
+	show_text_as_image_stop();
+	
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
@@ -1128,6 +1139,8 @@ void stop_endless_image()
 void show_endless_loading()
 {
 	global_is_qrcode_showing_on_screen = 0;
+
+	show_text_as_image_stop();
 
 	char cmd_str[1000];
     CLEAR(cmd_str);
@@ -1183,6 +1196,8 @@ int is_qrcode_generated()
 
 void show_tox_id_qrcode()
 {
+	show_text_as_image_stop();
+
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
@@ -1195,6 +1210,8 @@ void show_tox_id_qrcode()
 
 void show_tox_client_application_download_links()
 {
+	show_text_as_image_stop();
+
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_clients);
@@ -3407,6 +3424,8 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 		dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d\n", (int)friend_number, (int)audio_bitrate, (int)video_bitrate);
 
+		show_text_as_image_stop();
+		
 		toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
 
 		// clear screen on CALL ANSWER
