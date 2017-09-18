@@ -3,7 +3,7 @@
 function clean_up
 {
 	pkill toxblinkenwall
-	sleep 3
+	sleep 2
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
 	# Perform program exit cleanup of framebuffer
@@ -37,7 +37,7 @@ chmod u+x toxblinkenwall
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh
-sleep 2
+sleep 1
 scripts/create_gfx.sh
 
 while [ 1 == 1 ]; do
@@ -46,7 +46,7 @@ while [ 1 == 1 ]; do
 	scripts/init.sh
 	. scripts/vars.sh
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
-	sleep 5
+	sleep 2
 	# ---- only for RASPI ----
 	if [ "$IS_ON""x" == "RASPI""x" ]; then
 		:

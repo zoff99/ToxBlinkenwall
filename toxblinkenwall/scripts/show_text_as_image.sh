@@ -2,16 +2,18 @@
 
 function background2
 {
-        file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
+	file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
 
-        . $(dirname "$0")/vars.sh
-        $(dirname "$0")/stop_image_endless.sh
+	. $(dirname "$0")/vars.sh
+	$(dirname "$0")/stop_image_endless.sh
 
-        mv "$file_with_text" /tmp/toxmessage.txt
+	# mv "$file_with_text" /tmp/toxmessage.txt
 
-        # openGL text stuff ------
-        # openGL text stuff ------
+	# openGL text stuff ------
+	cat "$file_with_text" | node /usr/local/blinkenwall/poetry/poetry.js
+	# openGL text stuff ------
 }
+
 
 function background
 {
@@ -69,6 +71,7 @@ rm -f "$file_with_text""_tmp"
 rm -f "$file_with_text"
 
 }
+
 
 if [ "$IS_ON""x" == "RASPI""x" ]; then
 	background &
