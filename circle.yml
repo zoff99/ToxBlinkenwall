@@ -20,7 +20,8 @@ machine:
     RASPI_PKGSDIR: "/home/ubuntu/pkgs/"
 ## ----------- RASPI cross compile ----------------
     # ---------------------------------------------------
-    # v0.1.10 jitterbuf 8317821ed02f549380bbb05f2b80c44693a7bcb0
+    # MAX_CRYPTO_PACKET_SIZE 1400 -> 1000      4e096ac87135ef15bc9b738006a91f9b455b9f54
+    # jitterbuffer  capacity 3 -> 10           8317821ed02f549380bbb05f2b80c44693a7bcb0
     # v0.1.10 mobtweaks f73b345c21fae0e0e56fae86dc82f63188a00aca
     # c-toxcore v0.1.9 a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
     # c-toxcore v0.1.8 f6db9333e2d1262e7ba3846563c30f63c98ffa38
