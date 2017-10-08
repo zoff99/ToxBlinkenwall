@@ -20,6 +20,7 @@ machine:
     RASPI_PKGSDIR: "/home/ubuntu/pkgs/"
 ## ----------- RASPI cross compile ----------------
     # ---------------------------------------------------
+    # v0.1.10 jitterbuf 8317821ed02f549380bbb05f2b80c44693a7bcb0
     # v0.1.10 mobtweaks f73b345c21fae0e0e56fae86dc82f63188a00aca
     # c-toxcore v0.1.9 a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
     # c-toxcore v0.1.8 f6db9333e2d1262e7ba3846563c30f63c98ffa38
@@ -31,7 +32,7 @@ machine:
     # c-toxcore v0.1.2 a096c71db867ac83fc3e01e0fbe98573d20f9286
     # ---------------------------------------------------
     # c-toxcore version used
-    CTOXCORE_VERSION_HASH: f73b345c21fae0e0e56fae86dc82f63188a00aca
+    CTOXCORE_VERSION_HASH: 8317821ed02f549380bbb05f2b80c44693a7bcb0
     # c-toxcore repo used
     # CTOXCORE_URL: "https://github.com/TokTok/c-toxcore"
     CTOXCORE_URL: "https://github.com/zoff99/c-toxcore"
