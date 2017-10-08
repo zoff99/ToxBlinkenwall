@@ -65,7 +65,7 @@ cd $_SRC_
 # git clone https://github.com/TokTok/c-toxcore
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
-git checkout 8317821ed02f549380bbb05f2b80c44693a7bcb0
+git checkout e731f5f88a6b30c77c8f65e3cdc5fd851d41eed5
 ./autogen.sh
 
 export CFLAGS=-I$_INST_/include/
