@@ -27,6 +27,9 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 	sudo sed -i -e 's#POWERDOWN_TIME=.*#POWERDOWN_TIME=0#' /etc/kbd/config
 	sudo setterm -blank 0 > /dev/null 2>&1
 	sudo setterm -powerdown 0 > /dev/null 2>&1
+	
+        sudo /bin/chvt 1
+        sudo sh -c "TERM=linux setterm -blank 0 >/dev/tty0"
 fi
 # ---- only for RASPI ----
 
