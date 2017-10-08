@@ -12,6 +12,13 @@ elif [ "$IS_ON""x" == "BLINKENWALL""x" ]; then
   export BKWALL_HEIGHT=144
 fi
 
+if [ "$HD""x" == "RASPIHD""x" ]; then
+  export BKWALL_WIDTH=1280
+  export BKWALL_HEIGHT=720
+  export FB_WIDTH=1280
+  export FB_HEIGHT=720
+fi
+
 stride_=$(cat /sys/class/graphics/fb0/stride)
 bits_per_pixel_=$(cat /sys/class/graphics/fb0/bits_per_pixel)
 virtual_size=$(cat /sys/class/graphics/fb0/virtual_size)
