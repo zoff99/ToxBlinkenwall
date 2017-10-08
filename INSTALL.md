@@ -101,3 +101,11 @@ export IS_ON
 ' >> $_HOME_/.profile
 ```
 
+and if you want 720p video resolution add:
+
+```
+HD=RASPIHD
+export HD
+' >> $_HOME_/.profile
+```
+
