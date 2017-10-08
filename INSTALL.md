@@ -15,7 +15,7 @@ sudo apt-get --yes --force-yes install libqrencode-dev vim nano wget git make
 sudo apt-get --yes --force-yes install autotools-dev libtool bc libv4l-dev libv4lconvert0 v4l-conf v4l-utils
 sudo apt-get --yes --force-yes install libopus-dev libvpx-dev pkg-config libjpeg-dev libpulse-dev libconfig-dev
 sudo apt-get --yes --force-yes install automake checkinstall check yasm
-sudo apt-get --yes --force-yes install  libao-dev
+sudo apt-get --yes --force-yes install libao-dev
 
 export _SRC_=$_HOME_/src/
 export _INST_=$_HOME_/inst/
@@ -52,7 +52,6 @@ cd $_SRC_
 # git clone https://github.com/TokTok/c-toxcore
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
-# git checkout a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
 git checkout f73b345c21fae0e0e56fae86dc82f63188a00aca
 ./autogen.sh
 
