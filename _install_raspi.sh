@@ -98,8 +98,11 @@ gcc -O2 -fPIC -export-dynamic -I$_INST_/include -o toxblinkenwall -lm toxblinken
 -L$_INST_/lib \
 $_INST_/lib/libtoxcore.a \
 $_INST_/lib/libtoxav.a \
--lrt $_INST_/lib/libopus.a \
--lvpx -lm $_INST_/lib/libsodium.a \
+-lrt \
+$_INST_/lib/libopus.a \
+$_INST_/lib/libvpx.a \
+-lm \
+$_INST_/lib/libsodium.a \
 -lao -lpthread -lv4lconvert
 
 echo 'default_driver=alsa
