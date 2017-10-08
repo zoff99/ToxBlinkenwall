@@ -355,6 +355,8 @@ uint32_t incoming_filetransfers_friendnumber = -1;
 uint32_t incoming_filetransfers_filenumber = -1;
 int global_is_qrcode_showing_on_screen = 0;
 int global_qrcode_was_updated = 0;
+int toggle_display_frame = 0;
+int SHOW_EVERY_X_TH_VIDEO_FRAME = 1;
 
 // -- hardcoded --
 // -- hardcoded --
@@ -3623,6 +3625,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 		{
 			if (global_framebuffer_device_fd != 0)
 			{
+                               toggle_display_frame++;
+                               if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
+                               {
+                                       return;
+                               }
+                               else
+                               {
+                                       toggle_display_frame = 0;
+                               }
 
 				// dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
 
