@@ -3286,7 +3286,9 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
             /* fall through */
 
-            default: dbg(9, "VIDIOC_DQBUF error %d, %s\n", errno, strerror(errno)); return -1;
+            default:
+	     // dbg(9, "VIDIOC_DQBUF error %d, %s\n", errno, strerror(errno));
+		return -1;
 
         }
     }
@@ -4022,7 +4024,7 @@ void *thread_av(void *data)
                 //            "to plots now!\n");
                 //video_device_stop();
                 //close_video_device(video_device);
-				dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
+				// dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
             }
 
             pthread_mutex_unlock(&av_thread_lock);
@@ -4843,9 +4845,6 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			check_dir(tox);
-			check_friends_dir(tox);
-
 			if ((global_qrcode_was_updated == 1) && (global_is_qrcode_showing_on_screen == 1))
 			{
 				dbg(2, "QR code changed, waiting for update ...\n");
