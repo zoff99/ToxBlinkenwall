@@ -3768,6 +3768,10 @@ D:==========================
 				if (hh > 0)
 				{
 					vid_height_needed = 0 + (int)((float)frame_height_px1 / hh);
+					if (vid_height_needed > vid_height)
+					{
+						vid_height_needed = vid_height;
+					}
 				}
 				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
 
@@ -3775,6 +3779,10 @@ D:==========================
 				if (hh > 0)
 				{
 					vid_width_needed = 0 + (int)((float)frame_width_px1 / ww);
+					if (vid_width_needed > vid_width)
+					{
+						vid_width_needed = vid_width;
+					}
 				}
 				dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
 
