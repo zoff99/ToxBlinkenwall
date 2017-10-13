@@ -3765,26 +3765,25 @@ D:==========================
 				int vid_height_needed = vid_height;
 				if (hh > 0)
 				{
-					vid_height_needed = 0 + (int)((float)frame_height_px / hh);
+					vid_height_needed = 0 + (int)((float)frame_height_px1 / hh);
 				}
-
 				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
+
+				int vid_width_needed = vid_width;
+				if (hh > 0)
+				{
+					vid_width_needed = 0 + (int)((float)frame_width_px1 / ww);
+				}
+				dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
+
 
 				for (i = 0; i < vid_height_needed; ++i)
 				{
-					for (j = 0; j < (vid_width -	(4 *
-														(horizontal_stride_pixels_half_resized+inaccurate_horizonal_delta)
-													)
-									); ++j)
+					for (j = 0; j < vid_width_needed; ++j)
 					{
-
-						dbg(9, "j=%d\n", (int)j);
-
 						uint8_t *point = (uint8_t *) bf_out_data + 4 *
 						(
-							(i * (int)var_framebuffer_fix_info.line_length / 4) + j +
-							(2 * horizontal_stride_pixels_half_resized) +
-							inaccurate_horizonal_delta_sort_of_half
+							(i * (int)var_framebuffer_fix_info.line_length / 4) + j
 						);
 
 						j_src = (int)((float)j * ww);
