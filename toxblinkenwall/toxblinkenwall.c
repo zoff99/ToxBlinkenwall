@@ -72,8 +72,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 5
-static const char global_version_string[] = "0.99.5";
+#define VERSION_PATCH 6
+static const char global_version_string[] = "0.99.6";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -3658,8 +3658,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
-				// dbg(9, "frame_width_px=%d frame_height_px=%d\n", (int)frame_width_px, (int)frame_height_px);
-
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
 				int horizontal_stride_pixels = 0;
@@ -3675,6 +3673,17 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
+
+
+
+				dbg(9, "==========================\n");
+				dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px, (int)frame_height_px, (int)abs(ystride_));
+				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
+				dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
+				dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
+				dbg(9, "==========================\n");
+
+
 
 				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
 
