@@ -72,8 +72,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 6
-static const char global_version_string[] = "0.99.6";
+#define VERSION_PATCH 7
+static const char global_version_string[] = "0.99.7";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -3676,24 +3676,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				full_height = var_framebuffer_info.yres;
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 
-
-				dbg(9, "==========================\n");
-				dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)abs(ystride_));
-				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
-				dbg(9, "vid_width=%d vid_height=%d\n", (int)vid_width, (int)vid_height);
-				dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
-				dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
-				dbg(9, "==========================\n");
-
-/*
-D:==========================
-D:frame_width_px=640 frame_height_px=480 abs(ystride_)=704
-D:full_width=1280 full_height=720
-D:horizontal_stride_pixels=64 ystride=704 frame_width_px1=640 frame_height_px1=480
-D:horizontal_stride_pixels_half=32
-D:==========================
-*/
-
+				// dbg(9, "==========================\n");
+				// dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)abs(ystride_));
+				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
+				// dbg(9, "vid_width=%d vid_height=%d\n", (int)vid_width, (int)vid_height);
+				// dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
+				// dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
+				// dbg(9, "==========================\n");
 
 				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
 
@@ -3750,20 +3739,6 @@ D:==========================
 				 }
 
 
-
-				// should we use "ww" here as fator? we will see on the real "blinkenwall" ...
-				//
-				// int inaccurate_horizonal_delta=(int)(4*ww);
-				// int inaccurate_horizonal_delta_sort_of_half=(int)(2*ww);
-				//
-				/*
-				int inaccurate_horizonal_delta=(int)((float)8/ww);
-				int inaccurate_horizonal_delta_sort_of_half=(int)((float)4/ww);
-
-				inaccurate_horizonal_delta = 0;
-				inaccurate_horizonal_delta_sort_of_half = 0;
-				*/
-
 				int vid_height_needed = vid_height;
 				if (hh > 0)
 				{
@@ -3773,7 +3748,7 @@ D:==========================
 						vid_height_needed = vid_height;
 					}
 				}
-				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
+				// dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
 
 				int vid_width_needed = vid_width;
 				if (hh > 0)
@@ -3784,7 +3759,7 @@ D:==========================
 						vid_width_needed = vid_width;
 					}
 				}
-				dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
+				// dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
 
 
 				for (i = 0; i < vid_height_needed; ++i)
