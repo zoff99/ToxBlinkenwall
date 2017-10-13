@@ -3662,9 +3662,11 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				int horizontal_stride_pixels = 0;
 				int horizontal_stride_pixels_half = 0;
-				if (abs(ystride_) > frame_width_px1)
+				// if (abs(ystride_) > frame_width_px1)
+				if (full_width > frame_width_px1)
 				{
-					horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
+					// horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
+					horizontal_stride_pixels = full_width - frame_width_px1;
 					horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
 					// dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
 					// dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
@@ -3683,6 +3685,14 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
 				dbg(9, "==========================\n");
 
+/*
+D:==========================
+D:frame_width_px=640 frame_height_px=480 abs(ystride_)=704
+D:full_width=1280 full_height=720
+D:horizontal_stride_pixels=64 ystride=704 frame_width_px1=640 frame_height_px1=480
+D:horizontal_stride_pixels_half=32
+D:==========================
+*/
 
 
 				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
@@ -3729,7 +3739,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				 {
 				 	for (j = 0; j < vid_width; ++j)
 				 	{
-						// fill with very color
+						// fill with BG color
 			uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
 			+ j);
 				 		point[0] = 40; // B
