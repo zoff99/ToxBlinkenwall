@@ -3725,7 +3725,7 @@ D:==========================
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
 				{
-					horizontal_stride_pixels_half_resized = 1 + (int)((float)horizontal_stride_pixels_half / ww);
+					horizontal_stride_pixels_half_resized = 0 + (int)((float)horizontal_stride_pixels_half / ww);
 					// dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
 				}
 
@@ -3756,11 +3756,13 @@ D:==========================
 				// int inaccurate_horizonal_delta=(int)(4*ww);
 				// int inaccurate_horizonal_delta_sort_of_half=(int)(2*ww);
 				//
+				/*
 				int inaccurate_horizonal_delta=(int)((float)8/ww);
 				int inaccurate_horizonal_delta_sort_of_half=(int)((float)4/ww);
 
 				inaccurate_horizonal_delta = 0;
 				inaccurate_horizonal_delta_sort_of_half = 0;
+				*/
 
 				int vid_height_needed = vid_height;
 				if (hh > 0)
@@ -3781,9 +3783,10 @@ D:==========================
 				{
 					for (j = 0; j < vid_width_needed; ++j)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 *
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * //  '4 *'  ->  to get it in bytes (because 4 bytes per pixel)
 						(
-							(i * (int)var_framebuffer_fix_info.line_length / 4) + j
+							(i * (int)var_framebuffer_fix_info.line_length / 4) + // in pixels
+							j + (horizontal_stride_pixels_half_resized) // in pixels
 						);
 
 						j_src = (int)((float)j * ww);
