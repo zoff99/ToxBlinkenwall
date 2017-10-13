@@ -3655,9 +3655,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
 				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
-				dbg(9, "==========================\n");
-				dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px, (int)frame_height_px, (int)abs(ystride_));
-
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
@@ -3678,7 +3675,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 
 
-
+				dbg(9, "==========================\n");
+				dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)abs(ystride_));
 				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
 				dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
 				dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
