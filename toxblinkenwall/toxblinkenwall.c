@@ -3740,8 +3740,8 @@ D:==========================
 				 	for (j = 0; j < vid_width; ++j)
 				 	{
 						// fill with BG color
-			uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
-			+ j);
+						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
+							+ j);
 				 		point[0] = 40; // B
 				 		point[1] = 28; // G
 				 		point[2] = 28; // R
@@ -3759,21 +3759,33 @@ D:==========================
 				int inaccurate_horizonal_delta=(int)((float)8/ww);
 				int inaccurate_horizonal_delta_sort_of_half=(int)((float)4/ww);
 
-				for (i = 0; i < vid_height; ++i)
+				inaccurate_horizonal_delta = 0;
+				inaccurate_horizonal_delta_sort_of_half = 0;
+
+				int vid_height_needed = vid_height;
+				if (hh > 0)
+				{
+					vid_height_needed = 0 + (int)((float)frame_height_px / hh);
+				}
+
+				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
+
+				for (i = 0; i < vid_height_needed; ++i)
 				{
 					for (j = 0; j < (vid_width -	(4 *
-				(horizontal_stride_pixels_half_resized+inaccurate_horizonal_delta)
-									)
-							); ++j)
+														(horizontal_stride_pixels_half_resized+inaccurate_horizonal_delta)
+													)
+									); ++j)
 					{
 
-			uint8_t *point = (uint8_t *) bf_out_data + 4 *
-			(
-				(i * (int)var_framebuffer_fix_info.line_length/4) + j +
-				(2 * horizontal_stride_pixels_half_resized) +
-				inaccurate_horizonal_delta_sort_of_half
-			);
+						dbg(9, "j=%d\n", (int)j);
 
+						uint8_t *point = (uint8_t *) bf_out_data + 4 *
+						(
+							(i * (int)var_framebuffer_fix_info.line_length / 4) + j +
+							(2 * horizontal_stride_pixels_half_resized) +
+							inaccurate_horizonal_delta_sort_of_half
+						);
 
 						j_src = (int)((float)j * ww);
 						i_src = (int)((float)i * hh);
