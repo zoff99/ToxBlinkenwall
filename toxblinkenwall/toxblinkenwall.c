@@ -103,9 +103,9 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 8 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
-#define DEFAULT_GLOBAL_MIN_AUD_BITRATE 8 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
@@ -3678,6 +3678,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				dbg(9, "==========================\n");
 				dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)abs(ystride_));
 				dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
+				dbg(9, "vid_width=%d vid_height=%d\n", (int)vid_width, (int)vid_height);
 				dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
 				dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
 				dbg(9, "==========================\n");
