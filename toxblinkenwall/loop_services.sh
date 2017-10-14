@@ -28,7 +28,7 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 	sudo setterm -blank 0 > /dev/null 2>&1
 	sudo setterm -powerdown 0 > /dev/null 2>&1
 	
-        sudo /bin/chvt 1
+        openvt -- sudo sh -c "/bin/chvt 1 >/dev/null 2>/dev/null"
         sudo sh -c "TERM=linux setterm -blank 0 >/dev/tty0"
 fi
 # ---- only for RASPI ----
