@@ -425,7 +425,7 @@ void dbg(int level, const char *fmt, ...)
         level_and_format[0] = 'D';
     }
 
-    level_and_format[(strlen(fmt) + 2)] = ' ';
+    level_and_format[(strlen(fmt) + 2)] = '\0'; // '\0' or '\n'
     level_and_format[(strlen(fmt) + 3)] = '\0';
 
     time_t t3 = time(NULL);
