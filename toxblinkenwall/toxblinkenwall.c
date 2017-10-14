@@ -3502,19 +3502,26 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 		dbg(9, "ToxAV:Error setting/changing video bitrate\n");
 	}
 
+	// HINT: no matter what show the "call" screen
+	send_video = 1;
+	// HINT: no matter what show the "call" screen
+
 	if (send_video == 1)
 	{
 		global_is_qrcode_showing_on_screen = 0;
 
-		// clear screen on CALL START
-		stop_endless_image();
-		fb_fill_black();
-		// show funny face
-		show_video_calling();
+		if (global_video_active != 0)
+		{
+			// clear screen on CALL START
+			stop_endless_image();
+			fb_fill_black();
+			// show funny face
+			show_video_calling();
 
-		dbg(9, "t_toxav_call_state_cb:004\n");
-		global_video_active = 1;
-		global_send_first_frame = 2;
+			dbg(9, "t_toxav_call_state_cb:004\n");
+			global_video_active = 1;
+			global_send_first_frame = 2;
+		}
 	}
 	else
 	{
