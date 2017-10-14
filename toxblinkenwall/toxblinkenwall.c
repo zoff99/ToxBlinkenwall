@@ -104,7 +104,7 @@ typedef struct DHT_node {
 #define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
-#define DEFAULT_GLOBAL_MIN_VID_BITRATE 1000 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
@@ -3533,12 +3533,12 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
 {
-	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
-	{
-		// we are in a call with someone else already
-		dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
-		return;
-	}
+	//if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
+	//{
+	//	// we are in a call with someone else already
+	//	dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+	//	return;
+	//}
 
 
 	dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
