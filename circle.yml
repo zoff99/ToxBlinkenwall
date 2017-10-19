@@ -20,6 +20,7 @@ machine:
     RASPI_PKGSDIR: "/home/ubuntu/pkgs/"
 ## ----------- RASPI cross compile ----------------
     # ---------------------------------------------------
+    # v0.1.10 more tweaks                      b308141c972eb05a18ab27672f5dc0b6152d189c
     # v0.1.10 cfg_dec2                         3921fd04ee233a21befa960cf26214410e1b6582
     # v0.1.10 cfg_dec                          94bf0a32adac079b7739c6d32cfc0e504993f962
     # MAX_CRYPTO_PACKET_SIZE 1400 -> 1000      4e096ac87135ef15bc9b738006a91f9b455b9f54
@@ -35,7 +36,7 @@ machine:
     # c-toxcore v0.1.2 a096c71db867ac83fc3e01e0fbe98573d20f9286
     # ---------------------------------------------------
     # c-toxcore version used
-    CTOXCORE_VERSION_HASH: 3921fd04ee233a21befa960cf26214410e1b6582
+    CTOXCORE_VERSION_HASH: b308141c972eb05a18ab27672f5dc0b6152d189c
     # c-toxcore repo used
     # CTOXCORE_URL: "https://github.com/TokTok/c-toxcore"
     CTOXCORE_URL: "https://github.com/zoff99/c-toxcore"

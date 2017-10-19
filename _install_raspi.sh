@@ -66,6 +66,7 @@ cd $_SRC_
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
 
+# v0.1.10 more tweaks           b308141c972eb05a18ab27672f5dc0b6152d189c
 # v0.1.10 cfg_dec2              3921fd04ee233a21befa960cf26214410e1b6582
 # v0.1.10 cfg_dec               94bf0a32adac079b7739c6d32cfc0e504993f962
 # v0.1.10 onlyKF                74dc53cf180e32f92ebb3cb5e8542e919cc3b343
@@ -79,7 +80,7 @@ cd c-toxcore
 # v0.1.5                        995578f1038842288c1ff552fd796ab2377db6e1
 # v0.1.4                        27a97a8280813ec05a5209811c40ab23203bb292
 
-git checkout 3921fd04ee233a21befa960cf26214410e1b6582
+git checkout b308141c972eb05a18ab27672f5dc0b6152d189c
 
 ./autogen.sh
 
