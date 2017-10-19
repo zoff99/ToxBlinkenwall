@@ -621,6 +621,39 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 }
 
 
+#ifdef HAVE_PORTAUDIO
+
+/* This routine will be called by the PortAudio engine when audio is needed */
+static int portaudio_data_callback( const void *inputBuffer,
+                            void *outputBuffer,
+                            unsigned long framesPerBuffer,
+                            const PaStreamCallbackTimeInfo* timeInfo,
+                            PaStreamCallbackFlags statusFlags,
+                            void *userData )
+{
+
+	int *out = (int*)outputBuffer;
+	unsigned long i;
+
+	for( i=0; i<framesPerBuffer; i++ )
+	{
+		*out++ = 20;
+	}
+
+	return paContinue;
+}
+
+/*
+ * This routine is called by portaudio when playback is done.
+ */
+static void StreamFinished( void* userData )
+{
+	dbg(2, "Audio Stream Completed\n");
+}
+#endif
+
+
+
 Tox *create_tox()
 {
 	Tox *tox;
@@ -4025,40 +4058,6 @@ void fb_fill_xxx()
 		memset(framebuffer_mappedmem, 0xa3, framebuffer_screensize);
 	}
 }
-
-
-#ifdef HAVE_PORTAUDIO
-
-/* This routine will be called by the PortAudio engine when audio is needed */
-static int portaudio_data_callback( const void *inputBuffer,
-                            void *outputBuffer,
-                            unsigned long framesPerBuffer,
-                            const PaStreamCallbackTimeInfo* timeInfo,
-                            PaStreamCallbackFlags statusFlags,
-                            void *userData )
-{
-
-	int *out = (int*)outputBuffer;
-	unsigned long i;
-
-	for( i=0; i<framesPerBuffer; i++ )
-	{
-		*out++ = 20;
-	}
-
-	return paContinue;
-}
-
-/*
- * This routine is called by portaudio when playback is done.
- */
-static void StreamFinished( void* userData )
-{
-	dbg(2, "Audio Stream Completed\n");
-}
-#endif
-
-
 
 
 
