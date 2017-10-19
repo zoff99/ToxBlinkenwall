@@ -640,7 +640,7 @@ static int portaudio_data_callback( const void *inputBuffer,
 	unsigned long i;
 	for( i=0; i<framesPerBuffer; i++ )
 	{
-		*out++ = 20;
+		*out++ = i % 16383;
 	}
 
 	return paContinue;
