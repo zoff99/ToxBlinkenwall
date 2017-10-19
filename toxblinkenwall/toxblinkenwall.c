@@ -633,8 +633,11 @@ static int portaudio_data_callback( const void *inputBuffer,
 {
 
 	int *out = (int*)outputBuffer;
-	unsigned long i;
 
+	/* Reset output data first */
+	memset(out, 0, framesPerBuffer * 2 * sizeof(int16_t));
+
+	unsigned long i;
 	for( i=0; i<framesPerBuffer; i++ )
 	{
 		*out++ = 20;
@@ -3782,7 +3785,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				   &outputParameters,
 				   (int)libao_sampling_rate,
 				   paFramesPerBufferUnspecified,
-				   0,
+				   paDitherOff, /* Clip but don't dither */
 				   portaudio_data_callback,
 				   NULL );
 
