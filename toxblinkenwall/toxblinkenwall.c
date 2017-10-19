@@ -61,6 +61,7 @@
 
 #ifdef HAVE_PORTAUDIO
 #include <portaudio.h>
+#include "ringbuf.h"
 #endif
 
 
@@ -348,6 +349,7 @@ int _ao_default_driver = -1;
 
 #ifdef HAVE_PORTAUDIO
 PaStream *portaudio_stream = NULL;
+ringbuf_t portaudio_out_rb;
 #endif
 
 
@@ -632,16 +634,34 @@ static int portaudio_data_callback( const void *inputBuffer,
                             void *userData )
 {
 
-	int *out = (int*)outputBuffer;
+	#define SAMPLE_SILENCE (0)
+	int16_t *out = (int16_t*)outputBuffer;
 
-	/* Reset output data first */
-	memset(out, 0, framesPerBuffer * 2 * sizeof(int16_t));
+	size_t have_bytes_in_buffer = ringbuf_bytes_used(&portaudio_out_rb);
 
-	unsigned long i;
-	for( i=0; i<framesPerBuffer; i++ )
+	if (have_bytes_in_buffer < framesPerBuffer)
 	{
-		*out++ = i % 16383;
+		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)have_bytes_in_buffer);
+		unsigned long i;
+		for( i=0; i < framesPerBuffer; i++ )
+		{
+			// we don't have enough data, fill up with silence ..
+			if (i > have_bytes_in_buffer)
+			{
+				*out++ = SAMPLE_SILENCE;
+			}
+		}
 	}
+	else
+	{
+		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)framesPerBuffer);
+	}
+
+	// unsigned long i;
+	// for( i=0; i < framesPerBuffer; i++ )
+	// {
+	//	// *out++ = i % 16383;
+	// }
 
 	return paContinue;
 }
@@ -3448,6 +3468,9 @@ void close_cam()
 #endif
 
 #ifdef HAVE_PORTAUDIO
+
+	ringbuf_free(&portaudio_out_rb);
+
 	PaError err;
 
 	err = Pa_StopStream(portaudio_stream);
@@ -3723,7 +3746,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 #endif
 
 
-
 #ifdef HAVE_PORTAUDIO
 
 			PaError is_stream_active = 0;
@@ -3800,6 +3822,10 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 					dbg(0, "Error: calling Pa_StartStream\n");
 				}
 			}
+
+
+			// now actually put the audio data into the ring buffer
+			ringbuf_memcpy_into(portaudio_out_rb, (const char *)pcm, (size_t)(sample_count * channels * 2));
 
 #endif
 
@@ -4172,6 +4198,13 @@ void *thread_av(void *data)
 
 			libao_channels = 1;
 			libao_sampling_rate = 48000;
+
+			portaudio_out_rb = ringbuf_new((size_t) 1024 * 300); // 300kbytes ring buffer
+
+			if (portaudio_out_rb == NULL)
+			{
+				dbg(0, "Error creating ringbuffer\n");
+			}
 
 #endif
 
