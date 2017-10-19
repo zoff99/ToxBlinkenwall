@@ -3705,7 +3705,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				dbg(2, "need to reconfigure audio stream\n");
 			}
 
-			if (need_reconfig == 1) && (is_stream_active == 1)
+			if ((need_reconfig == 1) && (is_stream_active == 1))
 			{
 				PaError err_abort = Pa_AbortStream(portaudio_stream);
 				if (err_abort != paNoError)

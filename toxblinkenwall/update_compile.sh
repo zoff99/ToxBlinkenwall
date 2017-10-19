@@ -11,4 +11,5 @@ $_INST_/lib/libtoxcore.a \
 $_INST_/lib/libtoxav.a \
 -lrt $_INST_/lib/libopus.a \
 -lvpx -lm $_INST_/lib/libsodium.a \
+/usr/lib/arm-linux-gnueabihf/libportaudio.a \
 -lao -lpthread -lv4lconvert
