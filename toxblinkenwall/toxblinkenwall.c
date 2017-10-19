@@ -638,23 +638,30 @@ static int portaudio_data_callback( const void *inputBuffer,
 	int16_t *out = (int16_t*)outputBuffer;
 
 	size_t have_bytes_in_buffer = ringbuf_bytes_used(portaudio_out_rb);
+	size_t have_samples = (size_t)((have_bytes_in_buffer / libao_channels) / 2);
+	dbg(9, "have_bytes_in_buffer=%d framesPerBuffer=%d\n", (int)have_bytes_in_buffer, (int)framesPerBuffer);
+	dbg(9, "have_samples=%d\n", (int)have_samples);
 
-	if (have_bytes_in_buffer < framesPerBuffer)
+	if (have_samples < framesPerBuffer)
 	{
-		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)have_bytes_in_buffer);
+		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)(framesPerBuffer * libao_channels * 2));
 		unsigned long i;
 		for( i=0; i < framesPerBuffer; i++ )
 		{
 			// we don't have enough data, fill up with silence ..
-			if (i > have_bytes_in_buffer)
+			if (i > have_samples)
 			{
 				*out++ = SAMPLE_SILENCE;
+				//if (libao_channels == 2)
+				//{
+				//	*out++ = SAMPLE_SILENCE;
+				//}
 			}
 		}
 	}
 	else
 	{
-		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)framesPerBuffer);
+		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)(framesPerBuffer * channels * 2));
 	}
 
 	// unsigned long i;
