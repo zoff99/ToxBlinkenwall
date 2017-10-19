@@ -47,7 +47,8 @@
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
-#define HAVE_LIBAO 1
+// #define HAVE_LIBAO 1
+#define HAVE_PORTAUDIO 1
 #define HAVE_FRAMEBUFFER 1
 
 #ifdef HAVE_SOUND
@@ -56,6 +57,10 @@
 
 #ifdef HAVE_LIBAO
 #include <ao/ao.h>
+#endif
+
+#ifdef HAVE_PORTAUDIO
+#include <portaudio.h>
 #endif
 
 
@@ -340,6 +345,11 @@ ao_device *_ao_device = NULL;
 ao_sample_format _ao_format;
 int _ao_default_driver = -1;
 #endif
+
+#ifdef HAVE_PORTAUDIO
+PaStream *portaudio_stream = NULL;
+#endif
+
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
@@ -3401,6 +3411,23 @@ void close_cam()
 	ao_shutdown();
 #endif
 
+#ifdef HAVE_PORTAUDIO
+	PaError err;
+
+	err = Pa_StopStream(portaudio_stream);
+	if (err != paNoError)
+	{
+		dbg(0, "Pa_StopStream error\n");
+	}
+
+	err = Pa_CloseStream(portaudio_stream);
+    if (err != paNoError)
+	{
+		dbg(0, "Pa_CloseStream error\n");
+	}
+
+	Pa_Terminate();
+#endif
 
 #ifdef V4LCONVERT
 	v4lconvert_destroy(v4lconvert_data);
@@ -3614,39 +3641,41 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 #ifdef HAVE_LIBAO
 
-		if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
-		{
-			libao_channels = (int)channels;
-			libao_sampling_rate = (int)sampling_rate;
-
-			if (_ao_device != NULL)
+			if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
 			{
-				dbg(0, "closing sound output device\n");
-				ao_close(_ao_device);
-			}
+				libao_channels = (int)channels;
+				libao_sampling_rate = (int)sampling_rate;
 
-			// initialize sound output via libao ------------------
-			ao_initialize();
-			_ao_default_driver = ao_default_driver_id();
-			memset(&_ao_format, 0, sizeof(_ao_format));
-			_ao_format.bits = 16;
-			_ao_format.channels = libao_channels;
-			_ao_format.rate = libao_sampling_rate;
-			_ao_format.byte_format = AO_FMT_LITTLE;
+				if (_ao_device != NULL)
+				{
+					dbg(0, "closing sound output device\n");
+					ao_close(_ao_device);
+				}
 
-			dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
-			_ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
+				// initialize sound output via libao ------------------
+				ao_initialize();
+				_ao_default_driver = ao_default_driver_id();
+				memset(&_ao_format, 0, sizeof(_ao_format));
+				_ao_format.bits = 16;
+				_ao_format.channels = libao_channels;
+				_ao_format.rate = libao_sampling_rate;
+				_ao_format.byte_format = AO_FMT_LITTLE;
 
-			if (_ao_device == NULL)
-			{
-				dbg(0, "Error opening sound output device\n");
+				dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
+				_ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
+
+				if (_ao_device == NULL)
+				{
+					dbg(0, "Error opening sound output device\n");
+				}
+				else
+				{
+				}
+				// initialize sound output via libao ------------------
 			}
-			else
-			{
-			}
-			// initialize sound output via libao ------------------
-		}
 #endif
+
+
 
 #ifdef HAVE_LIBAO
 			// play audio to default audio device --------------
@@ -3656,6 +3685,88 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			}
 			// play audio to default audio device --------------
 #endif
+
+
+
+#ifdef HAVE_PORTAUDIO
+
+			PaError is_stream_active = 0;
+			if (portaudio_stream)
+			{
+				is_stream_active = Pa_IsStreamActive(portaudio_stream);
+			}
+
+			int need_reconfig = 0;
+			if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
+			{
+				libao_channels = (int)channels;
+				libao_sampling_rate = (int)sampling_rate;
+				need_reconfig = 1;
+				dbg(2, "need to reconfigure audio stream\n");
+			}
+
+			if (need_reconfig == 1) && (is_stream_active == 1)
+			{
+				PaError err_abort = Pa_AbortStream(portaudio_stream);
+				if (err_abort != paNoError)
+				{
+					dbg(0, "Error: calling Pa_AbortStream\n");
+				}
+			}
+
+			if ((need_reconfig == 1) || (is_stream_active != 1))
+			{
+				PaError err;
+
+				if (need_reconfig != 1)
+				{
+					dbg(0, "starting sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
+				}
+				else
+				{
+					dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
+				}
+
+				PaStreamParameters outputParameters;
+				outputParameters.device = Pa_GetDefaultOutputDevice(); /* default output device */
+				if (outputParameters.device == paNoDevice)
+				{
+					dbg(0, "Error: No default output device\n");
+				}
+
+				outputParameters.channelCount = (int)libao_channels;       /* stereo output */
+				outputParameters.sampleFormat = paInt16; /* 16 bit output */
+				outputParameters.suggestedLatency = Pa_GetDeviceInfo( outputParameters.device )->defaultLowOutputLatency;
+				outputParameters.hostApiSpecificStreamInfo = NULL;
+
+				//
+				// number of bytes   --> (size_t)(sample_count * channels * 2)
+				// number of samples --> sample_count
+				//
+				err = Pa_OpenStream(
+				   &portaudio_stream,
+				   NULL, /* no input */
+				   &outputParameters,
+				   (int)libao_sampling_rate,
+				   paFramesPerBufferUnspecified,
+				   0,
+				   portaudio_data_callback,
+				   NULL );
+
+				if (err != paNoError)
+				{
+					dbg(0, "Error: calling Pa_OpenStream\n");
+				}
+
+				err = Pa_StartStream( portaudio_stream );
+				if (err != paNoError)
+				{
+					dbg(0, "Error: calling Pa_StartStream\n");
+				}
+			}
+
+#endif
+
 		}
 		else
 		{
@@ -3916,6 +4027,41 @@ void fb_fill_xxx()
 }
 
 
+#ifdef HAVE_PORTAUDIO
+
+/* This routine will be called by the PortAudio engine when audio is needed */
+static int portaudio_data_callback( const void *inputBuffer,
+                            void *outputBuffer,
+                            unsigned long framesPerBuffer,
+                            const PaStreamCallbackTimeInfo* timeInfo,
+                            PaStreamCallbackFlags statusFlags,
+                            void *userData )
+{
+
+	int *out = (int*)outputBuffer;
+	unsigned long i;
+
+	for( i=0; i<framesPerBuffer; i++ )
+	{
+		*out++ = 20;
+	}
+
+	return paContinue;
+}
+
+/*
+ * This routine is called by portaudio when playback is done.
+ */
+static void StreamFinished( void* userData )
+{
+	dbg(2, "Audio Stream Completed\n");
+}
+#endif
+
+
+
+
+
 void *thread_av(void *data)
 {
 	ToxAV *av = (ToxAV *) data;
@@ -4010,6 +4156,21 @@ void *thread_av(void *data)
 		{
 		}
 		// initialize sound output via libao ------------------
+#endif
+
+
+#ifdef HAVE_PORTAUDIO
+			PaError err;
+			err = Pa_Initialize();
+
+			if( err != paNoError )
+			{
+				dbg(0, "Error opening sound output device\n");
+			}
+
+			libao_channels = 1;
+			libao_sampling_rate = 48000;
+
 #endif
 
 
