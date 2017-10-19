@@ -347,6 +347,9 @@ ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
 
+uint8_t libao_channels = 2;
+uint32_t libao_sampling_rate = 1;
+
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
 
@@ -3608,6 +3611,43 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
+
+#ifdef HAVE_LIBAO
+
+		if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
+		{
+			libao_channels = (int)channels;
+			libao_sampling_rate = (int)sampling_rate;
+
+			if (_ao_device != NULL)
+			{
+				dbg(0, "closing sound output device\n");
+				ao_close(_ao_device);
+			}
+
+			// initialize sound output via libao ------------------
+			ao_initialize();
+			_ao_default_driver = ao_default_driver_id();
+			memset(&_ao_format, 0, sizeof(_ao_format));
+			_ao_format.bits = 16;
+			_ao_format.channels = libao_channels;
+			_ao_format.rate = libao_sampling_rate;
+			_ao_format.byte_format = AO_FMT_LITTLE;
+
+			dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
+			_ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
+
+			if (_ao_device == NULL)
+			{
+				dbg(0, "Error opening sound output device\n");
+			}
+			else
+			{
+			}
+			// initialize sound output via libao ------------------
+		}
+#endif
+
 #ifdef HAVE_LIBAO
 			// play audio to default audio device --------------
 			if (_ao_device != NULL)
@@ -3946,13 +3986,18 @@ void *thread_av(void *data)
 #endif
 
 #ifdef HAVE_LIBAO
+
+		libao_channels = 1;
+		libao_sampling_rate = 48000;
+
+
 		// initialize sound output via libao ------------------
 		ao_initialize();
 		_ao_default_driver = ao_default_driver_id();
 		memset(&_ao_format, 0, sizeof(_ao_format));
 		_ao_format.bits = 16;
-		_ao_format.channels = 1;
-		_ao_format.rate = 48000;
+		_ao_format.channels = (int)libao_channels;
+		_ao_format.rate = (int)libao_sampling_rate;
 		_ao_format.byte_format = AO_FMT_LITTLE;
 
 		_ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
