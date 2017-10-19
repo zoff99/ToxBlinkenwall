@@ -637,7 +637,7 @@ static int portaudio_data_callback( const void *inputBuffer,
 	#define SAMPLE_SILENCE (0)
 	int16_t *out = (int16_t*)outputBuffer;
 
-	size_t have_bytes_in_buffer = ringbuf_bytes_used(&portaudio_out_rb);
+	size_t have_bytes_in_buffer = ringbuf_bytes_used(portaudio_out_rb);
 
 	if (have_bytes_in_buffer < framesPerBuffer)
 	{
