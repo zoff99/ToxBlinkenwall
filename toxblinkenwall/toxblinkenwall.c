@@ -78,8 +78,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 7
-static const char global_version_string[] = "0.99.7";
+#define VERSION_PATCH 8
+static const char global_version_string[] = "0.99.8";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -638,26 +638,28 @@ static int portaudio_data_callback( const void *inputBuffer,
 	int16_t *out = (int16_t*)outputBuffer;
 
 	size_t have_bytes_in_buffer = ringbuf_bytes_used(portaudio_out_rb);
-	size_t have_samples = (size_t)((have_bytes_in_buffer / libao_channels) / 2);
+	size_t have_frames = (size_t)((have_bytes_in_buffer / libao_channels) / 2);
 	dbg(9, "have_bytes_in_buffer=%d framesPerBuffer=%d\n", (int)have_bytes_in_buffer, (int)framesPerBuffer);
-	dbg(9, "have_samples=%d\n", (int)have_samples);
+	dbg(9, "have_frames=%d\n", (int)have_frames);
 
-	if (have_samples < framesPerBuffer)
+	if (have_frames <= framesPerBuffer)
 	{
 		ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)(framesPerBuffer * libao_channels * 2));
+#if 1
 		unsigned long i;
 		for( i=0; i < framesPerBuffer; i++ )
 		{
 			// we don't have enough data, fill up with silence ..
-			if (i > have_samples)
+			if (i > have_frames)
 			{
 				*out++ = SAMPLE_SILENCE;
-				//if (libao_channels == 2)
-				//{
-				//	*out++ = SAMPLE_SILENCE;
-				//}
+				if (libao_channels == 2)
+				{
+					*out++ = SAMPLE_SILENCE;
+				}
 			}
 		}
+#endif
 	}
 	else
 	{
