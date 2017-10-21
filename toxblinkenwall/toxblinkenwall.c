@@ -47,8 +47,8 @@
 
 #define V4LCONVERT 1
 // #define HAVE_SOUND 1
-// #define HAVE_LIBAO 1
-#define HAVE_PORTAUDIO 1
+#define HAVE_LIBAO 1
+// #define HAVE_PORTAUDIO 1
 #define HAVE_FRAMEBUFFER 1
 
 #ifdef HAVE_SOUND
