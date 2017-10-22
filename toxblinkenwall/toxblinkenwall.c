@@ -78,8 +78,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 8
-static const char global_version_string[] = "0.99.8";
+#define VERSION_PATCH 9
+static const char global_version_string[] = "0.99.9";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -361,6 +361,8 @@ int global_blink_state = 0;
 
 uint8_t libao_channels = 2;
 uint32_t libao_sampling_rate = 1;
+char *ao_play_pcm;
+size_t ao_play_bytes;
 
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
@@ -3694,6 +3696,16 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
     dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
 }
 
+void *audio_play(void *dummy)
+{
+	// make a local copy
+	size_t ao_play_bytes_ = ao_play_bytes;
+	char *ao_play_pcm_ = (char *)calloc(1, ao_play_bytes_);
+	memcpy(ao_play_pcm_, ao_play_pcm, ao_play_bytes_);
+	// this is a blocking call
+	ao_play( _ao_device, ao_play_pcm_, ao_play_bytes_);
+	free(ao_play_pcm_);
+}
 
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
@@ -3749,7 +3761,21 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			// play audio to default audio device --------------
 			if (_ao_device != NULL)
 			{
-				ao_play( _ao_device, (char *)pcm, (size_t)(sample_count * channels * 2) );
+#if 0
+				ao_play( _ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2) );
+#else
+
+				ao_play_pcm = (char *)pcm;
+				ao_play_bytes = (size_t)(sample_count * libao_channels * 2);
+
+				dbg(0, "sample_count=%d channels=%d samplerate=%d\n", (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
+
+				pthread_t audio_play_thread;
+				if(pthread_create(&audio_play_thread, NULL, audio_play, NULL))
+				{
+					dbg(0, "ERROR creating audio play thread\n");
+				}
+#endif
 			}
 			// play audio to default audio device --------------
 #endif
