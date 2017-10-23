@@ -3762,7 +3762,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			if (_ao_device != NULL)
 			{
 #if 0
-				ao_play( _ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2) );
+				ao_play(_ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2));
 #else
 
 				ao_play_pcm = (char *)pcm;
@@ -3771,7 +3771,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				dbg(0, "sample_count=%d channels=%d samplerate=%d\n", (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
 
 				pthread_t audio_play_thread;
-				if(pthread_create(&audio_play_thread, NULL, audio_play, NULL))
+				if (pthread_create(&audio_play_thread, NULL, audio_play, NULL))
 				{
 					dbg(0, "ERROR creating audio play thread\n");
 				}
