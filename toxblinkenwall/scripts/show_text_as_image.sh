@@ -76,5 +76,6 @@ rm -f "$file_with_text"
 if [ "$IS_ON""x" == "RASPI""x" ]; then
 	background &
 else
-	background2 &
+	# background2 &
+	background & # use old method for now (there is a bug in the new one)
 fi

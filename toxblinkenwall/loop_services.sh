@@ -17,6 +17,9 @@ export LD_LIBRARY_PATH=~/inst/lib/
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
+	# stop useless stuff
+	sudo pkill gvfs
+	sudo pkill gvfs
 	# camera module not loaded automatically
 	sudo modprobe bcm2835_v4l2
 	# stop gfx UI
@@ -28,8 +31,8 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 	sudo setterm -blank 0 > /dev/null 2>&1
 	sudo setterm -powerdown 0 > /dev/null 2>&1
 	
-        openvt -- sudo sh -c "/bin/chvt 1 >/dev/null 2>/dev/null"
-        sudo sh -c "TERM=linux setterm -blank 0 >/dev/tty0"
+	openvt -- sudo sh -c "/bin/chvt 1 >/dev/null 2>/dev/null"
+	sudo sh -c "TERM=linux setterm -blank 0 >/dev/tty0"
 fi
 # ---- only for RASPI ----
 
@@ -46,7 +49,7 @@ scripts/create_gfx.sh
 while [ 1 == 1 ]; do
 	scripts/stop_loading_endless.sh
 	scripts/stop_image_endless.sh
-	scripts/init.sh
+	# scripts/init.sh
 	. scripts/vars.sh
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
