@@ -17,9 +17,6 @@ export LD_LIBRARY_PATH=~/inst/lib/
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
-	# stop useless stuff
-	sudo pkill gvfs
-	sudo pkill gvfs
 	# camera module not loaded automatically
 	sudo modprobe bcm2835_v4l2
 	# stop gfx UI
