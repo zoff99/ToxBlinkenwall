@@ -4134,9 +4134,22 @@ void *video_play(void *dummy)
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 
+
+				int downscale = 0;
+				// check if we need to upscale or downscale
+				if ((frame_width_px1 > vid_width) || (frame_height_px1 > vid_height))
+				{
+					// downscale to video size
+					downscale = 1;
+				}
+				else
+				{
+					// upscale to video size / or leave as is
+				}
+
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
-				dbg(9, "frame_width_px1=%d frame_width_px=%d frame_height_px1=%d\n", (int)frame_width_px, (int)frame_width_px1, (int)frame_height_px1);
+				// dbg(9, "frame_width_px1=%d frame_width_px=%d frame_height_px1=%d\n", (int)frame_width_px1, (int)frame_width_px, (int)frame_height_px1);
 
 				int horizontal_stride_pixels = 0;
 				int horizontal_stride_pixels_half = 0;
@@ -4151,16 +4164,16 @@ void *video_play(void *dummy)
 
 				unsigned long int i, j;
 
-				dbg(9, "full_width=%f vid_width=%f full_height=%f vid_height=%f\n", (float)full_width, (float)vid_width, (float)full_height, (float)vid_height);
-				float ww = (float)full_width / (float)vid_width;
-				float hh = (float)full_height / (float)vid_height;
-				dbg(9, "video frame scale factor: full_width/vid_width=%f full_height/vid_height=%f\n", ww, hh);
+				// dbg(9, "full_width=%f vid_width=%f full_height=%f vid_height=%f\n", (float)full_width, (float)vid_width, (float)full_height, (float)vid_height);
+				float ww = (float)var_framebuffer_info.xres / (float)vid_width;
+				float hh = (float)var_framebuffer_info.yres / (float)vid_height;
+				// dbg(9, "video frame scale factor: full_width/vid_width=%f full_height/vid_height=%f\n", ww, hh);
 
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
 				{
 					horizontal_stride_pixels_half_resized = 0 + (int)((float)horizontal_stride_pixels_half / ww);
-					dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
+					// dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
 				}
 
 				int i_src;
@@ -4179,7 +4192,7 @@ void *video_play(void *dummy)
 						vid_height_needed = vid_height;
 					}
 				}
-				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
+				// dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
 
 				int vid_width_needed = vid_width;
 				if (hh > 0)
@@ -4190,23 +4203,64 @@ void *video_play(void *dummy)
 						vid_width_needed = vid_width;
 					}
 				}
-				dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
+				// dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
 
 
-				if (((vid_height_needed + 10) < var_framebuffer_info.xres) && ((vid_height_needed + 10) < var_framebuffer_info.yres))
+
+
+
+
+
+				if (downscale == 0)
+				// if (((vid_height_needed + 10) < var_framebuffer_info.xres) && ((vid_height_needed + 10) < var_framebuffer_info.yres))
 				{
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
-					uint8_t *point = NULL;
-					for (i = 0; i < vid_height_needed; ++i)
-					{
-						for (j = 0; j < vid_width_needed; ++j)
-						{
-							point = (uint8_t *) bf_out_data + 4 * ((i * (int)vid_width_needed) + j);
 
-							j_src = j; // (int)((float)j * ww);
-							i_src = i; // (int)((float)i * hh);
+					float ww2_upscale = (float)vid_width / (float)frame_width_px1;
+					float hh2_upscale = (float)vid_height / (float)frame_height_px1;
+					// dbg(9, "video frame scale factor2: ww=%f hh=%f\n", ww2_upscale, hh2_upscale);
+
+					float factor2_upscale = hh2_upscale;
+					if (ww2_upscale < hh2_upscale)
+					{
+						factor2_upscale = ww2_upscale;
+					}
+					// dbg(9, "factor2_upscale=%f\n", factor2_upscale);
+
+					int scale_to_width_upscale = (int)((float)frame_width_px1 * factor2_upscale);
+					int scale_to_height_upscale = (int)((float)frame_height_px1 * factor2_upscale);
+
+					if (scale_to_width_upscale < 2)
+					{
+						scale_to_width_upscale = 2;
+					}
+					else if (scale_to_width_upscale > vid_width)
+					{
+						scale_to_width_upscale = vid_width;
+					}
+
+					if (scale_to_height_upscale < 2)
+					{
+						scale_to_height_upscale = 2;
+					}
+					else if (scale_to_height_upscale > vid_height)
+					{
+						scale_to_height_upscale = vid_height;
+					}
+					// dbg(9, "video frame scale to: ww=%d hh=%d\n", scale_to_width_upscale, scale_to_height_upscale);
+
+
+					// convert to BGRA 1:1 size (from YUV)
+					uint8_t *point = NULL;
+					for (i = 0; i < frame_height_px1; i++)
+					{
+						i_src = i;
+						for (j = 0; j < frame_width_px1; j++)
+						{
+							point = (uint8_t *) bf_out_data + 4 * ((i * (int)frame_width_px1) + j);
+							j_src = j;
 
 							yx = y[(i_src * abs(ystride)) + j_src];
 							ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
@@ -4215,63 +4269,17 @@ void *video_play(void *dummy)
 							point[0] = YUV2B(yx, ux, vx); // B
 							point[1] = YUV2G(yx, ux, vx); // G
 							point[2] = YUV2R(yx, ux, vx); // R
-							point[3] = 0; // A
+							// point[3] = 0; // A
 						}
 					}
 
 
 					uint8_t *bf_out_data_upscaled = (uint8_t *)calloc(1, framebuffer_screensize);
-
-#if 1
 					memset(bf_out_data_upscaled, 0, framebuffer_screensize);
-#else
-					memset(bf_out_data_upscaled, 28, framebuffer_screensize);
-					uint8_t *point2 = NULL;
-					// fill bg with dark color
-					for (i = 0; i < var_framebuffer_info.yres; i++)
-					{
-						for (j = 0; j < var_framebuffer_info.xres; j++)
-						{
-							point2 = (uint8_t *) bf_out_data_upscaled + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4) + j);
-
-							// fill with BG color
-							point2[0] = 40; // B
-							// point2[1] = 28; // G
-							// point2[2] = 28; // R
-							point2[3] = 0; // A
-						}
-					}
-#endif
-
-					float ww2 = (float)var_framebuffer_info.xres / (float)vid_width_needed;
-					float hh2 = (float)var_framebuffer_info.yres / (float)vid_height_needed;
-					//  dbg(9, "video frame scale factor2: ww=%f hh=%f\n", ww2, hh2);
-
-					float factor2 = hh2;
-					if (ww2 < hh2)
-					{
-						factor2 = ww2;
-					}
-					// dbg(9, "factor2=%f\n", factor2);
-
-					int scale_to_width = (int)((float)vid_width_needed * factor2);
-					int scale_to_height = (int)((float)vid_height_needed * factor2);
-
-					if (scale_to_width < 2)
-					{
-						scale_to_width = 2;
-					}
-
-					if (scale_to_height < 2)
-					{
-						scale_to_height = 2;
-					}
-
-					// dbg(9, "video frame scale to: ww=%d hh=%d\n", scale_to_width, scale_to_height);
 
 					// resize ---------------
-					stbir_resize_uint8(bf_out_data, vid_width_needed, vid_height_needed, 0,
-						bf_out_data_upscaled, scale_to_width, scale_to_height, (int)var_framebuffer_fix_info.line_length, 4);
+					stbir_resize_uint8(bf_out_data, frame_width_px1, frame_height_px1, 0,
+						bf_out_data_upscaled, scale_to_width_upscale, scale_to_height_upscale, (int)var_framebuffer_fix_info.line_length, 4);
 					// dbg(9, "upscale res=%d\n", res_upscale);
 					// resize ---------------
 
@@ -4300,39 +4308,64 @@ void *video_play(void *dummy)
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
 
-#if 1
 					memset(bf_out_data, 0, framebuffer_screensize);
-#else
-					// fill bg with dark color
-					for (i = 0; i < vid_height; i++)
+					// dbg(9, "vid_width_needed=%d vid_height_needed=%d\n", (int)vid_width_needed, (int)vid_height_needed);
+
+
+
+					float ww2_downscale = (float)vid_width / (float)frame_width_px1;
+					float hh2_downscale = (float)vid_height / (float)frame_height_px1;
+					// dbg(9, "video frame scale factor2: ww=%f hh=%f\n", ww2_downscale, hh2_downscale);
+
+					float factor2_downscale = hh2_downscale;
+					if (ww2_downscale < hh2_downscale)
 					{
-						for (j = 0; j < vid_width; j++)
-						{
-							// fill with BG color
-							uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
-								+ j);
-							point[0] = 40; // B
-							point[1] = 28; // G
-							point[2] = 28; // R
-							point[3] = 0; // A
-						}
+						factor2_downscale = ww2_downscale;
 					}
-#endif
+					// dbg(9, "factor2_downscale=%f\n", factor2_downscale);
 
-					dbg(9, "vid_width_needed=%d vid_height_needed=%d\n", (int)vid_width_needed, (int)vid_height_needed);
+					int scale_to_width_downscale = (int)((float)frame_width_px1 * factor2_downscale);
+					int scale_to_height_downscale = (int)((float)frame_height_px1 * factor2_downscale);
 
-					for (i = 0; i < vid_height_needed; ++i)
+					if (scale_to_width_downscale < 2)
 					{
-						for (j = 0; j < vid_width_needed; ++j)
+						scale_to_width_downscale = 2;
+					}
+					else if (scale_to_width_downscale > vid_width)
+					{
+						scale_to_width_downscale = vid_width;
+					}
+
+					if (scale_to_height_downscale < 2)
+					{
+						scale_to_height_downscale = 2;
+					}
+					else if (scale_to_height_downscale > vid_height)
+					{
+						scale_to_height_downscale = vid_height;
+					}
+					// dbg(9, "video frame scale to: ww=%d hh=%d\n", scale_to_width_downscale, scale_to_height_downscale);
+
+
+
+
+
+
+					int offset_right_px = (int)(((float)vid_width - (float)scale_to_width_downscale) / 2.0f);
+					int offset_down_px = (int)(((float)vid_height - (float)scale_to_height_downscale) / 2.0f);
+
+					// downscale and convert to BGRA in 1 step
+					for (i = 0; i < scale_to_height_downscale; ++i)
+					{
+						i_src = (int)((float)i / factor2_downscale);
+						for (j = 0; j < scale_to_width_downscale; ++j)
 						{
 							uint8_t *point = (uint8_t *) bf_out_data + 4 * //  '4 *'  ->  to get it in bytes (because 4 bytes per pixel)
 							(
-								(i * (int)var_framebuffer_fix_info.line_length / 4) + // in pixels
-								j + (horizontal_stride_pixels_half_resized) // in pixels
+								((i + offset_down_px) * (int)var_framebuffer_fix_info.line_length / 4) + j + offset_right_px // in pixels
 							);
 
-							j_src = (int)((float)j * ww);
-							i_src = (int)((float)i * hh);
+							j_src = (int)((float)j / factor2_downscale);
 
 							yx = y[(i_src * abs(ystride)) + j_src];
 							ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
@@ -4341,7 +4374,7 @@ void *video_play(void *dummy)
 							point[0] = YUV2B(yx, ux, vx); // B
 							point[1] = YUV2G(yx, ux, vx); // G
 							point[2] = YUV2R(yx, ux, vx); // R
-							point[3] = 0; // A
+							// point[3] = 0; // A
 						}
 					}
 
