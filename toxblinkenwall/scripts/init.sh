@@ -6,8 +6,11 @@
 if [ "$IS_ON""x" == "RASPI""x" ]; then
   # stop useless stuff
   sudo /etc/init.d/lightdm stop
+  sleep 1
   sudo pkill gvfs
   sudo pkill gvfs
+  sudo pkill gvfsd
+  sudo pkill gvfsd
 fi
 # ---- only for RASPI ----
 
