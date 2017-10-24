@@ -34,6 +34,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <signal.h>
 
 #include <sodium/utils.h>
@@ -69,6 +70,14 @@
 #include <libv4lconvert.h>
 #endif
 
+#define STBIR_SATURATE_INT 1
+#define STBIR_DEFAULT_FILTER_UPSAMPLE STBIR_FILTER_BOX
+#define STBIR_NO_ALPHA_EPSILON 1
+#define STB_IMAGE_RESIZE_IMPLEMENTATION 1
+#include "stb_image_resize.h"
+
+
+
 #ifdef V4LCONVERT
 static struct v4lconvert_data *v4lconvert_data;
 #endif
@@ -78,8 +87,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 9
-static const char global_version_string[] = "0.99.9";
+#define VERSION_PATCH 11
+static const char global_version_string[] = "0.99.11";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -109,8 +118,9 @@ typedef struct DHT_node {
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 6 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 16 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
+#define DEFAULT_GLOBAL_MAX_VID_BITRATE 20000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 #define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
 
@@ -339,13 +349,35 @@ int full_width = 640; // gets set later, this is just as last resort
 int full_height = 480; // gets set later, this is just as last resort
 int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
-uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
+// uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
 #ifdef HAVE_LIBAO
+int libao_cancel_pending = 0;
 ao_device *_ao_device = NULL;
 ao_sample_format _ao_format;
 int _ao_default_driver = -1;
+
+sem_t count_audio_play_threads;
+int count_audio_play_threads_int;
+#define MAX_AO_PLAY_THREADS 25
+
+sem_t audio_play_lock;
 #endif
+
+sem_t count_video_play_threads;
+int count_video_play_threads_int;
+#define MAX_VIDEO_PLAY_THREADS 3
+sem_t video_play_lock;
+
+uint16_t video__width;
+uint16_t video__height;
+uint8_t const *video__y;
+uint8_t const *video__u;
+uint8_t const *video__v;
+int32_t video__ystride;
+int32_t video__ustride;
+int32_t video__vstride;
+
 
 #ifdef HAVE_PORTAUDIO
 PaStream *portaudio_stream = NULL;
@@ -384,6 +416,7 @@ uint32_t friend_to_send_video_to = -1;
 // -- hardcoded --
 
 int video_call_enabled = 1;
+int accepting_calls = 0;
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -616,6 +649,21 @@ time_t get_unix_time(void)
 void yieldcpu(uint32_t ms)
 {
     usleep(1000 * ms);
+}
+
+int get_number_in_string(const char *str, int default_value)
+{
+    int number;
+
+    while (!(*str >= '0' && *str <= '9') && (*str != '-') && (*str != '+')) str++;
+
+    if (sscanf(str, "%d", &number) == 1)
+    {
+        return number;
+    }
+
+    // no int found, return default value
+    return default_value; 
 }
 
 
@@ -1048,17 +1096,17 @@ void bootstrap(Tox *tox)
 	if (switch_nodelist_2 == 0)
 	{
 		dbg(9, "nodeslist:1\n");
-		bootstap_nodes(tox, &nodes1, (int)(sizeof(nodes1)/sizeof(DHT_node)), 1);
+		bootstap_nodes(tox, nodes1, (int)(sizeof(nodes1)/sizeof(DHT_node)), 1);
 	}
 	else if (switch_nodelist_2 == 2)
 	{
 		dbg(9, "nodeslist:3\n");
-		bootstap_nodes(tox, &nodes3, (int)(sizeof(nodes3)/sizeof(DHT_node)), 0);
+		bootstap_nodes(tox, nodes3, (int)(sizeof(nodes3)/sizeof(DHT_node)), 0);
 	}
 	else // (switch_nodelist_2 == 1)
 	{
 		dbg(9, "nodeslist:2\n");
-		bootstap_nodes(tox, &nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)), 1);
+		bootstap_nodes(tox, nodes2, (int)(sizeof(nodes2)/sizeof(DHT_node)), 1);
 	}
 #pragma GCC diagnostic pop
 
@@ -2044,6 +2092,16 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
 	}
 	// --- temp ---
 
+    // ----- bit rates -----
+    send_text_message_to_friend(tox, friend_number, "Bitrates (kb/s): audio=%d video=%d",
+                                (int)global_audio_bit_rate, (int)global_video_bit_rate);
+    // ----- bit rates -----
+
+    // ----- bit rates -----
+    send_text_message_to_friend(tox, friend_number, "show every n-th video frame: value=%d",
+                                (int)SHOW_EVERY_X_TH_VIDEO_FRAME);
+    // ----- bit rates -----
+
     char tox_id_hex[TOX_ADDRESS_SIZE*2 + 1];
 	get_my_toxid(tox, tox_id_hex);
 
@@ -2200,14 +2258,16 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
 {
 	send_text_message_to_friend(tox, friend_number, "=========================\nToxBlinkenwall version:%s\n=========================", global_version_string);
 	// send_text_message_to_friend(tox, friend_number, " commands are:");
-	send_text_message_to_friend(tox, friend_number, " .stats       --> show ToxBlinkenwall status");
-	send_text_message_to_friend(tox, friend_number, " .friends     --> show ToxBlinkenwall Friends");
-	// send_text_message_to_friend(tox, friend_number, " .snap     --> snap a single still image");
-	send_text_message_to_friend(tox, friend_number, " .showclients --> show Clientapp links");
-	send_text_message_to_friend(tox, friend_number, " .showqr      --> show ToxID");
-	send_text_message_to_friend(tox, friend_number, " .text <text> --> show Text on Wall");
-	send_text_message_to_friend(tox, friend_number, " .restart     --> restart ToxBlinkenwall system");
+	send_text_message_to_friend(tox, friend_number, " .stats        --> show ToxBlinkenwall status");
+	send_text_message_to_friend(tox, friend_number, " .friends      --> show ToxBlinkenwall Friends");
+	// send_text_message_to_friend(tox, friend_number, " .snap      --> snap a single still image");
+	send_text_message_to_friend(tox, friend_number, " .showclients  --> show Clientapp links");
+	send_text_message_to_friend(tox, friend_number, " .showqr       --> show ToxID");
+	send_text_message_to_friend(tox, friend_number, " .text <text>  --> show Text on Wall");
+	send_text_message_to_friend(tox, friend_number, " .restart      --> restart ToxBlinkenwall system");
 	send_text_message_to_friend(tox, friend_number, " .vcm          --> videocall me");
+    send_text_message_to_friend(tox, friend_number, " .vbr <v rate> --> set video bitrate to <v rate> kbits/s");
+    send_text_message_to_friend(tox, friend_number, " .skpf <num>   --> show only every n-th video frame");
 }
 
 //void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
@@ -2256,8 +2316,11 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			}
 			else if (strncmp((char*)message, ".text", strlen((char*)".text")) == 0)
 			{
-				global_is_qrcode_showing_on_screen = 0;
-				show_text_as_image(message);
+				if (accepting_calls == 1)
+				{
+					global_is_qrcode_showing_on_screen = 0;
+					show_text_as_image(message);
+				}
 			}
 			//else if (strncmp((char*)message, ".snap", strlen((char*)".snap")) == 0)
 			//{
@@ -2270,7 +2333,38 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			}
 			else if (strncmp((char*)message, ".vcm", strlen((char*)".vcm")) == 0) // video call me!
 			{
-				cmd_vcm(tox, friend_number);
+				if (accepting_calls == 1)
+				{
+					cmd_vcm(tox, friend_number);
+				}
+			}
+			else if (strncmp((char*)message, ".skpf ", strlen((char*)".skpf ")) == 0) // set show every n-th video frame
+			{
+				if (strlen(message) > 6) // require 1 digits
+				{
+					int value_new = get_number_in_string(message, (int)SHOW_EVERY_X_TH_VIDEO_FRAME);
+					if ((value_new >= 1) && (value_new <= 20))
+					{
+						SHOW_EVERY_X_TH_VIDEO_FRAME = value_new;
+					}
+				}
+			}
+
+			else if (strncmp((char*)message, ".vbr ", strlen((char*)".vbr ")) == 0) // set v bitrate
+			{
+				if (strlen(message) > 7) // require 3 digits
+				{
+					int vbr_new = get_number_in_string(message, (int)global_video_bit_rate);
+					if ((vbr_new >= DEFAULT_GLOBAL_MIN_VID_BITRATE) && (vbr_new <= DEFAULT_GLOBAL_MAX_VID_BITRATE))
+					{
+						DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
+						global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+						if (mytox_av != NULL)
+						{
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+					}
+				}
 			}
 			else
 			{
@@ -3463,11 +3557,11 @@ void close_cam()
 		global_framebuffer_device_fd = 0;
 	}
 
-	if (bf_out_data != NULL)
-	{
-		free(bf_out_data);
-		bf_out_data = NULL;
-	}
+//	if (bf_out_data != NULL)
+//	{
+//		free(bf_out_data);
+//		bf_out_data = NULL;
+//	}
 #endif
 
 #ifdef HAVE_LIBAO
@@ -3527,6 +3621,13 @@ void close_cam()
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
+	if (accepting_calls != 1)
+	{
+		dbg(2, "Not accepting calls yet\n");
+		return;
+	}
+
+
 	if (global_video_active == 1)
 	{
 		dbg(9, "Call already active\n");
@@ -3561,6 +3662,12 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
+	if (accepting_calls != 1)
+	{
+		dbg(2, "Not accepting call state changes yet\n");
+		return;
+	}
+
 	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
 	{
 		// we are in a call with someone else already
@@ -3696,15 +3803,77 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
     dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
 }
 
+void inc_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	count_audio_play_threads_int++;
+	sem_post(&count_audio_play_threads);
+}
+
+void dec_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	count_audio_play_threads_int--;
+	if (count_audio_play_threads_int < 0)
+	{
+		count_audio_play_threads_int = 0;
+	}
+	sem_post(&count_audio_play_threads);
+}
+
+int get_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	int ret = count_audio_play_threads_int;
+	sem_post(&count_audio_play_threads);
+	return ret;
+}
+
+void inc_video_t_counter()
+{
+	sem_wait(&count_video_play_threads);
+	count_video_play_threads_int++;
+	sem_post(&count_video_play_threads);
+}
+
+void dec_video_t_counter()
+{
+	sem_wait(&count_video_play_threads);
+	count_video_play_threads_int--;
+	if (count_video_play_threads_int < 0)
+	{
+		count_video_play_threads_int = 0;
+	}
+	sem_post(&count_video_play_threads);
+}
+
+int get_video_t_counter()
+{
+	sem_wait(&count_video_play_threads);
+	int ret = count_video_play_threads_int;
+	sem_post(&count_video_play_threads);
+	return ret;
+}
+
+
 void *audio_play(void *dummy)
 {
 	// make a local copy
 	size_t ao_play_bytes_ = ao_play_bytes;
 	char *ao_play_pcm_ = (char *)calloc(1, ao_play_bytes_);
 	memcpy(ao_play_pcm_, ao_play_pcm, ao_play_bytes_);
+
 	// this is a blocking call
-	ao_play( _ao_device, ao_play_pcm_, ao_play_bytes_);
+	sem_wait(&audio_play_lock);
+	if (libao_cancel_pending == 0)
+	{
+		ao_play( _ao_device, ao_play_pcm_, ao_play_bytes_);
+	}
+	sem_post(&audio_play_lock);
+
 	free(ao_play_pcm_);
+	dec_audio_t_counter();
+	pthread_exit(0);
 }
 
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
@@ -3723,6 +3892,10 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 			if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
 			{
+				sem_wait(&audio_play_lock);
+
+				libao_cancel_pending = 1;
+
 				libao_channels = (int)channels;
 				libao_sampling_rate = (int)sampling_rate;
 
@@ -3752,6 +3925,12 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				{
 				}
 				// initialize sound output via libao ------------------
+
+				sem_post(&audio_play_lock);
+
+
+				yieldcpu(500);
+				libao_cancel_pending = 0;
 			}
 #endif
 
@@ -3762,18 +3941,36 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			if (_ao_device != NULL)
 			{
 #if 0
-				ao_play(_ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2));
+				ao_play( _ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2) );
 #else
 
 				ao_play_pcm = (char *)pcm;
 				ao_play_bytes = (size_t)(sample_count * libao_channels * 2);
 
-				dbg(0, "sample_count=%d channels=%d samplerate=%d\n", (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
+				// dbg(0, "sample_count=%d channels=%d samplerate=%d\n", (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
 
 				pthread_t audio_play_thread;
-				if (pthread_create(&audio_play_thread, NULL, audio_play, NULL))
+
+				if (get_audio_t_counter() <= MAX_AO_PLAY_THREADS)
 				{
-					dbg(0, "ERROR creating audio play thread\n");
+					inc_audio_t_counter();
+					if (pthread_create(&audio_play_thread, NULL, audio_play, NULL))
+					{
+						dec_audio_t_counter();
+						dbg(0, "error creating audio play thread\n");
+					}
+					else
+					{
+						// dbg(0, "creating audio play thread #%d\n", get_audio_t_counter());
+						if (pthread_detach(audio_play_thread))
+						{
+							dbg(0, "error detaching audio play thread\n");
+						}
+					}
+				}
+				else
+				{
+					dbg(1, "more than %d ao play threads already\n", (int)MAX_AO_PLAY_THREADS);
 				}
 #endif
 			}
@@ -3885,30 +4082,17 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 }
 
 
-static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
-        uint16_t width, uint16_t height,
-        uint8_t const *y, uint8_t const *u, uint8_t const *v,
-        int32_t ystride, int32_t ustride, int32_t vstride,
-        void *user_data)
+void *video_play(void *dummy)
 {
+	sem_wait(&video_play_lock);
 
-#ifdef HAVE_FRAMEBUFFER
+	// make a local copy
+	uint16_t width = video__width;
+	uint16_t height = video__height;
+	int32_t ystride = video__ystride;
+	int32_t ustride = video__ustride;
+	int32_t vstride = video__vstride;
 
-	if (global_video_active == 1)
-	{
-		if (friend_to_send_video_to == friend_number)
-		{
-			if (global_framebuffer_device_fd != 0)
-			{
-                               toggle_display_frame++;
-                               if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
-                               {
-                                       return;
-                               }
-                               else
-                               {
-                                       toggle_display_frame = 0;
-                               }
 
 				// dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
 
@@ -3930,67 +4114,52 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
 				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
+
+	uint8_t *y = (uint8_t *)calloc(1, y_layer_size);
+	uint8_t *u = (uint8_t *)calloc(1, u_layer_size);
+	uint8_t *v = (uint8_t *)calloc(1, v_layer_size);
+
+	memcpy(y, video__y, y_layer_size);
+	memcpy(u, video__u, u_layer_size);
+	memcpy(v, video__v, v_layer_size);
+
+	sem_post(&video_play_lock);
+
+
+
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
+				full_width = var_framebuffer_info.xres;
+				full_height = var_framebuffer_info.yres;
+
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
+
+				dbg(9, "frame_width_px1=%d frame_width_px=%d frame_height_px1=%d\n", (int)frame_width_px, (int)frame_width_px1, (int)frame_height_px1);
 
 				int horizontal_stride_pixels = 0;
 				int horizontal_stride_pixels_half = 0;
-				// if (abs(ystride_) > frame_width_px1)
 				if (full_width > frame_width_px1)
 				{
-					// horizontal_stride_pixels = abs(ystride_) - frame_width_px1;
 					horizontal_stride_pixels = full_width - frame_width_px1;
 					horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
-					// dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
-					// dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
 				}
 
-				full_width = var_framebuffer_info.xres;
-				full_height = var_framebuffer_info.yres;
-				// framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len
 
-				// dbg(9, "==========================\n");
-				// dbg(9, "frame_width_px=%d frame_height_px=%d abs(ystride_)=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)abs(ystride_));
-				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
-				// dbg(9, "vid_width=%d vid_height=%d\n", (int)vid_width, (int)vid_height);
-				// dbg(9, "horizontal_stride_pixels=%d ystride=%d frame_width_px1=%d frame_height_px1=%d\n", (int)horizontal_stride_pixels, (int)abs(ystride_), (int)frame_width_px1, (int)frame_height_px1);
-				// dbg(9, "horizontal_stride_pixels_half=%d\n", (int)horizontal_stride_pixels_half);
-				// dbg(9, "==========================\n");
-
-				// dbg(9, "full_width=%d full_height=%d\n", (int)full_width, (int)full_height);
-
-				// uint8_t *bf_out_data = (uint8_t *)malloc(full_width * full_height * 4); // (640 x 480 x BGRA) bytes
-				if (bf_out_data == NULL)
-				{
-					bf_out_data = (uint8_t *)malloc(framebuffer_screensize);
-					memset(bf_out_data, 0, framebuffer_screensize); // clear buffer
-				}
+				uint8_t *bf_out_data = (uint8_t *)calloc(1, framebuffer_screensize);
 
 				unsigned long int i, j;
 
-				// for (i = 0; i < full_height; ++i)
-				// {
-				// 	for (j = 0; j < full_width; ++j)
-				// 	{
-				// 		uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * width) + j);
-				// 		point[0] = 0;
-				// 		point[1] = 0;
-				// 		point[2] = 0;
-				// 		point[3] = 0;
-				// 	}
-				// }
-
+				dbg(9, "full_width=%f vid_width=%f full_height=%f vid_height=%f\n", (float)full_width, (float)vid_width, (float)full_height, (float)vid_height);
 				float ww = (float)full_width / (float)vid_width;
 				float hh = (float)full_height / (float)vid_height;
-				// dbg(9, "ww=%f hh=%f\n", ww, hh);
+				dbg(9, "video frame scale factor: full_width/vid_width=%f full_height/vid_height=%f\n", ww, hh);
 
 				int horizontal_stride_pixels_half_resized = 0;
 				if (ww > 0)
 				{
 					horizontal_stride_pixels_half_resized = 0 + (int)((float)horizontal_stride_pixels_half / ww);
-					// dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
+					dbg(9, "horizontal_stride_pixels_half_resized=%d\n", (int)horizontal_stride_pixels_half_resized);
 				}
 
 				int i_src;
@@ -3998,20 +4167,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				int yx;
 				int ux;
 				int vx;
-
-				 for (i = 0; i < vid_height; ++i)
-				 {
-				 	for (j = 0; j < vid_width; ++j)
-				 	{
-						// fill with BG color
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
-							+ j);
-				 		point[0] = 40; // B
-				 		point[1] = 28; // G
-				 		point[2] = 28; // R
-				 		point[3] = 0; // A
-				 	}
-				 }
 
 
 				int vid_height_needed = vid_height;
@@ -4023,7 +4178,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 						vid_height_needed = vid_height;
 					}
 				}
-				// dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
+				dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
 
 				int vid_width_needed = vid_width;
 				if (hh > 0)
@@ -4034,43 +4189,260 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 						vid_width_needed = vid_width;
 					}
 				}
-				// dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
+				dbg(9, "vid_width_needed=%d vid_width=%d\n", (int)vid_width_needed, (int)vid_width);
 
 
-				for (i = 0; i < vid_height_needed; ++i)
+				if (((vid_height_needed + 10) < var_framebuffer_info.xres) && ((vid_height_needed + 10) < var_framebuffer_info.yres))
 				{
-					for (j = 0; j < vid_width_needed; ++j)
+					// scale image up to output size -----------------------------
+					// scale image up to output size -----------------------------
+					// scale image up to output size -----------------------------
+					uint8_t *point = NULL;
+					for (i = 0; i < vid_height_needed; ++i)
 					{
-						uint8_t *point = (uint8_t *) bf_out_data + 4 * //  '4 *'  ->  to get it in bytes (because 4 bytes per pixel)
-						(
-							(i * (int)var_framebuffer_fix_info.line_length / 4) + // in pixels
-							j + (horizontal_stride_pixels_half_resized) // in pixels
-						);
+						for (j = 0; j < vid_width_needed; ++j)
+						{
+							point = (uint8_t *) bf_out_data + 4 * ((i * (int)vid_width_needed) + j);
 
-						j_src = (int)((float)j * ww);
-						i_src = (int)((float)i * hh);
+							j_src = j; // (int)((float)j * ww);
+							i_src = i; // (int)((float)i * hh);
 
-						yx = y[(i_src * abs(ystride)) + j_src];
-						ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
-						vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+							yx = y[(i_src * abs(ystride)) + j_src];
+							ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+							vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
 
-						point[0] = YUV2B(yx, ux, vx); // B
-						point[1] = YUV2G(yx, ux, vx); // G
-						point[2] = YUV2R(yx, ux, vx); // R
-						point[3] = 0; // A
+							point[0] = YUV2B(yx, ux, vx); // B
+							point[1] = YUV2G(yx, ux, vx); // G
+							point[2] = YUV2R(yx, ux, vx); // R
+							point[3] = 0; // A
+						}
+					}
+
+
+					uint8_t *bf_out_data_upscaled = (uint8_t *)calloc(1, framebuffer_screensize);
+
+#if 1
+					memset(bf_out_data_upscaled, 0, framebuffer_screensize);
+#else
+					memset(bf_out_data_upscaled, 28, framebuffer_screensize);
+					uint8_t *point2 = NULL;
+					// fill bg with dark color
+					for (i = 0; i < var_framebuffer_info.yres; i++)
+					{
+						for (j = 0; j < var_framebuffer_info.xres; j++)
+						{
+							point2 = (uint8_t *) bf_out_data_upscaled + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4) + j);
+
+							// fill with BG color
+							point2[0] = 40; // B
+							// point2[1] = 28; // G
+							// point2[2] = 28; // R
+							point2[3] = 0; // A
+						}
+					}
+#endif
+
+					float ww2 = (float)var_framebuffer_info.xres / (float)vid_width_needed;
+					float hh2 = (float)var_framebuffer_info.yres / (float)vid_height_needed;
+					//  dbg(9, "video frame scale factor2: ww=%f hh=%f\n", ww2, hh2);
+
+					float factor2 = hh2;
+					if (ww2 < hh2)
+					{
+						factor2 = ww2;
+					}
+					// dbg(9, "factor2=%f\n", factor2);
+
+					int scale_to_width = (int)((float)vid_width_needed * factor2);
+					int scale_to_height = (int)((float)vid_height_needed * factor2);
+
+					if (scale_to_width < 2)
+					{
+						scale_to_width = 2;
+					}
+
+					if (scale_to_height < 2)
+					{
+						scale_to_height = 2;
+					}
+
+					// dbg(9, "video frame scale to: ww=%d hh=%d\n", scale_to_width, scale_to_height);
+
+					// resize ---------------
+					stbir_resize_uint8(bf_out_data, vid_width_needed, vid_height_needed, 0,
+						bf_out_data_upscaled, scale_to_width, scale_to_height, (int)var_framebuffer_fix_info.line_length, 4);
+					// dbg(9, "upscale res=%d\n", res_upscale);
+					// resize ---------------
+
+					if (bf_out_data != NULL)
+					{
+						free(bf_out_data);
+						bf_out_data = NULL;
+					}
+
+					if (bf_out_data_upscaled != NULL)
+					{
+						sem_wait(&video_play_lock);
+						fb_copy_frame_to_fb(bf_out_data_upscaled);
+						sem_post(&video_play_lock);
+
+						free(bf_out_data_upscaled);
+						bf_out_data_upscaled = NULL;
+					}
+					// scale image up to output size -----------------------------
+					// scale image up to output size -----------------------------
+					// scale image up to output size -----------------------------
+				}
+				else
+				{
+					// scale image down to output size (or leave as is) ----------
+					// scale image down to output size (or leave as is) ----------
+					// scale image down to output size (or leave as is) ----------
+
+#if 1
+					memset(bf_out_data, 0, framebuffer_screensize);
+#else
+					// fill bg with dark color
+					for (i = 0; i < vid_height; i++)
+					{
+						for (j = 0; j < vid_width; j++)
+						{
+							// fill with BG color
+							uint8_t *point = (uint8_t *) bf_out_data + 4 * ((i * (int)var_framebuffer_fix_info.line_length / 4)
+								+ j);
+							point[0] = 40; // B
+							point[1] = 28; // G
+							point[2] = 28; // R
+							point[3] = 0; // A
+						}
+					}
+#endif
+
+					dbg(9, "vid_width_needed=%d vid_height_needed=%d\n", (int)vid_width_needed, (int)vid_height_needed);
+
+					for (i = 0; i < vid_height_needed; ++i)
+					{
+						for (j = 0; j < vid_width_needed; ++j)
+						{
+							uint8_t *point = (uint8_t *) bf_out_data + 4 * //  '4 *'  ->  to get it in bytes (because 4 bytes per pixel)
+							(
+								(i * (int)var_framebuffer_fix_info.line_length / 4) + // in pixels
+								j + (horizontal_stride_pixels_half_resized) // in pixels
+							);
+
+							j_src = (int)((float)j * ww);
+							i_src = (int)((float)i * hh);
+
+							yx = y[(i_src * abs(ystride)) + j_src];
+							ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+							vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+
+							point[0] = YUV2B(yx, ux, vx); // B
+							point[1] = YUV2G(yx, ux, vx); // G
+							point[2] = YUV2R(yx, ux, vx); // R
+							point[3] = 0; // A
+						}
+					}
+
+
+					if (bf_out_data != NULL)
+					{
+						sem_wait(&video_play_lock);
+						fb_copy_frame_to_fb(bf_out_data);
+						sem_post(&video_play_lock);
+
+						free(bf_out_data);
+						bf_out_data = NULL;
+					}
+					// scale image down to output size (or leave as is) ----------
+					// scale image down to output size (or leave as is) ----------
+					// scale image down to output size (or leave as is) ----------
+				}
+
+	if (y)
+	{
+		free((void *)y);
+	}
+
+	if (u)
+	{
+		free((void *)u);
+	}
+
+	if (v)
+	{
+		free((void *)v);
+	}
+
+
+	dec_video_t_counter();
+	pthread_exit(0);
+}
+
+
+static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
+        uint16_t width, uint16_t height,
+        uint8_t const *y, uint8_t const *u, uint8_t const *v,
+        int32_t ystride, int32_t ustride, int32_t vstride,
+        void *user_data)
+{
+
+#ifdef HAVE_FRAMEBUFFER
+
+	if (global_video_active == 1)
+	{
+		if (friend_to_send_video_to == friend_number)
+		{
+			if (global_framebuffer_device_fd != 0)
+			{
+				toggle_display_frame++;
+				if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
+				{
+					// dbg(9, "skipping video frame ...\n");
+					return;
+				}
+				else
+				{
+					   toggle_display_frame = 0;
+				}
+
+
+				sem_wait(&video_play_lock);
+
+				video__width = width;
+				video__height = height;
+				video__y = y;
+				video__u = u;
+				video__v = v;
+				video__ystride = ystride;
+				video__ustride = ustride;
+				video__vstride = vstride;
+
+				pthread_t video_play_thread;
+
+				if (get_video_t_counter() <= MAX_VIDEO_PLAY_THREADS)
+				{
+					inc_video_t_counter();
+					if (pthread_create(&video_play_thread, NULL, video_play, NULL))
+					{
+						dec_video_t_counter();
+						dbg(0, "error creating video play thread\n");
+					}
+					else
+					{
+						// dbg(0, "creating video play thread #%d\n", get_video_t_counter());
+						if (pthread_detach(video_play_thread))
+						{
+							dbg(0, "error detaching video play thread\n");
+						}
 					}
 				}
-
-
-				if (bf_out_data != NULL)
+				else
 				{
-					fb_copy_frame_to_fb(bf_out_data);
-					// free(bf_out_data);
-					// bf_out_data = NULL;
+					// dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
 				}
 
-				// clear framebuffer (black xxx)
-				// fb_fill_xxx();
+				sem_post(&video_play_lock);
 			}
 		}
 		else
@@ -4264,6 +4636,11 @@ void *thread_av(void *data)
 	stop_endless_loading();
 	yieldcpu(700); // TODO: wait for qr-code file to be created (it is done in background!)
 	show_tox_id_qrcode();
+
+
+	// only now start accepting calls
+	accepting_calls = 1;
+	dbg(2, "--- accepting calls NOW ---\n");
 
 
 
@@ -4901,6 +5278,9 @@ void sigint_handler(int signo)
 
 int main(int argc, char *argv[])
 {
+	// don't accept calls until video device is ready
+	accepting_calls = 0;
+
 	show_endless_loading();
 
 	global_want_restart = 0;
@@ -5036,6 +5416,31 @@ int main(int argc, char *argv[])
       }
   }
 
+#ifdef HAVE_LIBAO
+	count_audio_play_threads_int = 0;
+
+	if (sem_init(&count_audio_play_threads, 0, 1))
+	{
+		dbg(0, "Error in sem_init for count_audio_play_threads\n");
+	}
+
+	if (sem_init(&audio_play_lock, 0, 1))
+	{
+		dbg(0, "Error in sem_init for audio_play_lock\n");
+	}
+#endif
+
+	if (sem_init(&video_play_lock, 0, 1))
+	{
+		dbg(0, "Error in sem_init for video_play_lock\n");
+	}
+
+	count_video_play_threads_int = 0;
+
+	if (sem_init(&count_video_play_threads, 0, 1))
+	{
+		dbg(0, "Error in sem_init for count_video_play_threads\n");
+	}
 
 	Tox *tox = create_tox();
 	global_start_time = time(NULL);
@@ -5197,6 +5602,14 @@ int main(int argc, char *argv[])
     close_cam();
     toxav_kill(mytox_av);
     tox_kill(tox);
+
+#ifdef HAVE_LIBAO
+	sem_destroy(&count_audio_play_threads);
+	sem_destroy(&audio_play_lock);
+	sem_destroy(&count_video_play_threads);
+	sem_destroy(&video_play_lock);
+#endif
+
 
     if (logfile)
     {
