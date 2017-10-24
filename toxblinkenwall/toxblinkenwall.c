@@ -74,6 +74,7 @@
 #define STBIR_DEFAULT_FILTER_UPSAMPLE STBIR_FILTER_BOX
 #define STBIR_NO_ALPHA_EPSILON 1
 #define STB_IMAGE_RESIZE_IMPLEMENTATION 1
+#define STBIR_ASSERT(x) #x
 #include "stb_image_resize.h"
 
 
