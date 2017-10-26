@@ -168,6 +168,10 @@ dependencies:
     - . ~/pp;cd "$_SYSROOT_" ; tar -xzvf ~/pkg1.tgz
     - wget 'https://github.com/zoff99/raspi_cross_compile/raw/master/bin_packages/portaudio19-dev.tgz' -O ~/pkg1.tgz
     - . ~/pp;cd "$_SYSROOT_" ; tar -xzvf ~/pkg1.tgz
+    - wget 'https://github.com/zoff99/raspi_cross_compile/raw/master/bin_packages/libasound2.tgz' -O ~/pkg1.tgz
+    - . ~/pp;cd "$_SYSROOT_" ; tar -xzvf ~/pkg1.tgz
+    - wget 'https://github.com/zoff99/raspi_cross_compile/raw/master/bin_packages/libasound2-dev.tgz' -O ~/pkg1.tgz
+    - . ~/pp;cd "$_SYSROOT_" ; tar -xzvf ~/pkg1.tgz
     # install raspi binary pkgs -------------------------
 
     - . ~/pp;cd $_s_;git clone "$CTOXCORE_URL"
