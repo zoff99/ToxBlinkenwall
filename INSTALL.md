@@ -123,7 +123,7 @@ if your screen turns off after 10 minutes do this:
 sudo nano /etc/lightdm/lightdm.conf
 
 # add to the [Seat:*] section
-# xserver-command=X -s 0 dpms
+xserver-command=X -s 0 dpms
 
 # now save and reboot the pi!
 ```
