@@ -52,7 +52,9 @@ cd $_SRC_
 # git clone https://github.com/TokTok/c-toxcore
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
-git checkout b308141c972eb05a18ab27672f5dc0b6152d189c
+
+# v0.1.10 more vpx tweaks       eab6e81ec9ed5b88aa712093ea53c802ff81d611
+git checkout eab6e81ec9ed5b88aa712093ea53c802ff81d611
 ./autogen.sh
 
 export CFLAGS=-I$_INST_/include/
@@ -78,13 +80,13 @@ $_INST_/lib/libsodium.a \
 $_INST_/lib/libvpx.a \
 -lrt \
 -lm \
--lao \
+-lasound \
 -lpthread \
 -lv4lconvert
 
-echo 'default_driver=alsa
-verbose=true
-' > $_HOME_/.libao
+# echo 'default_driver=alsa
+# verbose=true
+# ' > $_HOME_/.libao
 
 # audio test program
 gcc a.c -lao -ldl -lm -o a
