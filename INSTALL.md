@@ -112,7 +112,7 @@ export IS_ON
 and if you want 720p video resolution add:
 
 ```
-HD=RASPIHD
+echo 'HD=RASPIHD
 export HD
 ' >> $_HOME_/.profile
 ```
