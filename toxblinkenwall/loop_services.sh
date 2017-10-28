@@ -49,8 +49,8 @@ while [ 1 == 1 ]; do
 	# scripts/init.sh
 	. scripts/vars.sh
 	
-        v4l2-ctl -v width=1280,height=720,pixelformat=YV12
-        v4l2-ctl -p 25
+        v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
+        v4l2-ctl -d "$video_device" -p 25
 
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
