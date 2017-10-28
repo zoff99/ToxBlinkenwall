@@ -48,6 +48,10 @@ while [ 1 == 1 ]; do
 	scripts/stop_image_endless.sh
 	# scripts/init.sh
 	. scripts/vars.sh
+	
+        v4l2-ctl -v width=1280,height=720,pixelformat=YV12
+        v4l2-ctl -p 25
+
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
 	# ---- only for RASPI ----
