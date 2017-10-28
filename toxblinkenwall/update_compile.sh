@@ -17,6 +17,6 @@ $_INST_/lib/libsodium.a \
 $_INST_/lib/libvpx.a \
 -lrt \
 -lm \
--lao \
+-lasound \
 -lpthread \
 -lv4lconvert
