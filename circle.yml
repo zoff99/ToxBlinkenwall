@@ -187,7 +187,7 @@ dependencies:
     - cd toxblinkenwall ; rm -fv toxblinkenwall
     - cd toxblinkenwall ; . ~/pp ; $CC -g -O3 -fPIC -o toxblinkenwall toxblinkenwall.c -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lm -lsodium -ltoxcore -ltoxav -lpthread -lvpx -ljpeg -lv4lconvert -lasound -lao -ldl
     - cd toxblinkenwall ;. ~/pp ; cp -av ./toxblinkenwall $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
-    - cd toxblinkenwall ; . ~/pp ; $CC -g -O3 -fPIC -o toxblinkenwall_static toxblinkenwall.c -static -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt -lasound -lao -ldl
+    - cd toxblinkenwall ; . ~/pp ; $CC -g -O3 -fPIC -o toxblinkenwall_static toxblinkenwall.c -static -std=gnu99 -I"$_SYSROOT_"/usr/local/include/ -L"$_SYSROOT_"/usr/lib/arm-linux-gnueabihf/ -lsodium -ltoxcore -ltoxav -lsodium -lpthread -static-libgcc -static-libstdc++ -lopus -lvpx -lm -lpthread -lv4lconvert -ljpeg -lm -lrt -lao -ldl -Wl,-Bdynamic -lasound
     - cd toxblinkenwall ;. ~/pp ; cp -av ./toxblinkenwall_static $CIRCLE_ARTIFACTS/"${CUR_ARCH_}"/
 
 ## ----------- RASPI cross compile ----------------
