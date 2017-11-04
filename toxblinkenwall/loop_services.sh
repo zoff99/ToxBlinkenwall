@@ -6,6 +6,7 @@ function clean_up
 	sleep 2
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
+	pkill -f ext_keys.py
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
 	scripts/cleanup_fb.sh
@@ -27,7 +28,7 @@ if [ "$IS_ON""x" == "RASPI""x" ]; then
 	sudo sed -i -e 's#POWERDOWN_TIME=.*#POWERDOWN_TIME=0#' /etc/kbd/config
 	sudo setterm -blank 0 > /dev/null 2>&1
 	sudo setterm -powerdown 0 > /dev/null 2>&1
-	
+
 	openvt -- sudo sh -c "/bin/chvt 1 >/dev/null 2>/dev/null"
 	sudo sh -c "TERM=linux setterm -blank 0 >/dev/tty0"
 fi
@@ -37,6 +38,7 @@ trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 
 chmod u+x scripts/*.sh
 chmod u+x toxblinkenwall
+chmod u+x ext_keys_scripts/ext_keys.py
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh
@@ -46,20 +48,20 @@ scripts/create_gfx.sh
 while [ 1 == 1 ]; do
 	scripts/stop_loading_endless.sh
 	scripts/stop_image_endless.sh
-	# scripts/init.sh
 	. scripts/vars.sh
-	
-        v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
+
+	pkill -f ext_keys.py
+
+	v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
         v4l2-ctl -d "$video_device" -p 25
 
+	cd ext_keys_scripts
+	./ext_keys.py &
+	cd ..
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
 	# ---- only for RASPI ----
 	if [ "$IS_ON""x" == "RASPI""x" ]; then
-		:
-		# stop gfx UI
-		# sudo /etc/init.d/lightdm start
-		# sleep 2
 	fi
 	# ---- only for RASPI ----
 done
