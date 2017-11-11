@@ -83,7 +83,7 @@ cd c-toxcore
 # v0.1.5                        995578f1038842288c1ff552fd796ab2377db6e1
 # v0.1.4                        27a97a8280813ec05a5209811c40ab23203bb292
 
-git checkout adbf2386071801a8f70cba3d165ce1d5b87809fb
+git checkout 2fe9bcb55ca44ea391d2b5fc1f747d326e5f443b
 
 ./autogen.sh
 
@@ -110,9 +110,6 @@ $_INST_/lib/libvpx.a \
 $_INST_/lib/libsodium.a \
 -lasound -lpthread -lv4lconvert
 
-# echo 'default_driver=alsa
-# verbose=true
-# ' > $_HOME_/.libao
 
 # audio test program
 gcc a.c -lao -ldl -lm -o a
