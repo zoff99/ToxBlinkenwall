@@ -53,8 +53,7 @@ cd $_SRC_
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
 
-# v0.1.10 more vpx tweaks       eab6e81ec9ed5b88aa712093ea53c802ff81d611
-git checkout eab6e81ec9ed5b88aa712093ea53c802ff81d611
+git checkout 2fe9bcb55ca44ea391d2b5fc1f747d326e5f443b
 ./autogen.sh
 
 export CFLAGS=-I$_INST_/include/
