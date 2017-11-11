@@ -11,21 +11,24 @@ GPIO.RPI_REVISION    #  0 = Compute Module, 1 = Rev 1, 2 = Rev 2, 3 = Model B+
 GPIO.VERSION
 
 fifo_path = '../ext_keys.fifo'
-
-# Set all rows as input --------------------------
-input_4 = 0 # row 1
-input_17 = 0 # row 4
-# Set all rows as input --------------------------
-
-# Set all columns as output low ------------------
-input_27 = 0 # col 1
-input_22 = 0 # col 3
-# Set all columns as output low ------------------
+cur_button=-1
 
 ROW    = [4, -1, -1, 17]
-COLUMN = [27, -1, 22]
+COLUMN = [27, 18, 22]
 
 fifo_write = open(fifo_path, 'w')
+
+# Set all columns as output low
+for j in range(len(COLUMN)):
+    if COLUMN[j] != -1:
+        GPIO.setup(COLUMN[j], GPIO.OUT)
+        GPIO.output(COLUMN[j], GPIO.LOW)
+ 
+# Set all rows as input
+for i in range(len(ROW)):
+    if ROW[i] != -1:
+        GPIO.setup(ROW[i], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
 
 try:
     while True:
@@ -35,7 +38,7 @@ try:
             if COLUMN[j] != -1:
                 GPIO.setup(COLUMN[j], GPIO.OUT)
                 GPIO.output(COLUMN[j], GPIO.LOW)
-         
+ 
         # Set all rows as input
         for i in range(len(ROW)):
             if ROW[i] != -1:
@@ -85,22 +88,38 @@ try:
                 else:
                     # print "row=" + str(rowVal) + " col=" + str(colVal)
 
-                    if rowVal == 0 and colVal == 0:
+                    if rowVal == 0 and colVal == 0 and cur_button != 1:
                         # button "1" pressed
                         fifo_write = open(fifo_path, 'w')
                         fifo_write.write("call:1\n")
                         fifo_write.flush()
-                    elif rowVal == 3 and colVal == 0:
+                        cur_button=1
+                    elif rowVal == 0 and colVal == 1 and cur_button != 2:
+                        # button "2" pressed
+                        fifo_write = open(fifo_path, 'w')
+                        fifo_write.write("call:2\n")
+                        fifo_write.flush()
+                        cur_button=2
+                    elif rowVal == 3 and colVal == 0 and cur_button != 3:
                         # button "*" pressed
                         fifo_write = open(fifo_path, 'w')
                         fifo_write.write("hangup:\n")
                         fifo_write.flush()
-                    elif rowVal == 3 and colVal == 2:
+                        cur_button=3
+                    elif rowVal == 3 and colVal == 1 and cur_button != 4:
+                        # button "0" pressed
+                        fifo_write = open(fifo_path, 'w')
+                        fifo_write.write("toggle_speaker:\n")
+                        fifo_write.flush()
+                        cur_button=4
+                    elif rowVal == 3 and colVal == 2 and cur_button != 5:
                         # button "#" pressed
                         fifo_write = open(fifo_path, 'w')
                         fifo_write.write("toggle_quality:\n")
                         fifo_write.flush()
-
+                        cur_button=5
+                    else:
+                        cur_button=-1
 
         sleep(0.2)         # wait 0.2 seconds
 
