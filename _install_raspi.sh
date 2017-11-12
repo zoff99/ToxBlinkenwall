@@ -83,7 +83,7 @@ cd c-toxcore
 # v0.1.5                        995578f1038842288c1ff552fd796ab2377db6e1
 # v0.1.4                        27a97a8280813ec05a5209811c40ab23203bb292
 
-git checkout 2fe9bcb55ca44ea391d2b5fc1f747d326e5f443b
+git checkout b07a8df97f89a3f501211cdfe799db132f28c6a8
 
 ./autogen.sh
 
