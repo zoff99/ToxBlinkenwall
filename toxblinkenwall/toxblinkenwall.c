@@ -4,7 +4,8 @@
  * in 2017
  *
  * compile on linux (dynamic):
- *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert -lao
+ *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ \
+        -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert -lao -lasound
  *
  * run on linux (dynamic):
  * export LD_LIBRARY_PATH=usr/lib ; ./toxblinkenwall
@@ -15,6 +16,66 @@
  *
  */
 
+/*
+
+# cat /proc/asound/cards
+
+# aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq
+
+
+nano -w /usr/share/alsa/alsa.conf
+# example usb audio: U0x4b40x301
+
+add to end of file:
+
+-----------------------------------------
+pcm.usb
+{
+    type hw
+    card U0x4b40x301
+}
+
+pcm.card_bcm {
+    type hw
+    card ALSA
+}
+
+pcm.!default {
+    type asym
+
+    playback.pcm
+    {
+        type plug
+        slave.pcm "card_bcm"
+    }
+
+    capture.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+}
+
+defaults.pcm.!card ALSA
+-----------------------------------------
+
+# v4l2-ctl  --list-formats-ext
+# v4l2-ctl -v width=1280,height=720,pixelformat=YV12
+# v4l2-ctl --stream-mmap=3 --stream-count=50
+#
+# should be about 30fps
+
+# search
+dbg\([^.]*, "[^\\]*"
+
+
+
+# sudo  lsusb -v | grep "idProduct\|MaxPower"
+
+
+*/
+
+#define _GNU_SOURCE
 
 #include <ctype.h>
 #include <stdio.h>
@@ -33,9 +94,12 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <errno.h>
+
 #include <pthread.h>
+
 #include <semaphore.h>
 #include <signal.h>
+#include <linux/sched.h>
 
 #include <sodium/utils.h>
 #include <tox/tox.h>
@@ -47,12 +111,41 @@
 #include <sys/mman.h>
 
 #define V4LCONVERT 1
-// #define HAVE_SOUND 1
-#define HAVE_LIBAO 1
-// #define HAVE_PORTAUDIO 1
-#define HAVE_FRAMEBUFFER 1
 
-#ifdef HAVE_SOUND
+// --------- video output: choose only 1 of those! ---------
+#define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
+// --------- video output: choose only 1 of those! ---------
+//
+// --------- audio recording: choose only 1 of those! ---------
+#define HAVE_ALSA_REC 1      // for audio recording [* DEFAULT]
+// --------- audio recording: choose only 1 of those! ---------
+//
+// --------- audio playing: choose only 1 of those! ---------
+// #define HAVE_LIBAO 1      // for audio playing   (a bit choppy)
+#define HAVE_ALSA_PLAY 1     // for audio playing   [* DEFAULT]
+// #define HAVE_PORTAUDIO 1  // for audio playing   --> currently broken!!
+// --------- audio playing: choose only 1 of those! ---------
+//
+
+// --------- external keys ---------
+#define HAVE_EXTERNAL_KEYS 1
+// --------- external keys ---------
+
+
+// ---------- dirty hack ----------
+// ---------- dirty hack ----------
+// ---------- dirty hack ----------
+extern int global__MAX_DECODE_TIME_US;
+extern int global__VP8E_SET_CPUUSED_VALUE;
+extern int global__VPX_END_USAGE;
+extern int global__VPX_KF_MAX_DIST;
+extern int global__VPX_G_LAG_IN_FRAMES;
+// ---------- dirty hack ----------
+// ---------- dirty hack ----------
+// ---------- dirty hack ----------
+
+
+#if defined(HAVE_ALSA_REC) || defined(HAVE_ALSA_PLAY)
 #include <alsa/asoundlib.h>
 #endif
 
@@ -88,8 +181,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 11
-static const char global_version_string[] = "0.99.11";
+#define VERSION_PATCH 16
+static const char global_version_string[] = "0.99.16";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -100,6 +193,20 @@ typedef struct DHT_node {
     unsigned char key_bin[TOX_PUBLIC_KEY_SIZE];
 } DHT_node;
 
+
+struct audio_play_data_block {
+    char *pcm; // memory block of PCM data
+    size_t block_size_in_bytes;
+	size_t sample_count;
+};
+
+struct alsa_audio_play_data_block {
+    char *pcm; // memory block of PCM data
+    size_t block_size_in_bytes;
+	uint8_t channels;
+	uint32_t sampling_rate;
+	size_t sample_count;
+};
 
 
 #define MAX_AVATAR_FILE_SIZE 65536
@@ -117,13 +224,16 @@ typedef struct DHT_node {
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
-#define VIDEO_BUFFER_COUNT 3
+#define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
-#define DEFAULT_GLOBAL_AUD_BITRATE 16 // kbit/sec
+#define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 2500 // kbit/sec
+#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 10000 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 64 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
 #define DEFAULT_GLOBAL_MAX_VID_BITRATE 20000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
-#define DEFAULT_FPS_SLEEP_MS 250 // 250=4fps, 500=2fps, 160=6fps  // default video fps (sleep in msecs.)
+int DEFAULT_FPS_SLEEP_MS = 110; // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
+int default_fps_sleep_corrected;
 
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
 
@@ -292,6 +402,21 @@ void fb_fill_black();
 void fb_fill_xxx();
 void show_video_calling();
 void show_text_as_image_stop();
+static int get_policy(char p, int *policy);
+static void display_thread_sched_attr(char *msg);
+static void display_sched_attr(char *msg, int policy, struct sched_param *param);
+#ifdef HAVE_ALSA_PLAY
+void close_sound_play_device();
+void init_sound_play_device(int channels, int sample_rate);
+static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate);
+#endif
+int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin);
+void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str);
+void delete_entry_file(int entry_num);
+void call_entry_num(Tox *tox, int entry_num);
+void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix, int start_y_pix, const char* text);
+void update_status_line_1_text();
+void update_status_line_1_text_arg(int vbr_);
 
 
 const char *savedata_filename = "savedata.tox";
@@ -352,22 +477,40 @@ int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
 // uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
+#ifdef HAVE_EXTERNAL_KEYS
+int ext_keys_fd;
+char *ext_keys_fifo = "ext_keys.fifo";
+int do_read_ext_keys = 0;
+#define MAX_READ_FIFO_BUF 1000
+#endif
+
 #ifdef HAVE_LIBAO
 int libao_cancel_pending = 0;
 ao_device *_ao_device = NULL;
 ao_sample_format _ao_format;
 int _ao_default_driver = -1;
-
 sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
-#define MAX_AO_PLAY_THREADS 25
-
+#define MAX_AO_PLAY_THREADS 3
 sem_t audio_play_lock;
 #endif
 
+#ifdef HAVE_ALSA_PLAY
+snd_pcm_t *audio_play_handle;
+const char *audio_play_device = "default";
+int have_output_sound_device = 1;
+sem_t count_audio_play_threads;
+int count_audio_play_threads_int;
+#define MAX_ALSA_AUDIO_PLAY_THREADS 1
+sem_t audio_play_lock;
+#define ALSA_AUDIO_PLAY_START_THRESHOLD (10)
+#define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (2)
+#endif
+
+
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 3
+#define MAX_VIDEO_PLAY_THREADS 2
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -380,11 +523,39 @@ int32_t video__ustride;
 int32_t video__vstride;
 
 
+#define MAX_VIDEO_RECORD_THREADS 1
+sem_t count_video_record_threads;
+int count_video_record_threads_int;
+
+
+
 #ifdef HAVE_PORTAUDIO
 PaStream *portaudio_stream = NULL;
 ringbuf_t portaudio_out_rb;
 #endif
 
+
+#define DEFAULT_AUDIO_CAPTURE_SAMPLERATE (48000)
+// Valid sampling rates are: 8000, 12000, 16000, 24000, or 48000
+#define DEFAULT_AUDIO_CAPTURE_CHANNELS (1)
+
+#ifdef HAVE_ALSA_REC
+snd_pcm_t *audio_capture_handle;
+// const char *audio_device = "plughw:0,0";
+// const char *audio_device = "hw:CARD=U0x46d0x933,DEV=0";
+const char *audio_device = "default";
+// sysdefault:CARD
+int do_audio_recording = 1;
+int have_input_sound_device = 1;
+#define MAX_ALSA_RECORD_THREADS 4
+#define AUDIO_RECORD_AUDIO_LENGTH (120)
+// frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
+// frame is also = ((AUDIO_RECORD_BUFFER_BYTES / DEFAULT_AUDIO_CAPTURE_CHANNELS) / 2)
+#define AUDIO_RECORD_BUFFER_FRAMES (((DEFAULT_AUDIO_CAPTURE_SAMPLERATE) * (AUDIO_RECORD_AUDIO_LENGTH)) / 1000)
+#define AUDIO_RECORD_BUFFER_BYTES (AUDIO_RECORD_BUFFER_FRAMES * 2)
+sem_t count_audio_record_threads;
+int count_audio_record_threads_int;
+#endif
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
@@ -418,10 +589,29 @@ uint32_t friend_to_send_video_to = -1;
 
 int video_call_enabled = 1;
 int accepting_calls = 0;
+int global_show_fps_on_video = 0;
+char status_line_1_str[200];
+char status_line_2_str[200];
+uint32_t global_video_in_fps;
+uint32_t global_video_out_fps;
+int update_fps_every = 20;
+int update_fps_counter = 0;
+const char *speaker_out_name_0 = "TV ";
+const char *speaker_out_name_1 = "SPK";
+int speaker_out_num = 0;
+int do_phonebook_invite = 0;
+
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
 FriendsList Friends;
+
+
+
+void dbg__X(int level, const char *fmt, ...)
+{
+	// DUMMY
+}
 
 void dbg(int level, const char *fmt, ...)
 {
@@ -452,7 +642,7 @@ void dbg(int level, const char *fmt, ...)
 
     if (!level_and_format)
     {
-        // fprintf(stderr, "free:000a\n");
+        // dbg(9, stderr, "free:000a\n");
         return;
     }
 
@@ -497,10 +687,10 @@ void dbg(int level, const char *fmt, ...)
         va_end(ap);
     }
 
-    // fprintf(stderr, "free:001\n");
+    // dbg(9, "free:001\n");
     if (level_and_format)
     {
-        // fprintf(stderr, "free:001.a\n");
+        // dbg(9, "free:001.a\n");
         free(level_and_format);
     }
 
@@ -508,9 +698,26 @@ void dbg(int level, const char *fmt, ...)
     {
         free(level_and_format_2);
     }
-    // fprintf(stderr, "free:002\n");
+    // dbg(9, "free:002\n");
 }
 
+static inline void __utimer_start(struct timeval* tm1)
+{
+    gettimeofday(tm1, NULL);
+}
+
+static inline unsigned long long __utimer_stop(struct timeval* tm1, const char* log_msg, int no_log)
+{
+    struct timeval tm2;
+    gettimeofday(&tm2, NULL);
+
+    unsigned long long t = 1000 * (tm2.tv_sec - tm1->tv_sec) + (tm2.tv_usec - tm1->tv_usec) / 1000;
+	if (no_log == 0)
+	{
+		dbg(9, "%s %llu ms\n", log_msg, t);
+	}
+	return t;
+}
 
 uint32_t generate_random_uint32()
 {
@@ -524,6 +731,87 @@ uint32_t generate_random_uint32()
 	r = rand();
 	return r;
 }
+
+unsigned int char_to_int(char c)
+{
+    if (c >= '0' && c <= '9')
+    { return c - '0'; }
+    if (c >= 'A' && c <= 'F')
+    { return 10 + c - 'A'; }
+    if (c >= 'a' && c <= 'f')
+    { return 10 + c - 'a'; }
+    return -1;
+}
+
+void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str)
+{
+    char tox_id_hex_local[TOX_ADDRESS_SIZE * 2 + 1];
+    CLEAR(tox_id_hex_local);
+
+    // dbg(9, "bin_to_hex_string:sizeof(tox_id_hex_local)=%d\n", (int)sizeof(tox_id_hex_local));
+    // dbg(9, "bin_to_hex_string:strlen(tox_id_bin)=%d\n", (int)tox_id_bin_len);
+
+    sodium_bin2hex(tox_id_hex_local, sizeof(tox_id_hex_local), tox_id_bin, tox_id_bin_len);
+
+    for (size_t i = 0; i < sizeof(tox_id_hex_local) - 1; i++)
+    {
+        // dbg(9, "i=%d\n", i);
+        tox_id_hex_local[i] = toupper(tox_id_hex_local[i]);
+    }
+
+    snprintf(toxid_str, (size_t) (TOX_ADDRESS_SIZE * 2 + 1), "%s", (const char *) tox_id_hex_local);
+}
+
+/*
+ * Converts a hexidecimal string of length hex_len to binary format and puts the result in output.
+ * output_size must be exactly half of hex_len.
+ *
+ * Returns 0 on success.
+ * Returns -1 on failure.
+ */
+uint8_t *hex_string_to_bin(const char *hex_string)
+{
+    size_t len = TOX_ADDRESS_SIZE;
+    uint8_t *val = malloc(len);
+    memset(val, 0, (size_t) len);
+
+    // dbg(9, "hex_string_to_bin:len=%d\n", (int)len);
+
+    for (size_t i = 0; i != len; ++i)
+    {
+        // dbg(9, "hex_string_to_bin:%d %d\n", hex_string[2*i], hex_string[2*i+1]);
+        val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
+        // dbg(9, "hex_string_to_bin:i=%d val[i]=%d\n", i, (int)val[i]);
+    }
+
+    return val;
+}
+
+
+/* Converts a binary representation of a Tox ID into a string.
+ *
+ * Returns 0 on success.
+ * Returns -1 on failure.
+ */
+int bin_id_to_string(const char *bin_id, size_t bin_id_size, char *output, size_t output_size)
+{
+    if (bin_id_size != TOX_ADDRESS_SIZE || output_size < (TOX_ADDRESS_SIZE * 2 + 1))
+    {
+        return -1;
+    }
+
+    size_t i;
+    for (i = 0; i < TOX_ADDRESS_SIZE; ++i)
+    {
+        snprintf(&output[i * 2], output_size - (i * 2), "%02X", bin_id[i] & 0xff);
+    }
+
+	return 0;
+}
+
+
+
+
 
 
 // linked list ----------
@@ -865,21 +1153,6 @@ off_t file_size(const char *path)
     return st.st_size;
 }
 
-int bin_id_to_string(const char *bin_id, size_t bin_id_size, char *output, size_t output_size)
-{
-    if (bin_id_size != TOX_ADDRESS_SIZE || output_size < (TOX_ADDRESS_SIZE * 2 + 1))
-    {
-        return -1;
-    }
-
-    size_t i;
-    for (i = 0; i < TOX_ADDRESS_SIZE; ++i)
-    {
-        snprintf(&output[i * 2], output_size - (i * 2), "%02X", bin_id[i] & 0xff);
-    }
-
-	return 0;
-}
 
 void random_char(char *output, int len)
 {
@@ -1159,7 +1432,7 @@ void show_video_calling()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
-	system(cmd_str);
+	if (system(cmd_str));
 
 	yieldcpu(600);
 }
@@ -1250,7 +1523,7 @@ void show_text_as_image(const char *display_text)
 
 		// snprintf(cmd_str, sizeof(cmd_str), "%s '%s'", shell_cmd__show_text_as_image, display_text2);
 		snprintf(cmd_str, sizeof(cmd_str), "%s ''", shell_cmd__show_text_as_image);
-		system(cmd_str);
+		if (system(cmd_str));
 
 		// unlink(cmd__image_text_full_path);
 	}
@@ -1261,7 +1534,7 @@ void show_text_as_image_stop()
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_text_as_image_stop);
-	system(cmd_str);		
+	if (system(cmd_str));
 }
 
 void show_endless_image()
@@ -1273,7 +1546,7 @@ void show_endless_image()
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
-	system(cmd_str);
+	if (system(cmd_str));
 }
 
 void stop_endless_image()
@@ -1281,7 +1554,7 @@ void stop_endless_image()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_image_anim);
-	system(cmd_str);
+	if (system(cmd_str));
 }
 
 
@@ -1294,7 +1567,7 @@ void show_endless_loading()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__start_endless_loading_anim);
-	system(cmd_str);
+	if (system(cmd_str));
 }
 
 void stop_endless_loading()
@@ -1302,7 +1575,7 @@ void stop_endless_loading()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_loading_anim);
-	system(cmd_str);
+	if (system(cmd_str));
 }
 
 void create_tox_id_qrcode(Tox *tox)
@@ -1315,7 +1588,7 @@ void create_tox_id_qrcode(Tox *tox)
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s \"tox:%s\"", shell_cmd__create_qrcode, tox_id_hex);
-	system(cmd_str);
+	if (system(cmd_str));
 
 	global_qrcode_was_updated = 1;
 }
@@ -1350,7 +1623,7 @@ void show_tox_id_qrcode()
 	char cmd_str[1000];
 	CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
-	system(cmd_str);
+	if (system(cmd_str));
 
 	dbg(2, "show_tox_id_qrcode()\n");
 
@@ -1364,7 +1637,7 @@ void show_tox_client_application_download_links()
 	char cmd_str[1000];
     CLEAR(cmd_str);
 	snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_clients);
-	system(cmd_str);
+	if (system(cmd_str));
 }
 
 
@@ -1498,8 +1771,8 @@ void send_file_to_friend_real(Tox *m, uint32_t num, const char* filename, int re
 	}
 
 	dbg(0, "send_file_to_friend_real:tox_file_get_file_id num=%d filenum=%d\n", (int)num, (int)filenum);
-	dbg(0, "send_file_to_friend_real:file_id_resume=%d ft->file_id=%d\n", (int)fileid_resume, (int)ft->file_id);
-	dbg(0, "send_file_to_friend_real:o=%d ft->file_id=%d\n", (int)o, (int)ft->file_id);
+	// dbg(0, "send_file_to_friend_real:file_id_resume=%d ft->file_id=%d\n", (int)fileid_resume, (int)ft->file_id);
+	// dbg(0, "send_file_to_friend_real:o=%d ft->file_id=%d\n", (int)o, (int)ft->file_id);
 
 	char file_id_str[TOX_FILE_ID_LENGTH * 2 + 1];
 	bin_id_to_string_all((char*)ft->file_id, (size_t)TOX_FILE_ID_LENGTH, file_id_str, (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
@@ -1564,7 +1837,7 @@ void resume_file_to_friend(Tox *m, uint32_t num, struct FileTransfer* ft)
 		dbg(2, "resume_file_to_friend:full path=%s\n", file_name_incl_full_path);
 		char file_id_str[TOX_FILE_ID_LENGTH * 2 + 1];
 		bin_id_to_string_all((char*)ft->file_id, (size_t)TOX_FILE_ID_LENGTH, file_id_str, (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
-		dbg(2, "resume_file_to_friend:file_id=%d file_id_bin=%d\n", (int)file_id_str, (int)ft->file_id);
+		// dbg(2, "resume_file_to_friend:file_id=%d file_id_bin=%d\n", (int)file_id_str, (int)ft->file_id);
 		dbg(2, "resume_file_to_friend:file_id=%s\n", file_id_str);
 
 		dbg(2, "resume_file_to_friend:path=%s friendnum=%d filenum=%d\n", file_name_incl_full_path, (int)ft->friendnum, (int)ft->filenum);
@@ -2098,10 +2371,40 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
                                 (int)global_audio_bit_rate, (int)global_video_bit_rate);
     // ----- bit rates -----
 
-    // ----- bit rates -----
     send_text_message_to_friend(tox, friend_number, "show every n-th video frame: value=%d",
                                 (int)SHOW_EVERY_X_TH_VIDEO_FRAME);
-    // ----- bit rates -----
+
+
+    send_text_message_to_friend(tox, friend_number, "sleep in ms between video frames: value=%d",
+                                (int)DEFAULT_FPS_SLEEP_MS);
+
+    send_text_message_to_friend(tox, friend_number, "setting vpx kf_max_dist: value=%d",
+                                (int)global__VPX_KF_MAX_DIST);
+
+    send_text_message_to_friend(tox, friend_number, "setting vpx g_lag_in_frames: value=%d",
+                                (int)global__VPX_G_LAG_IN_FRAMES);
+
+
+	if (global__VPX_END_USAGE == 0)
+	{
+		send_text_message_to_friend(tox, friend_number, "setting vpx end usage: VPX_VBR Variable Bit Rate (VBR) mode");
+	}
+	else if (global__VPX_END_USAGE == 1)
+	{
+		send_text_message_to_friend(tox, friend_number, "setting vpx end usage: VPX_CBR Constant Bit Rate (CBR) mode");
+	}
+	else if (global__VPX_END_USAGE == 2)
+	{
+		send_text_message_to_friend(tox, friend_number, "setting vpx end usage: VPX_CQ  *Constrained Quality (CQ)  mode");
+	}
+	else if (global__VPX_END_USAGE == 3)
+	{
+		send_text_message_to_friend(tox, friend_number, "setting vpx end usage: VPX_Q   Constant Quality (Q) mode");
+	}
+
+    send_text_message_to_friend(tox, friend_number, "VPX CPU_USED value [-16 .. 16]: value=%d",
+                                (int)global__VP8E_SET_CPUUSED_VALUE);
+
 
     char tox_id_hex[TOX_ADDRESS_SIZE*2 + 1];
 	get_my_toxid(tox, tox_id_hex);
@@ -2206,6 +2509,8 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 			friend_to_send_video_to = friend_number;
 			dbg(9, "cmd_vcm:004\n");
 
+			update_status_line_1_text();
+
 			TOXAV_ERR_CALL error = 0;
 			toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
 			// toxav_call(mytox_av, friend_number, 0, 40, &error);
@@ -2258,17 +2563,26 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 void send_help_to_friend(Tox *tox, uint32_t friend_number)
 {
 	send_text_message_to_friend(tox, friend_number, "=========================\nToxBlinkenwall version:%s\n=========================", global_version_string);
-	// send_text_message_to_friend(tox, friend_number, " commands are:");
-	send_text_message_to_friend(tox, friend_number, " .stats        --> show ToxBlinkenwall status");
-	send_text_message_to_friend(tox, friend_number, " .friends      --> show ToxBlinkenwall Friends");
-	// send_text_message_to_friend(tox, friend_number, " .snap      --> snap a single still image");
-	send_text_message_to_friend(tox, friend_number, " .showclients  --> show Clientapp links");
-	send_text_message_to_friend(tox, friend_number, " .showqr       --> show ToxID");
-	send_text_message_to_friend(tox, friend_number, " .text <text>  --> show Text on Wall");
-	send_text_message_to_friend(tox, friend_number, " .restart      --> restart ToxBlinkenwall system");
-	send_text_message_to_friend(tox, friend_number, " .vcm          --> videocall me");
-    send_text_message_to_friend(tox, friend_number, " .vbr <v rate> --> set video bitrate to <v rate> kbits/s");
-    send_text_message_to_friend(tox, friend_number, " .skpf <num>   --> show only every n-th video frame");
+	send_text_message_to_friend(tox, friend_number, " .stats         --> show ToxBlinkenwall status");
+	send_text_message_to_friend(tox, friend_number, " .friends       --> show ToxBlinkenwall Friends");
+	send_text_message_to_friend(tox, friend_number, " .showclients   --> show Clientapp links");
+	send_text_message_to_friend(tox, friend_number, " .showqr        --> show ToxID");
+	send_text_message_to_friend(tox, friend_number, " .text <text>   --> show Text on Wall");
+	send_text_message_to_friend(tox, friend_number, " .restart       --> restart ToxBlinkenwall system");
+	send_text_message_to_friend(tox, friend_number, " .vcm           --> videocall me");
+	send_text_message_to_friend(tox, friend_number, " .kac           --> Kill all calls");
+    send_text_message_to_friend(tox, friend_number, " .vbr <v rate>  --> set video bitrate to <v rate> kbits/s");
+    send_text_message_to_friend(tox, friend_number, " .skpf <num>    --> show only every n-th video frame");
+    send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
+    send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
+    send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
+    send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
+    send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
+    send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
+    send_text_message_to_friend(tox, friend_number, " .fps <delay ms>     --> set delay in ms between sent frames");
+    send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
+    send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
+    send_text_message_to_friend(tox, friend_number, " .call <num>         --> call book entry <num>");
 }
 
 //void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
@@ -2280,6 +2594,191 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
 //void finish_zipfile(mz_zip_archive *pZip)
 //{
 //}
+
+void invite_toxid_as_friend(Tox *tox, uint8_t *tox_id_bin)
+{
+    if (tox_id_bin == NULL)
+    {
+        dbg(9, "no ToxID\n");
+        return;
+    }
+
+    int64_t fnum = friend_number_for_entry(tox, tox_id_bin);
+    if (fnum == -1)
+    {
+        dbg(9, "ToxID not on friendlist, inviting ...\n");
+        const char *message_str = "invite ...";
+        TOX_ERR_FRIEND_ADD error;
+        uint32_t friendnum = tox_friend_add(tox, (uint8_t *) tox_id_bin,
+                                            (uint8_t *) message_str,
+                                            (size_t) strlen(message_str),
+                                            &error);
+
+        if (error != 0)
+        {
+            if (error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
+            {
+                dbg(9, "add friend:ERROR:TOX_ERR_FRIEND_ADD_ALREADY_SENT\n");
+            }
+            else
+            {
+                dbg(9, "add friend:ERROR:%d\n", (int) error);
+            }
+        }
+        else
+        {
+            dbg(9, "friend request sent.\n");
+        }
+    }
+    else
+    {
+        dbg(9, "ToxID already a friend\n");
+    }
+
+    update_savedata_file(tox);
+}
+
+bool file_exists(const char *path)
+{
+    struct stat s;
+    return stat(path, &s) == 0;
+}
+
+void create_entry_file_if_not_exists(int entry_num)
+{
+	char entry_toxid_filename[300];
+	snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+
+    if (!file_exists(entry_toxid_filename))
+    {
+        FILE *fp = fopen(entry_toxid_filename, "w");
+
+        if (fp == NULL)
+        {
+            dbg(1, "Warning: failed to create %s file\n", entry_toxid_filename);
+            return;
+        }
+
+        fclose(fp);
+        dbg(1, "Warning: creating new %s file. Did you lose the old one?\n", entry_toxid_filename);
+    }
+}
+
+void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
+{
+    create_entry_file_if_not_exists(entry_num);
+    *toxid_str = NULL;
+
+	char entry_toxid_filename[300];
+	snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+
+    FILE *fp = fopen(entry_toxid_filename, "r");
+    if (fp == NULL)
+    {
+        dbg(1, "Warning: failed to read %s file\n", entry_toxid_filename);
+        return;
+    }
+
+    char id[256];
+    int len;
+    while (fgets(id, sizeof(id), fp))
+    {
+        len = strlen(id);
+        if (len < (TOX_ADDRESS_SIZE * 2))
+        {
+            continue;
+        }
+
+        *toxid_str = hex_string_to_bin(id);
+        break;
+    }
+
+    fclose(fp);
+}
+
+void delete_entry_file(int entry_num)
+{
+	if ((entry_num >= 1) && (entry_num <= 9))
+	{
+		char entry_toxid_filename[300];
+		snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+
+		unlink(entry_toxid_filename);
+	}
+}
+
+void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
+{
+    if (toxid_bin == NULL)
+    {
+        delete_entry_file(entry_num);
+    }
+    else
+    {
+        create_entry_file_if_not_exists(entry_num);
+
+        char entry_toxid_filename[300];
+        snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+
+        FILE *fp = fopen(entry_toxid_filename, "wb");
+        if (fp == NULL)
+        {
+            dbg(1, "Warning: failed to read %s file\n", entry_toxid_filename);
+            return;
+        }
+
+        char toxid_pubkey_string[TOX_ADDRESS_SIZE * 2 + 1];
+        CLEAR(toxid_pubkey_string);
+        bin_to_hex_string(toxid_bin, (size_t) TOX_ADDRESS_SIZE, toxid_pubkey_string);
+
+        int result = fputs(toxid_pubkey_string, fp);
+        fclose(fp);
+    }
+}
+
+void disconnect_all_calls(Tox *tox)
+{
+    size_t i = 0;
+    size_t size = tox_self_get_friend_list_size(tox);
+
+    if (size == 0)
+    {
+        return;
+    }
+
+    uint32_t list[size];
+    tox_self_get_friend_list(tox, list);
+    char friend_key[TOX_PUBLIC_KEY_SIZE];
+    CLEAR(friend_key);
+
+    for (i = 0; i < size; ++i)
+    {
+        av_local_disconnect(mytox_av, list[i]);
+    }
+}
+
+void update_status_line_1_text()
+{
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate);
+	// dbg(9, "update_status_line_1_text:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
+}
+
+void update_status_line_1_text_arg(int vbr_)
+{
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", (int)global_video_in_fps, (int)global_video_out_fps, vbr_);
+}
+
+void update_status_line_2_text()
+{
+	if (speaker_out_num == 0)
+	{
+		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d", speaker_out_name_0, (int)global_audio_bit_rate);
+	}
+	else
+	{
+		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d", speaker_out_name_1, (int)global_audio_bit_rate);
+	}
+}
 
 void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message,
                                    size_t length, void *user_data)
@@ -2298,6 +2797,10 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			{
 				send_help_to_friend(tox, friend_number);
 			}
+			else if (strncmp((char*)message, "help", strlen((char*)"help")) == 0)
+			{
+				send_help_to_friend(tox, friend_number);
+			}
 			else if (strncmp((char*)message, ".stats", strlen((char*)".stats")) == 0)
 			{
 				cmd_stats(tox, friend_number);
@@ -2313,7 +2816,10 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 			}
 			else if (strncmp((char*)message, ".showqr", strlen((char*)".showqr")) == 0)
 			{
-				show_tox_id_qrcode();
+				if (global_video_active == 0)
+				{
+					show_tox_id_qrcode();
+				}
 			}
 			else if (strncmp((char*)message, ".text", strlen((char*)".text")) == 0)
 			{
@@ -2339,6 +2845,72 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 					cmd_vcm(tox, friend_number);
 				}
 			}
+			else if (strncmp((char *)message, ".kac", strlen((char *) ".kac")) == 0)
+			{
+				disconnect_all_calls(tox);
+			}
+			else if (strncmp((char*)message, ".set ", strlen((char*)".set ")) == 0) // set book entry <num> to <ToxID> and add friend request!
+			{
+				if (strlen(message) == ((TOX_ADDRESS_SIZE * 2) + 7))
+				{
+					char *only_num = strndup((message + 5), 1);
+					int entry_num = get_number_in_string(only_num, (int)-1);
+					free(only_num);
+
+					if ((entry_num >= 1) && (entry_num <=9))
+					{
+						const char *entry_hex_toxid_string = (message + 7);
+						uint8_t *entry_bin_toxid = hex_string_to_bin(entry_hex_toxid_string);
+
+						if (entry_bin_toxid)
+						{
+							write_pubkey_to_entry_file(entry_bin_toxid, entry_num);
+
+							int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+
+							if (is_already_friendnum == -1)
+							{
+								invite_toxid_as_friend(tox, entry_bin_toxid);
+							}
+
+							free(entry_bin_toxid);
+						}
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".del ", strlen((char*)".del ")) == 0) // remove book entry <num>
+			{
+				if (strlen(message) == 6)
+				{
+					char *only_num = strndup((message + 5), 1);
+					int entry_num = get_number_in_string(only_num, (int)-1);
+					free(only_num);
+
+					if ((entry_num >= 1) && (entry_num <=9))
+					{
+						delete_entry_file(entry_num);
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".call ", strlen((char*)".call ")) == 0) // call book entry <num>
+			{
+				if (strlen(message) == 7) // 1 digit allowed only
+				{
+					int call_number_num = get_number_in_string(message, (int)-1);
+					if ((call_number_num >= 1) && (call_number_num <= 9))
+					{
+						call_entry_num(tox, call_number_num);
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".showfps", strlen((char*)".showfps ")) == 0) // show fps on video
+			{
+				global_show_fps_on_video = 1;
+			}
+			else if (strncmp((char*)message, ".hidefps", strlen((char*)".hidefps ")) == 0) // hide fps on video
+			{
+				global_show_fps_on_video = 0;
+			}
 			else if (strncmp((char*)message, ".skpf ", strlen((char*)".skpf ")) == 0) // set show every n-th video frame
 			{
 				if (strlen(message) > 6) // require 1 digits
@@ -2350,7 +2922,45 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 					}
 				}
 			}
-
+			else if (strncmp((char*)message, ".fps ", strlen((char*)".fps ")) == 0) // set 1000/fps
+			{
+				if (strlen(message) > 5)
+				{
+					int num_new = get_number_in_string(message, (int)DEFAULT_FPS_SLEEP_MS);
+					if ((num_new >= 1) && (num_new <= 1000))
+					{
+						DEFAULT_FPS_SLEEP_MS = num_new;
+						dbg(9, "setting wait in ms: %d\n", (int)DEFAULT_FPS_SLEEP_MS);
+					}
+				}
+			}			
+			else if (strncmp((char*)message, ".vpxu ", strlen((char*)".vpxu ")) == 0) // set vpx end usage
+			{
+				if (strlen(message) > 6)
+				{
+					int num_new = get_number_in_string(message, (int)global__VPX_END_USAGE);
+					if ((num_new >= 0) && (num_new <= 3))
+					{
+						global__VPX_END_USAGE = num_new;
+						if (global__VPX_END_USAGE == 0)
+						{
+							dbg(9, "setting vpx end usage: VPX_VBR Variable Bit Rate (VBR) mode\n");
+						}
+						else if (global__VPX_END_USAGE == 1)
+						{
+							dbg(9, "setting vpx end usage: VPX_CBR Constant Bit Rate (CBR) mode\n");
+						}
+						else if (global__VPX_END_USAGE == 2)
+						{
+							dbg(9, "setting vpx end usage: VPX_CQ  *Constrained Quality (CQ)  mode\n");
+						}
+						else if (global__VPX_END_USAGE == 3)
+						{
+							dbg(9, "setting vpx end usage: VPX_Q   Constant Quality (Q) mode\n");
+						}
+					}
+				}
+			}			
 			else if (strncmp((char*)message, ".vbr ", strlen((char*)".vbr ")) == 0) // set v bitrate
 			{
 				if (strlen(message) > 7) // require 3 digits
@@ -2360,8 +2970,56 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 					{
 						DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
 						global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+
+						update_status_line_1_text();
+
 						if (mytox_av != NULL)
 						{
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".cpu ", strlen((char*)".cpu ")) == 0) // set CPU value for vp8 encoder
+			{
+				if (strlen(message) > 5)
+				{
+					int vbr_new = get_number_in_string(message, (int)global__VP8E_SET_CPUUSED_VALUE);
+					if ((vbr_new >= -16) && (vbr_new <= 16))
+					{
+						if (mytox_av != NULL)
+						{
+							global__VP8E_SET_CPUUSED_VALUE = (int)vbr_new;
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".kfmax ", strlen((char*)".kfmax ")) == 0)
+			{
+				if (strlen(message) > 7)
+				{
+					int vbr_new = get_number_in_string(message, (int)global__VPX_KF_MAX_DIST);
+					if ((vbr_new >= 1) && (vbr_new <= 200))
+					{
+						if (mytox_av != NULL)
+						{
+							global__VPX_KF_MAX_DIST = (int)vbr_new;
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+					}
+				}
+			}
+			else if (strncmp((char*)message, ".glag ", strlen((char*)".glag ")) == 0)
+			{
+				if (strlen(message) > 6)
+				{
+					int vbr_new = get_number_in_string(message, (int)global__VPX_G_LAG_IN_FRAMES);
+					if ((vbr_new >= 0) && (vbr_new <= 100))
+					{
+						if (mytox_av != NULL)
+						{
+							global__VPX_G_LAG_IN_FRAMES = (int)vbr_new;
 							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
 						}
 					}
@@ -2372,7 +3030,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 				if (Friends.list[j].waiting_for_answer == 1)
 				{
 					// we want to get user feedback
-					snprintf(Friends.list[j].last_answer, 99, (char*)message);
+					snprintf(Friends.list[j].last_answer, 99, "%s", (char*)message);
 					Friends.list[j].waiting_for_answer = 2;
 
 					if (Friends.list[j].last_answer)
@@ -2387,8 +3045,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 				else
 				{
 					// send_back = 1;
-					// unknown command, just send "help / usage"
-					send_help_to_friend(tox, friend_number);
+					// unknown command, just be quiet
 				}
 			}
 		}
@@ -3085,6 +3742,46 @@ char* get_current_time_date_formatted()
 }
 
 
+int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
+{
+    size_t i = 0;
+    size_t size = tox_self_get_friend_list_size(tox);
+    int64_t ret_friendnum = -1;
+
+    if (size == 0)
+    {
+        return ret_friendnum;
+    }
+
+    if (tox_id_bin == NULL)
+    {
+        return ret_friendnum;
+    }
+
+    uint32_t list[size];
+    tox_self_get_friend_list(tox, list);
+    char friend_key[TOX_PUBLIC_KEY_SIZE];
+    CLEAR(friend_key);
+
+    for (i = 0; i < size; ++i)
+    {
+        if (tox_friend_get_public_key(tox, list[i], (uint8_t *) friend_key, NULL) == 0)
+        {
+        }
+        else
+        {
+            if (memcmp(tox_id_bin, friend_key, TOX_PUBLIC_KEY_SIZE) == 0)
+            {
+                ret_friendnum = list[i];
+                return ret_friendnum;
+            }
+        }
+    }
+
+    return ret_friendnum;
+}
+
+
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
@@ -3197,8 +3894,8 @@ int init_cam()
 	format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
 
-	format.fmt.pix.width = 1920;
-	format.fmt.pix.height = 1080;
+	format.fmt.pix.width = 1280;
+	format.fmt.pix.height = 720;
 
 	dest_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
@@ -3463,8 +4160,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     }
 
     struct v4l2_buffer buf;
-
-    CLEAR(buf);
+    // ** // CLEAR(buf);
 
     buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP; // V4L2_MEMORY_USERPTR;
@@ -3640,13 +4336,16 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 		TOXAV_ERR_ANSWER err;
 		global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+
+		update_status_line_1_text();
+
 		int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
 		int video_bitrate = global_video_bit_rate;
 		friend_to_send_video_to = friend_number;
 		global_video_active = 1;
 		global_send_first_frame = 2;
 
-		dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d\n", (int)friend_number, (int)audio_bitrate, (int)video_bitrate);
+		dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d global_video_active=%d\n", (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
 
 		show_text_as_image_stop();
 		
@@ -3682,8 +4381,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
 	if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
 	{
-		dbg(9, "Call with friend %d finished\n", friend_number);
 		global_video_active = 0;
+		dbg(9, "Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
 		friend_to_send_video_to = -1;
 
 		show_tox_id_qrcode();
@@ -3691,8 +4390,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	}
 	else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	{
-		dbg(9, "Call with friend %d errored\n", friend_number);
 		global_video_active = 0;
+		dbg(9, "Call with friend %d errored, global_video_active=%d\n", friend_number, global_video_active);
 		friend_to_send_video_to = -1;
 
 		show_tox_id_qrcode();
@@ -3721,7 +4420,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	dbg(9, "t_toxav_call_state_cb:002a send_audio=%d send_video=%d global_video_bit_rate=%d\n", send_audio, send_video, (int)global_video_bit_rate);
 	TOXAV_ERR_BIT_RATE_SET bitrate_err = 0;
 	// ** // toxav_bit_rate_set(av, friend_number, 0, send_video ? global_video_bit_rate : 0, &bitrate_err);
-	dbg(9, "t_toxav_call_state_cb:004\n");
+	dbg(9, "t_toxav_call_state_cb:003\n");
 
 	if (bitrate_err)
 	{
@@ -3736,7 +4435,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	{
 		global_is_qrcode_showing_on_screen = 0;
 
-		if (global_video_active != 0)
+		if (global_video_active == 0)
 		{
 			// clear screen on CALL START
 			stop_endless_image();
@@ -3744,22 +4443,28 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 			// show funny face
 			show_video_calling();
 
-			dbg(9, "t_toxav_call_state_cb:004\n");
+			dbg(9, "t_toxav_call_state_cb:004xx\n");
 			global_video_active = 1;
 			global_send_first_frame = 2;
+
+			dbg(9, "global_video_active=%d friend_to_send_video_to=%d\n", global_video_active, friend_to_send_video_to);
 		}
 	}
-	else
-	{
-		dbg(9, "t_toxav_call_state_cb:005\n");
-		global_video_active = 0;
-		global_send_first_frame = 0;
-		friend_to_send_video_to = -1;
+	// -------- never reached --------
+	// -------- never reached --------
+	//else
+	//{
+	//	dbg(9, "t_toxav_call_state_cb:005\n");
+	//	global_video_active = 0;
+	//	global_send_first_frame = 0;
+	//	friend_to_send_video_to = -1;
+	//
+	//	show_tox_id_qrcode();
+	//}
+	// -------- never reached --------
+	// -------- never reached --------
 
-		show_tox_id_qrcode();
-	}
-
-	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d\n", friend_number, state, send_audio, send_video);
+	dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d global_video_active=%d global_send_first_frame=%d friend_to_send_video_to=%d\n", friend_number, state, send_audio, send_video, global_video_active, global_send_first_frame, friend_to_send_video_to);
 }
 
 static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
@@ -3798,12 +4503,17 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 		// HINT: don't touch global video bitrate --------
 		// global_video_bit_rate = video_bit_rate_;
 		// HINT: don't touch global video bitrate --------
+
+		// TODO: this will get overwritten at every fps update!!
+		update_status_line_1_text_arg(video_bit_rate_);
+
 	}
 
     dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
     dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
 }
 
+#ifdef HAVE_ALSA_PLAY
 void inc_audio_t_counter()
 {
 	sem_wait(&count_audio_play_threads);
@@ -3829,6 +4539,38 @@ int get_audio_t_counter()
 	sem_post(&count_audio_play_threads);
 	return ret;
 }
+#endif
+
+
+#ifdef HAVE_LIBAO
+void inc_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	count_audio_play_threads_int++;
+	sem_post(&count_audio_play_threads);
+}
+
+void dec_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	count_audio_play_threads_int--;
+	if (count_audio_play_threads_int < 0)
+	{
+		count_audio_play_threads_int = 0;
+	}
+	sem_post(&count_audio_play_threads);
+}
+
+int get_audio_t_counter()
+{
+	sem_wait(&count_audio_play_threads);
+	int ret = count_audio_play_threads_int;
+	sem_post(&count_audio_play_threads);
+	return ret;
+}
+#endif
+
+
 
 void inc_video_t_counter()
 {
@@ -3857,25 +4599,124 @@ int get_video_t_counter()
 }
 
 
-void *audio_play(void *dummy)
+void inc_video_trec_counter()
 {
-	// make a local copy
-	size_t ao_play_bytes_ = ao_play_bytes;
-	char *ao_play_pcm_ = (char *)calloc(1, ao_play_bytes_);
-	memcpy(ao_play_pcm_, ao_play_pcm, ao_play_bytes_);
+	sem_wait(&count_video_record_threads);
+	count_video_record_threads_int++;
+	sem_post(&count_video_record_threads);
+}
 
-	// this is a blocking call
-	sem_wait(&audio_play_lock);
-	if (libao_cancel_pending == 0)
+void dec_video_trec_counter()
+{
+	sem_wait(&count_video_record_threads);
+	count_video_record_threads_int--;
+	if (count_video_record_threads_int < 0)
 	{
-		ao_play( _ao_device, ao_play_pcm_, ao_play_bytes_);
+		count_video_record_threads_int = 0;
 	}
-	sem_post(&audio_play_lock);
+	sem_post(&count_video_record_threads);
+}
 
-	free(ao_play_pcm_);
+int get_video_trec_counter()
+{
+	sem_wait(&count_video_record_threads);
+	int ret = count_video_record_threads_int;
+	sem_post(&count_video_record_threads);
+	return ret;
+}
+
+
+
+
+#ifdef HAVE_ALSA_PLAY
+
+void *alsa_audio_play(void *data)
+{
+
+	struct alsa_audio_play_data_block *adb = (struct alsa_audio_play_data_block *)data;
+
+	dbg(0, "ALSA:001\n");
+
+#if 0
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: alsa_audio_play thread");
+#endif
+
+	// make a local copy
+	char *play_pcm_ = (char *)calloc(1, adb->block_size_in_bytes);
+
+	if (play_pcm_)
+	{
+		memcpy(play_pcm_, adb->pcm, adb->block_size_in_bytes);
+
+		sem_wait(&audio_play_lock);
+		int err;
+		if ((err = snd_pcm_writei(audio_play_handle, (char *)play_pcm_, adb->sample_count)) != adb->sample_count)
+		{
+			dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+			if ((int)err == -11) // -> Resource temporarily unavailable
+			{
+				dbg(0, "play_device:yield a bit (2)\n");
+				// zzzzzz
+				yieldcpu(1);
+			}
+			sound_play_xrun_recovery(audio_play_handle, err, (int)adb->channels, (int)adb->sampling_rate);
+		}
+		sem_post(&audio_play_lock);
+
+		free(play_pcm_);
+	}
+
+	free(adb);
+
 	dec_audio_t_counter();
+
 	pthread_exit(0);
 }
+
+#endif
+
+
+
+#ifdef HAVE_LIBAO
+
+void *audio_play(void *data)
+{
+	struct audio_play_data_block *adb = (struct audio_play_data_block *)data;
+
+#if 0
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: audio_play thread");
+#endif
+
+	// make a local copy
+	char *ao_play_pcm_ = (char *)malloc(adb->block_size_in_bytes);
+	memcpy(ao_play_pcm_, adb->pcm, adb->block_size_in_bytes);
+
+	// this is a blocking call
+	if (libao_cancel_pending == 0)
+	{
+		sem_wait(&audio_play_lock);
+		ao_play( _ao_device, (char *)ao_play_pcm_, (uint_32)adb->block_size_in_bytes);
+		sem_post(&audio_play_lock);
+	}
+
+	free(ao_play_pcm_);
+	free(adb);
+
+	dec_audio_t_counter();
+
+	pthread_exit(0);
+}
+
+#endif
+
 
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
@@ -3889,10 +4730,73 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 		if (friend_to_send_video_to == friend_number)
 		{
 
+#ifdef HAVE_ALSA_PLAY
+			if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
+			{
+
+#if 0
+				// ------ thread priority ------
+				struct sched_param param;
+				int policy;
+				int s;
+				display_thread_sched_attr("Scheduler attributes of [1]: alsa audio play thread");
+				get_policy('f', &policy);
+				param.sched_priority = strtol("1", NULL, 0);
+				s = pthread_setschedparam(pthread_self(), policy, &param);
+				if (s != 0)
+				{
+					dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of alsa audio play thread\n");
+				}
+				else
+				{
+				}
+				display_thread_sched_attr("Scheduler attributes of [3]: alsa audio play thread");
+				// ------ thread priority ------
+#endif
+
+
+				sem_wait(&audio_play_lock);
+
+				libao_channels = (int)channels;
+				libao_sampling_rate = (int)sampling_rate;
+
+				// initialize sound output ------------------
+				close_sound_play_device();
+				// zzzzzz
+				yieldcpu(20);
+				init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
+				// initialize sound output ------------------
+
+				sem_post(&audio_play_lock);
+
+			}
+
+#endif
+
 #ifdef HAVE_LIBAO
 
 			if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
 			{
+#if 1
+				// ------ thread priority ------
+				struct sched_param param;
+				int policy;
+				int s;
+				display_thread_sched_attr("Scheduler attributes of [1]: audio play thread");
+				get_policy('r', &policy);
+				param.sched_priority = strtol("1", NULL, 0);
+				s = pthread_setschedparam(pthread_self(), policy, &param);
+				if (s != 0)
+				{
+					dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of audio play thread\n");
+				}
+				else
+				{
+				}
+				display_thread_sched_attr("Scheduler attributes of [3]: audio play thread");
+				// ------ thread priority ------
+#endif
+
 				sem_wait(&audio_play_lock);
 
 				libao_cancel_pending = 1;
@@ -3935,7 +4839,101 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			}
 #endif
 
+#ifdef HAVE_ALSA_PLAY
 
+#if 1
+
+			sem_wait(&audio_play_lock);
+
+			int err;
+			int has_error = 0;
+			int avail_bytes_in_play_buffer = (int)snd_pcm_avail_update(audio_play_handle);
+			// dbg(9, "snd_pcm_avail [1]:%d sample_count=%d\n", avail_bytes_in_play_buffer, sample_count);
+
+			// dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
+
+
+			if ((int)avail_bytes_in_play_buffer > (int)sample_count)
+			{
+				err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+				has_error = 0;
+			}
+			else
+			{
+				err = avail_bytes_in_play_buffer;
+				has_error = 1;
+			}
+
+			if ((has_error == 1) || (err != sample_count))
+			{
+				// dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+
+				// dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+				//if (err == -11) // -> Resource temporarily unavailable
+				//{
+				//	dbg(0, "play_device:Resource temporarily unavailable (1)\n");
+				//	// zzzzzz
+				//	yieldcpu(1);
+				//}
+				if (err == -EAGAIN)
+				{
+					dbg(0, "play_device:EAGAIN\n");
+					// zzzzzz
+					yieldcpu(1);
+				}
+				else
+				{
+					sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+				}
+			}
+
+			sem_post(&audio_play_lock);
+
+
+			// avail_bytes_in_play_buffer = (int)snd_pcm_avail_update(audio_play_handle);
+			// dbg(9, "snd_pcm_avail [2]:%d\n", avail_bytes_in_play_buffer);
+
+			// dbg(0, "ALSA:014\n");
+
+
+#else
+
+			struct alsa_audio_play_data_block *adb = calloc(1, sizeof (struct alsa_audio_play_data_block));
+			adb->block_size_in_bytes = (size_t)(sample_count * libao_channels * 2);
+			adb->pcm = (char *)pcm;
+			adb->channels = libao_channels;
+			adb->sampling_rate = libao_sampling_rate;
+			adb->sample_count = sample_count;
+
+			pthread_t audio_play_thread;
+			if (get_audio_t_counter() <= MAX_ALSA_AUDIO_PLAY_THREADS)
+			{
+				inc_audio_t_counter();
+				if (pthread_create(&audio_play_thread, NULL, alsa_audio_play, (void *)adb))
+				{
+					dbg(0, "error creating audio play thread\n");
+					free(adb);
+					dec_audio_t_counter();
+				}
+				else
+				{
+					if (pthread_detach(audio_play_thread))
+					{
+						dbg(0, "error detaching audio play thread\n");
+					}
+
+					// zzzzzz
+					yieldcpu(1);
+				}
+			}
+			else
+			{
+				dbg(1, "more than %d alsa play threads already\n", (int)MAX_ALSA_AUDIO_PLAY_THREADS);
+				free(adb);
+			}
+#endif
+
+#endif
 
 #ifdef HAVE_LIBAO
 			// play audio to default audio device --------------
@@ -3948,17 +4946,29 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				ao_play_pcm = (char *)pcm;
 				ao_play_bytes = (size_t)(sample_count * libao_channels * 2);
 
-				// dbg(0, "sample_count=%d channels=%d samplerate=%d\n", (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
+				struct audio_play_data_block *adb = calloc(1, sizeof (struct audio_play_data_block));
+				adb->block_size_in_bytes = ao_play_bytes;
+				adb->pcm = (char *)pcm;
+				// adb->sample_count = sample_count; // not used now
+
+				// adb->pcm = calloc(1, adb->block_size_in_bytes);
+				// memcpy(adb->pcm, pcm, adb->block_size_in_bytes);
+
+				// dbg(0, "ao_play_bytes=%d sample_count=%d channels=%d samplerate=%d\n", (int)ao_play_bytes, (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
 
 				pthread_t audio_play_thread;
 
 				if (get_audio_t_counter() <= MAX_AO_PLAY_THREADS)
 				{
 					inc_audio_t_counter();
-					if (pthread_create(&audio_play_thread, NULL, audio_play, NULL))
+					if (pthread_create(&audio_play_thread, NULL, audio_play, (void *)adb))
 					{
-						dec_audio_t_counter();
 						dbg(0, "error creating audio play thread\n");
+
+						// free(adb->pcm);
+						free(adb);
+
+						dec_audio_t_counter();
 					}
 					else
 					{
@@ -3967,11 +4977,17 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 						{
 							dbg(0, "error detaching audio play thread\n");
 						}
+
+						// zzzzzz
+						yieldcpu(1);
 					}
 				}
 				else
 				{
 					dbg(1, "more than %d ao play threads already\n", (int)MAX_AO_PLAY_THREADS);
+
+					// free(adb->pcm);
+					free(adb);
 				}
 #endif
 			}
@@ -3988,7 +5004,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			}
 
 			int need_reconfig = 0;
-			if ((libao_channels != channels)||(libao_sampling_rate != sampling_rate))
+			if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
 			{
 				libao_channels = (int)channels;
 				libao_sampling_rate = (int)sampling_rate;
@@ -4083,9 +5099,35 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 }
 
 
+void update_status_line_on_fb()
+{
+	unsigned char *bf_out_real_fb = framebuffer_mappedmem;
+
+	text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+		var_framebuffer_fix_info.line_length, bf_out_real_fb,
+		10, var_framebuffer_info.yres - 50, status_line_1_str);
+
+	text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+		var_framebuffer_fix_info.line_length, bf_out_real_fb,
+		10, var_framebuffer_info.yres - 30, status_line_2_str);
+
+}
+
+
 void *video_play(void *dummy)
 {
 	sem_wait(&video_play_lock);
+
+#if 0
+	int num = get_video_t_counter();
+
+    char thread_name_str[15];
+	CLEAR(thread_name_str);
+    snprintf(thread_name_str, sizeof(thread_name_str), "v_p_thrd #%d", (int)num);
+	pthread_setname_np(pthread_self(), thread_name_str);
+#else
+	// pthread_setname_np(pthread_self(), "v_p_thrd+");
+#endif
 
 	// make a local copy
 	uint16_t width = video__width;
@@ -4134,17 +5176,18 @@ void *video_play(void *dummy)
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 
+				// dbg(9, "frame_width_px1=%d frame_height_px1=%d vid_width=%d vid_height=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)vid_width ,(int)vid_height);
 
 				int downscale = 0;
 				// check if we need to upscale or downscale
-				if ((frame_width_px1 > vid_width) || (frame_height_px1 > vid_height))
+				if ((frame_width_px1 > (vid_width - 5)) || (frame_height_px1 > (vid_height - 5)))
 				{
-					// downscale to video size
+					// downscale to video size / or leave as is
 					downscale = 1;
 				}
 				else
 				{
-					// upscale to video size / or leave as is
+					// upscale to video size
 				}
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
@@ -4218,6 +5261,8 @@ void *video_play(void *dummy)
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
 
+					dbg(9, "scale image UP   ****\n");
+
 					float ww2_upscale = (float)vid_width / (float)frame_width_px1;
 					float hh2_upscale = (float)vid_height / (float)frame_height_px1;
 					// dbg(9, "video frame scale factor2: ww=%f hh=%f\n", ww2_upscale, hh2_upscale);
@@ -4289,6 +5334,14 @@ void *video_play(void *dummy)
 						bf_out_data = NULL;
 					}
 
+					text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+						var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
+						10, var_framebuffer_info.yres - 50, status_line_1_str);
+					text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+						var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
+						10, var_framebuffer_info.yres - 30, status_line_2_str);
+
+
 					if (bf_out_data_upscaled != NULL)
 					{
 						sem_wait(&video_play_lock);
@@ -4308,6 +5361,7 @@ void *video_play(void *dummy)
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
 
+					// dbg(9, "scale image DOWN ++++\n");
 					memset(bf_out_data, 0, framebuffer_screensize);
 					// dbg(9, "vid_width_needed=%d vid_height_needed=%d\n", (int)vid_width_needed, (int)vid_height_needed);
 
@@ -4378,6 +5432,12 @@ void *video_play(void *dummy)
 						}
 					}
 
+					text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+						var_framebuffer_fix_info.line_length, bf_out_data,
+						10, var_framebuffer_info.yres - 50, status_line_1_str);
+					text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+						var_framebuffer_fix_info.line_length, bf_out_data,
+						10, var_framebuffer_info.yres - 30, status_line_2_str);
 
 					if (bf_out_data != NULL)
 					{
@@ -4414,12 +5474,49 @@ void *video_play(void *dummy)
 }
 
 
+// ---- DEBUG ----
+static struct timeval tm_incoming_video_frames;
+int first_incoming_video_frame = 1;
+// ---- DEBUG ----
+
+
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+
+	// ---- DEBUG ----
+	if (first_incoming_video_frame == 0)
+	{
+		unsigned long long timspan_in_ms = 99999;
+		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
+
+		if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
+		{
+			global_video_in_fps = (int)(1000 / timspan_in_ms);
+		}
+		else
+		{
+			global_video_in_fps = 0;
+		}
+
+		update_fps_counter++;
+		if (update_fps_counter > update_fps_every)
+		{
+			update_fps_counter = 0;
+			update_status_line_1_text();
+		}
+	}
+	else
+	{
+		first_incoming_video_frame = 0;
+	}
+	__utimer_start(&tm_incoming_video_frames);
+	// ---- DEBUG ----
+
+
 
 #ifdef HAVE_FRAMEBUFFER
 
@@ -4469,6 +5566,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 						{
 							dbg(0, "error detaching video play thread\n");
 						}
+						// zzzzzz
+						yieldcpu(1);
 					}
 				}
 				else
@@ -4531,12 +5630,82 @@ void fb_fill_xxx()
 
 
 
+void *video_record(void *dummy)
+{
+	TOXAV_ERR_SEND_FRAME error = 0;
+
+	toxcam_av_video_frame *av_video_frame_copy = (toxcam_av_video_frame *)dummy;
+
+	toxav_video_send_frame(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
+		   av_video_frame_copy->y, av_video_frame_copy->u, av_video_frame_copy->v, &error);
+
+	free(av_video_frame_copy->y);
+	// free(av_video_frame_copy->u); // --> all in one buffer!!
+	// free(av_video_frame_copy->v); // --> all in one buffer!!
+
+	if (error)
+	{
+		if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+		{
+			//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
+			//			 av_video_frame.h);
+			dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
+		}
+		else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
+		{
+			//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
+			//	i, friend[i].call_state_self, friend[i].call_state_friend);
+			dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+		}
+		else
+		{
+			//debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
+			//			friend[i].number, error);
+			dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
+
+			// *TODO* if these keep piling up --> just disconnect the call!!
+			// *TODO* if these keep piling up --> just disconnect the call!!
+			// *TODO* if these keep piling up --> just disconnect the call!!
+		}
+	}
+
+	dec_video_trec_counter();
+}
+
+
+
+// ---- DEBUG ----
+static struct timeval tm_outgoing_video_frames;
+int first_outgoing_video_frame = 1;
+// ---- DEBUG ----
+
+
 void *thread_av(void *data)
 {
 	ToxAV *av = (ToxAV *) data;
 
 	pthread_t id = pthread_self();
 	pthread_mutex_t av_thread_lock;
+
+#if 1
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: video iterate thread");
+	get_policy('o', &policy);
+	param.sched_priority = strtol("0", NULL, 0);
+	// ****** // s = pthread_setschedparam(pthread_self(), policy, &param);
+	// if (s != 0)
+	// {
+	// 	dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of video iterate thread\n");
+	// }
+	// else
+	{
+	}
+	display_thread_sched_attr("Scheduler attributes of [3]: video iterate thread");
+	// ------ thread priority ------
+#endif
 
 	if (pthread_mutex_init(&av_thread_lock, NULL) != 0)
 	{
@@ -4682,14 +5851,13 @@ void *thread_av(void *data)
 	{
 		if (global_video_active == 1)
 		{
-			pthread_mutex_lock(&av_thread_lock);
+			// pthread_mutex_lock(&av_thread_lock);
 
 
 
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
-
 
 
 
@@ -4720,13 +5888,74 @@ void *thread_av(void *data)
 					free(date_time_str);
 				}
 
-
-				blinking_dot_on_frame_xy(20, 30, &global_blink_state);
+				blinking_dot_on_frame_xy(10, 30, &global_blink_state);
 
 				if (friend_to_send_video_to != -1)
 				{
 					// dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
 
+
+					// ---- DEBUG ----
+					unsigned long long timspan_in_ms = 99999;
+					if (first_outgoing_video_frame == 0)
+					{
+						timspan_in_ms = __utimer_stop(&tm_outgoing_video_frames, "sending video frame every:", 1);
+						if (timspan_in_ms > DEFAULT_FPS_SLEEP_MS)
+						{
+							default_fps_sleep_corrected = (int)((long)DEFAULT_FPS_SLEEP_MS - ((long)timspan_in_ms - (long)DEFAULT_FPS_SLEEP_MS));
+							if (default_fps_sleep_corrected < 0)
+							{
+								// dbg(9, "sending video frame: sleep 0ms\n");
+								default_fps_sleep_corrected = 0;
+							}
+						}
+						else
+						{
+							default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
+							// dbg(9, "sending video frame: sleep %d ms\n", (int)default_fps_sleep_corrected);
+						}
+					}
+					else
+					{
+						first_outgoing_video_frame = 0;
+					}
+					__utimer_start(&tm_outgoing_video_frames);
+					// ---- DEBUG ----
+
+
+					if (global_show_fps_on_video == 1)
+					{
+						if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
+						{
+							char fps_str[1000];
+							CLEAR(fps_str);
+							snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(1000 / timspan_in_ms));
+							text_on_yuf_frame_xy(50, 30, fps_str);
+						}
+						else
+						{
+							text_on_yuf_frame_xy(50, 30, "fps: --");
+						}
+					}
+
+					if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
+					{
+						global_video_out_fps = (int)(1000 / timspan_in_ms);
+					}
+					else
+					{
+						global_video_out_fps = 0;
+					}
+
+					update_fps_counter++;
+					if (update_fps_counter > update_fps_every)
+					{
+						update_fps_counter = 0;
+						update_status_line_1_text();
+					}
+
+
+#if 1
 					TOXAV_ERR_SEND_FRAME error = 0;
 					toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
 						   av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
@@ -4756,6 +5985,61 @@ void *thread_av(void *data)
 							// *TODO* if these keep piling up --> just disconnect the call!!
 						}
 					}
+#else
+
+				// ---------------------------------------
+				// TODO: threading here crashes :-(
+				//       check me
+				// ---------------------------------------
+
+				pthread_t video_record_thread;
+
+				if (get_video_trec_counter() <= MAX_VIDEO_RECORD_THREADS)
+				{
+
+					toxcam_av_video_frame av_video_frame_copy;
+					size_t video_frame_size_bytes = (size_t)((av_video_frame.w * av_video_frame.h) * (3 / 2)); // TODO: stride!!!
+
+					av_video_frame_copy.y = (uint8_t *)calloc(1, video_frame_size_bytes);
+					av_video_frame_copy.u = (uint8_t *)(av_video_frame_copy.y + (av_video_frame.w * av_video_frame.h));
+					av_video_frame_copy.v = (uint8_t *)(av_video_frame_copy.u + ((av_video_frame.w * av_video_frame.h) / 4));
+					av_video_frame_copy.w = av_video_frame.w;
+					av_video_frame_copy.h = av_video_frame.h;
+					memcpy(av_video_frame_copy.y, av_video_frame.y, video_frame_size_bytes);
+
+					inc_video_trec_counter();
+					if (pthread_create(&video_record_thread, NULL, video_record, (void *)&av_video_frame_copy))
+					{
+						free(av_video_frame_copy.y);
+						// free(av_video_frame_copy.u); // --> all in one buffer!!
+						// free(av_video_frame_copy.v); // --> all in one buffer!!
+
+						dec_video_trec_counter();
+						dbg(0, "error creating video record thread\n");
+					}
+					else
+					{
+						dbg(0, "creating video record thread #%d\n", get_video_t_counter());
+						if (pthread_detach(video_record_thread))
+						{
+							dbg(0, "error detaching video record thread\n");
+						}
+						// zzzzzz
+						yieldcpu(1);
+					}
+				}
+				else
+				{
+					dbg(1, "more than %d video record threads already\n", (int)MAX_VIDEO_RECORD_THREADS);
+				}
+
+				// ---------------------------------------
+				// TODO: threading here crashes :-(
+				//       check me
+				// ---------------------------------------
+
+#endif
+
 				}
 
             }
@@ -4768,9 +6052,9 @@ void *thread_av(void *data)
 				// dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
             }
 
-            pthread_mutex_unlock(&av_thread_lock);
-			// yieldcpu(1000); // 1 frame every 1 seconds!!
-            yieldcpu(DEFAULT_FPS_SLEEP_MS); /* ~4 frames per second */
+            // pthread_mutex_unlock(&av_thread_lock);
+
+            yieldcpu(default_fps_sleep_corrected); /* ~25 frames per second */
             // yieldcpu(80); /* ~12 frames per second */
             // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
 
@@ -4815,11 +6099,31 @@ void *thread_video_av(void *data)
 
 	dbg(2, "AV video Thread #%d: starting\n", (int) id);
 
+#if 1
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: video thread");
+	get_policy('o', &policy);
+	param.sched_priority = strtol("0", NULL, 0);
+	s = pthread_setschedparam(pthread_self(), policy, &param);
+	if (s != 0)
+	{
+		dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of video thread\n");
+	}
+	else
+	{
+	}
+	display_thread_sched_attr("Scheduler attributes of [3]: video thread");
+	// ------ thread priority ------
+#endif
+
 	while (toxav_video_thread_stop != 1)
 	{
 		// pthread_mutex_lock(&av_thread_lock);
 		toxav_iterate(av);
-		// dbg(9, "AV video Thread #%d running ...", (int) id);
+		// dbg(9, "AV video Thread #%d running ...\n", (int) id);
 		// pthread_mutex_unlock(&av_thread_lock);
 		usleep(toxav_iteration_interval(av) * 1000);
 	}
@@ -4841,6 +6145,9 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	TOXAV_ERR_CALL_CONTROL error = 0;
 	toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
 	global_video_active = 0;
+
+	dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
+
 	global_send_first_frame = 0;
 	friend_to_send_video_to = -1;
 
@@ -5118,6 +6425,121 @@ void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t
 	*v = RGB2V(r, g, b);
 }
 
+
+
+void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int px_x, int px_y, uint8_t r, uint8_t g, uint8_t b)
+{
+	uint8_t *plane = fb_buf;
+    plane = plane + (px_x * 4) + (px_y * fb_line_bytes);
+	*plane = b; // b
+	plane++;
+	*plane = g; // g
+	plane++;
+	*plane = r; // r
+	plane++;
+	*plane = 0; // a
+	// plane++;
+
+	// size_t location = px_x * 4 + px_y * fb_line_bytes;
+	// fb_buf[location] = b;
+	// fb_buf[(location + 1)] = g;
+	// fb_buf[(location + 2)] = r;
+	// fb_buf[(location + 3)] = 0; // a,  No transparency
+}
+
+
+void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b)
+{
+	int k;
+	int j;
+
+	for (k=0;k<bar_h_pix;k++)
+	{
+		for (j=0;j<bar_w_pix;j++)
+		{
+			set_color_in_bgra_frame_xy(fb_xres, fb_yres, fb_line_bytes, fb_buf,
+				(bar_start_x_pix + j), (bar_start_y_pix + k), r, g, b);
+		}
+	}
+}
+
+
+void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf,
+int start_x_pix, int start_y_pix, int font_char_num, uint8_t r, uint8_t g, uint8_t b)
+{
+	int font_w = 8;
+	int font_h = 8;
+
+	uint8_t *plane = fb_buf;
+	char *bitmap = font8x8_basic[font_char_num];
+
+	int k;
+	int j;
+	int offset = 0;
+	int set = 0;
+
+	for (k=0;k<font_h;k++)
+	{
+		plane = fb_buf + ((start_y_pix + k) * fb_line_bytes);
+		plane = plane + start_x_pix * 4; // 4 bytes per pixel
+		for (j=0;j<font_w;j++)
+		{
+			set = bitmap[k] & 1 << j;
+			if (set)
+			{
+				*plane = b; // b
+				plane++;
+				*plane = g; // g
+				plane++;
+				*plane = r; // r
+				plane++;
+				*plane = 0; // a
+				plane++;
+			}
+			else
+			{
+				plane = plane + 4;
+			}
+		}
+	}
+
+}
+
+
+void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix, int start_y_pix, const char* text)
+{
+	int carriage = 0;
+	const int letter_width = 8;
+	const int letter_spacing = 1;
+
+	int block_needed_width = 2 + 2 + (strlen(text) * (letter_width + letter_spacing));
+	left_top_bar_into_bgra_frame(fb_xres, fb_yres, fb_line_bytes, fb_buf, start_x_pix, start_y_pix, block_needed_width, 12, 255, 255, 255);
+
+	int looper;
+
+	for(looper=0;(int)looper < (int)strlen(text);looper++)
+	{
+		uint8_t c = text[looper];
+		if ((c > 0) && (c < 127))
+		{
+			print_font_char_rgba(fb_xres, fb_yres, fb_line_bytes, fb_buf,
+				(2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+				2 + start_y_pix,
+				c, 0, 0, 0);
+		}
+		else
+		{
+			// leave a blank
+		}
+		carriage++;
+	}
+}
+
+
+
+
+
+
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text)
 {
 	int carriage = 0;
@@ -5134,7 +6556,7 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text)
 		uint8_t c = text[looper];
 		if ((c > 0) && (c < 127))
 		{
-			print_font_char((12 + ((letter_width + letter_spacing) * carriage)), 12, c, 0);
+			print_font_char((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)), 2 + start_y_pix, c, 0);
 		}
 		else
 		{
@@ -5178,36 +6600,55 @@ void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int b
 
 
 
-// ------------------ alsa recording ------------------
-// ------------------ alsa recording ------------------
-// ------------------ alsa recording ------------------
-
-#ifdef HAVE_SOUND
-
-
-short audio_buf[128];
-snd_pcm_t *audio_capture_handle;
-// const char *audio_device = "plughw:0,0";
-// const char *audio_device = "hw:CARD=U0x46d0x991,DEV=0";
-const char *audio_device = "default";
-// sysdefault:CARD
-
-void record_from_sound_device()
+static int get_policy(char p, int *policy)
 {
-	int i;
-	int err;
-	for (i = 0; i < 10; ++i)
-	{
-		if ((err = snd_pcm_readi(audio_capture_handle, audio_buf, 128)) != 128)
-		{
-			dbg(9, "read from audio interface failed (%s)\n", snd_strerror (err));
-		}
-	}
+   switch (p) {
+   case 'f': *policy = SCHED_FIFO;     return 1;
+   case 'r': *policy = SCHED_RR;       return 1;
+   case 'b': *policy = SCHED_BATCH;    return 1;
+   case 'o': *policy = SCHED_OTHER;    return 1;
+   default:  return 0;
+   }
 }
+
+static void display_sched_attr(char *msg, int policy, struct sched_param *param)
+{
+   dbg(9, "%s:policy=%s, priority=%d\n", msg,
+		   (policy == SCHED_FIFO)  ? "SCHED_FIFO" :
+		   (policy == SCHED_RR)    ? "SCHED_RR" :
+		   (policy == SCHED_BATCH) ? "SCHED_BATCH" :
+		   (policy == SCHED_OTHER) ? "SCHED_OTHER" :
+		   "???",
+		   param->sched_priority);
+}
+
+static void display_thread_sched_attr(char *msg)
+{
+	int policy, s;
+	struct sched_param param;
+
+	s = pthread_getschedparam(pthread_self(), &policy, &param);
+	if (s != 0)
+	{
+		dbg(0, "error in display_thread_sched_attr\n");
+	}
+
+	display_sched_attr(msg, policy, &param);
+}
+
+
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+// ------------------ alsa recording ------------------
+
+#ifdef HAVE_ALSA_REC
 
 void close_sound_device()
 {
-	snd_pcm_close(audio_capture_handle);
+	if (have_input_sound_device == 1)
+	{
+		snd_pcm_close(audio_capture_handle);
+	}
 }
 
 void init_sound_device()
@@ -5216,56 +6657,61 @@ void init_sound_device()
 		int err;
 		snd_pcm_hw_params_t *hw_params;
 
-		if ((err = snd_pcm_open (&audio_capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-			dbg(9, "cannot open audio device %s (%s)\n",
+		have_input_sound_device = 1;
+
+		// open in blocking mode for recording !!
+		if ((err = snd_pcm_open(&audio_capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
+			dbg(9, "record_device:cannot open audio device %s (%s)\n",
 				 audio_device,
 				 snd_strerror (err));
 			//exit (1);
+			have_input_sound_device = 0;
+			return;
 		}
 
 		if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-			dbg(9, "cannot allocate hardware parameter structure (%s)\n",
+			dbg(9, "record_device:cannot allocate hardware parameter structure (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
 		if ((err = snd_pcm_hw_params_any (audio_capture_handle, hw_params)) < 0) {
-			dbg(9, "cannot initialize hardware parameter structure (%s)\n",
+			dbg(9, "record_device:cannot initialize hardware parameter structure (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
 		if ((err = snd_pcm_hw_params_set_access (audio_capture_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			dbg(9, "cannot set access type (%s)\n",
+			dbg(9, "record_device:cannot set access type (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
 		if ((err = snd_pcm_hw_params_set_format (audio_capture_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-			dbg(9, "cannot set sample format (%s)\n",
+			dbg(9, "record_device:cannot set sample format (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
-		unsigned int actualRate = 44100;
-		dbg(9, "sound: wanted audio rate:%d\n", actualRate);
+		unsigned int actualRate = DEFAULT_AUDIO_CAPTURE_SAMPLERATE;
+		dbg(9, "record_device:sound: wanted audio rate:%d\n", actualRate);
 		if ((err = snd_pcm_hw_params_set_rate_near (audio_capture_handle, hw_params, &actualRate, 0)) < 0) {
-			dbg(9, "cannot set sample rate (%s)\n",
+			dbg(9, "record_device:cannot set sample rate (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
-		dbg(9, "sound: got audio rate:%d\n", actualRate);
+		dbg(9, "record_device:sound: got audio rate:%d\n", actualRate);
 
 		// 1 -> mono, 2 -> stereo
-		if ((err = snd_pcm_hw_params_set_channels (audio_capture_handle, hw_params, 1)) < 0) {
-			dbg(9, "cannot set channel count (%s)\n",
+		if ((err = snd_pcm_hw_params_set_channels (audio_capture_handle, hw_params, DEFAULT_AUDIO_CAPTURE_CHANNELS)) < 0) {
+			dbg(9, "record_device:cannot set channel count (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
 
 		if ((err = snd_pcm_hw_params (audio_capture_handle, hw_params)) < 0) {
-			dbg(9, "cannot set parameters (%s)\n",
+			dbg(9, "record_device:cannot set parameters (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
@@ -5273,10 +6719,174 @@ void init_sound_device()
 		snd_pcm_hw_params_free (hw_params);
 
 		if ((err = snd_pcm_prepare (audio_capture_handle)) < 0) {
-			dbg(9, "cannot prepare audio interface for use (%s)\n",
+			dbg(9, "record_device:cannot prepare audio interface for use (%s)\n",
 				 snd_strerror (err));
 			//exit (1);
 		}
+}
+
+void inc_audio_record_t_counter()
+{
+	sem_wait(&count_audio_record_threads);
+	count_audio_record_threads_int++;
+	sem_post(&count_audio_record_threads);
+}
+
+void dec_audio_record_t_counter()
+{
+	sem_wait(&count_audio_record_threads);
+	count_audio_record_threads_int--;
+	if (count_audio_record_threads_int < 0)
+	{
+		count_audio_record_threads_int = 0;
+	}
+	sem_post(&count_audio_record_threads);
+}
+
+int get_audio_record_t_counter()
+{
+	sem_wait(&count_audio_record_threads);
+	int ret = count_audio_record_threads_int;
+	sem_post(&count_audio_record_threads);
+	return ret;
+}
+
+// r -u /dev/fb0 -j 640 -k 480
+void *audio_record__(void *buf_pointer)
+{
+	if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
+	{
+#if 1
+		// make a local copy
+		int16_t *audio_buf_orig = (int16_t *)buf_pointer;
+		size_t audio_record_bytes_ = AUDIO_RECORD_BUFFER_BYTES;
+		// int16_t *audio_buf_ = (int16_t *)malloc(audio_record_bytes_);
+		if (audio_buf_orig)
+		{
+			// memcpy(audio_buf_, audio_buf_orig, audio_record_bytes_);
+			size_t sample_count = (size_t)((audio_record_bytes_ / 2) / DEFAULT_AUDIO_CAPTURE_CHANNELS);
+
+			TOXAV_ERR_SEND_FRAME error;
+			bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig, sample_count,
+				(uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+			// dbg(9, "audio_record:006 TOXAV_ERR_SEND_FRAME=%d res=%d\n", (int)error, (int)res);
+
+			free(audio_buf_orig);
+		}
+#endif
+	}
+
+	dec_audio_record_t_counter();
+	pthread_exit(0);
+}
+
+
+void *thread_record_alsa_audio(void *data)
+{
+	int i;
+	int err;
+	do_audio_recording = 1;
+	// ToxAV *av = (ToxAV *) data;
+
+	init_sound_device();
+
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: thread_record_alsa_audio");
+	get_policy('r', &policy);
+#if 0
+	param.sched_priority = strtol("2", NULL, 0);
+	s = pthread_setschedparam(pthread_self(), policy, &param);
+	if (s != 0)
+	{
+		dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of thread_record_alsa_audio\n");
+	}
+	else
+	{
+	}
+	display_thread_sched_attr("Scheduler attributes of [3]: thread_record_alsa_audio");
+#endif
+	// ------ thread priority ------
+
+	while ((do_audio_recording == 1) && (have_input_sound_device == 1))
+	{
+#if 1
+		if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
+		{
+
+			if (have_input_sound_device == 1)
+			{
+				snd_pcm_reset(audio_capture_handle);
+
+				int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
+				if ((err = snd_pcm_readi(audio_capture_handle, audio_buf_l, AUDIO_RECORD_BUFFER_FRAMES)) != AUDIO_RECORD_BUFFER_FRAMES)
+				{
+					dbg(1, "record_device:read from audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+					free(audio_buf_l);
+
+					if ((int)err == -11) // -> Resource temporarily unavailable
+					{
+						dbg(0, "play_device:yield a bit (2)\n");
+						// zzzzzz
+						yieldcpu(1);
+					}
+
+					close_sound_device();
+					dbg(9, "record_device:close_sound_device\n");
+					// zzzzzz
+					yieldcpu(20);
+					init_sound_device();
+				}
+				else
+				{
+					// dbg(1, "read from audio interface OK (frames=%d)\n", (int)err);
+
+					pthread_t audio_record_thread__;
+					if (get_audio_record_t_counter() <= MAX_ALSA_RECORD_THREADS)
+					{
+						inc_audio_record_t_counter();
+						if (pthread_create(&audio_record_thread__, NULL, audio_record__, (void *)audio_buf_l))
+						{
+							dec_audio_record_t_counter();
+							dbg(0, "error creating audio record thread\n");
+
+							free(audio_buf_l);
+						}
+						else
+						{
+							// int pthread_setschedparam(audio_record_thread__, int policy, const struct sched_param *param);
+
+							// pthread_setname_np(audio_record_thread__, "audio_rec_thd__");
+
+							//dbg(0, "creating audio play thread #%d\n", get_audio_t_counter());
+							if (pthread_detach(audio_record_thread__))
+							{
+								dbg(0, "error detaching audio record thread\n");
+							}
+						}
+					}
+					else
+					{
+						dbg(1, "more than %d audio record threads already\n", (int)MAX_ALSA_RECORD_THREADS);
+
+						free(audio_buf_l);
+					}
+				}
+			}
+		}
+		else
+		{
+#endif
+			// sleep 0.5 seconds
+			yieldcpu(500);
+#if 1
+		}
+#endif
+	}
+
+	close_sound_device();
 }
 
 #endif
@@ -5284,6 +6894,424 @@ void init_sound_device()
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
+
+
+void call_entry_num(Tox *tox, int entry_num)
+{
+	if (accepting_calls == 1)
+	{
+		uint8_t *caller_toxid_bin = NULL;
+		read_pubkey_from_file(&caller_toxid_bin, entry_num);
+
+		if (caller_toxid_bin != NULL)
+		{
+			int64_t entry_num_friendnum = friend_number_for_entry(tox, caller_toxid_bin);
+
+			if (entry_num_friendnum != -1)
+			{
+				if (accepting_calls == 1)
+				{
+					cmd_vcm(tox, entry_num_friendnum);
+				}
+			}
+
+			free(caller_toxid_bin);
+		}
+	}
+}
+
+void toggle_speaker()
+{
+#ifdef HAVE_ALSA_PLAY
+
+	if (speaker_out_num == 0)
+	{
+		speaker_out_num = 1;
+	}
+	else
+	{
+		speaker_out_num = 0;
+	}
+
+	dbg(9, "toggle_speaker:speaker_out_num=%d\n", speaker_out_num);
+
+	sem_wait(&audio_play_lock);
+	close_sound_play_device();
+
+	// -- toggle alsa config with sudo command --
+    char cmd_001[1000];
+	CLEAR(cmd_001);
+    snprintf(cmd_001, sizeof(cmd_001), "sudo ./toggle_alsa.sh %d", (int)speaker_out_num);
+	dbg(9, "toggle_speaker:cmd=%s\n", cmd_001);
+	if (system(cmd_001));
+	// -- toggle alsa config with sudo command --
+
+	yieldcpu(1000); // wait 1 second !!
+
+	init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
+	sem_post(&audio_play_lock);
+
+	update_status_line_2_text();
+	update_status_line_on_fb();
+
+#endif
+}
+
+void toggle_quality()
+{
+	int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
+
+	if (global_video_bit_rate == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
+	{
+		vbr_new = DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY;
+		dbg(2, "toggle_quality: HIGH\n");
+		global__VP8E_SET_CPUUSED_VALUE = 10;
+		global__VPX_END_USAGE = 3;
+	}
+	else
+	{
+		vbr_new = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY;
+		dbg(2, "toggle_quality: normal\n");
+		global__VP8E_SET_CPUUSED_VALUE = 16;
+		global__VPX_END_USAGE = 2;
+	}
+
+	DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
+	global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+
+	update_status_line_1_text();
+	update_status_line_on_fb();
+
+	if (mytox_av != NULL)
+	{
+		if (friend_to_send_video_to > -1)
+		{
+			toxav_bit_rate_set(mytox_av, friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+		}
+	}
+}
+
+
+void *thread_phonebook_invite(void *data)
+{
+	Tox *tox = (Tox *)data;
+	int j;
+
+	do_phonebook_invite = 1;
+
+	while (do_phonebook_invite == 1)
+	{
+		for(j=0;j<10;j++)
+		{
+			uint8_t *entry_bin_toxid = NULL;
+			read_pubkey_from_file(&entry_bin_toxid, j);
+
+			if (entry_bin_toxid != NULL)
+			{
+				int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+				if (is_already_friendnum == -1)
+				{
+					invite_toxid_as_friend(tox, entry_bin_toxid);
+				}
+			}
+
+			yieldcpu(30);
+		}
+
+		yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
+	}
+}
+
+#ifdef HAVE_EXTERNAL_KEYS
+
+void *thread_ext_keys(void *data)
+{
+	char buf[MAX_READ_FIFO_BUF];
+	do_read_ext_keys = 1;
+	int res = 0;
+
+	Tox *tox = (Tox *)data;
+
+	mkfifo(ext_keys_fifo, 0666);
+	ext_keys_fd = open(ext_keys_fifo, O_RDONLY);
+
+	while (do_read_ext_keys == 1)
+	{
+		res = read(ext_keys_fd, buf, MAX_READ_FIFO_BUF);
+		if (res == 0)
+		{
+			// dbg(9, "ExtKeys: reopening FIFO for reading\n");
+			close(ext_keys_fd);
+			mkfifo(ext_keys_fifo, 0666);
+			yieldcpu(50);
+			ext_keys_fd = open(ext_keys_fifo, O_RDONLY);
+		}
+		else
+		{
+			dbg(9, "ExtKeys: received: %s\n", buf);
+
+			if (strncmp((char*)buf, "call:1", strlen((char*)"call:1")) == 0)
+			{
+				dbg(2, "ExtKeys: CALL:1\n");
+				call_entry_num(tox, 1);
+			}
+			else if (strncmp((char*)buf, "call:2", strlen((char*)"call:2")) == 0)
+			{
+				dbg(2, "ExtKeys: CALL:2\n");
+				call_entry_num(tox, 2);
+			}
+			else if (strncmp((char*)buf, "hangup:", strlen((char*)"hangup:")) == 0)
+			{
+				dbg(2, "ExtKeys: HANGUP:\n");
+				disconnect_all_calls(tox);
+			}
+			else if (strncmp((char*)buf, "toggle_quality:", strlen((char*)"toggle_quality:")) == 0)
+			{
+				dbg(2, "ExtKeys: TOGGLE QUALITY:\n");
+				toggle_quality();
+			}
+			else if (strncmp((char*)buf, "toggle_speaker:", strlen((char*)"toggle_speaker:")) == 0)
+			{
+				dbg(2, "ExtKeys: TOGGLE SPEAKER:\n");
+				toggle_speaker();
+			}
+		}
+	}
+
+    close(ext_keys_fd);
+
+}
+
+#endif
+
+
+
+#ifdef HAVE_ALSA_PLAY
+
+void close_sound_play_device()
+{
+	dbg(0, "ALSA:015\n");
+
+	if (have_output_sound_device == 1)
+	{
+		snd_pcm_close(audio_play_handle);
+	}
+
+	dbg(0, "ALSA:016\n");
+
+}
+
+void init_sound_play_device(int channels, int sample_rate)
+{
+		dbg(0, "ALSA:002\n");
+
+		int i;
+		int err;
+		snd_pcm_hw_params_t *hw_params;
+
+		have_output_sound_device = 1;
+
+		// open in blocking mode for playing
+		if ((err = snd_pcm_open(&audio_play_handle, audio_play_device, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
+			dbg(9, "play_device:cannot open audio play device %s (%s)\n",
+				 audio_play_device,
+				 snd_strerror (err));
+			//exit (1);
+			have_output_sound_device = 0;
+			return;
+		}
+
+		dbg(0, "ALSA:003\n");
+
+
+		if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
+			dbg(9, "play_device:cannot allocate hardware parameter structure (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_any (audio_play_handle, hw_params)) < 0) {
+			dbg(9, "play_device:cannot initialize hardware parameter structure (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_set_access (audio_play_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
+			dbg(9, "play_device:cannot set access type (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params_set_format (audio_play_handle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
+			dbg(9, "play_device:cannot set sample format (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		unsigned int actualRate = sample_rate;
+		dbg(9, "play_device:sound: wanted audio rate:%d\n", actualRate);
+		if ((err = snd_pcm_hw_params_set_rate_near (audio_play_handle, hw_params, &actualRate, 0)) < 0) {
+			dbg(9, "play_device:cannot set sample rate (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		dbg(9, "sound: got audio rate:%d\n", actualRate);
+
+		// 1 -> mono, 2 -> stereo
+		if ((err = snd_pcm_hw_params_set_channels (audio_play_handle, hw_params, channels)) < 0) {
+			dbg(9, "play_device:cannot set channel count (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		if ((err = snd_pcm_hw_params (audio_play_handle, hw_params)) < 0) {
+			dbg(9, "play_device:cannot set parameters (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		snd_pcm_hw_params_free(hw_params);
+
+
+
+
+
+		snd_pcm_sw_params_t *swparams;
+		snd_pcm_sw_params_alloca(&swparams);
+
+
+        /* get the current swparams */
+        err = snd_pcm_sw_params_current(audio_play_handle, swparams);
+        if (err < 0) {
+                dbg(9, "play_device:Unable to determine current swparams for playback: %s\n", snd_strerror(err));
+        }
+
+		snd_pcm_uframes_t val;
+
+		err = snd_pcm_sw_params_get_start_threshold(swparams, &val);
+		dbg(9, "play_device:get_start_threshold:%d\n", (int)val);
+		err = snd_pcm_sw_params_get_silence_threshold(swparams, &val);
+		dbg(9, "play_device:get_silence_threshold:%d\n", (int)val);
+
+        /* start the transfer when the buffer is almost full: */
+        /* (buffer_size / avail_min) * avail_min */
+        err = snd_pcm_sw_params_set_start_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)ALSA_AUDIO_PLAY_START_THRESHOLD);
+        if (err < 0)
+		{
+			dbg(9, "play_device:Unable to set start threshold mode for playback: %s\n", snd_strerror(err));
+		}
+
+        err = snd_pcm_sw_params_set_silence_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)ALSA_AUDIO_PLAY_SILENCE_THRESHOLD);
+        if (err < 0)
+		{
+			dbg(9, "play_device:Unable to set silence threshold mode for playback: %s\n", snd_strerror(err));
+		}
+
+		err = snd_pcm_sw_params_get_start_threshold(swparams, &val);
+		dbg(9, "play_device:get_start_threshold (after):%d\n", (int)val);
+		err = snd_pcm_sw_params_get_silence_threshold(swparams, &val);
+		dbg(9, "play_device:get_silence_threshold (after):%d\n", (int)val);
+
+
+        /* write the parameters to the playback device */
+        err = snd_pcm_sw_params(audio_play_handle, swparams);
+        if (err < 0) {
+                dbg(9, "play_device:Unable to set sw params for playback: %s\n", snd_strerror(err));
+        }
+
+		if ((err = snd_pcm_prepare (audio_play_handle)) < 0) {
+			dbg(9, "play_device:cannot prepare audio interface for use (%s)\n",
+				 snd_strerror (err));
+			//exit (1);
+		}
+
+		dbg(0, "ALSA:009\n");
+
+}
+
+
+static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate)
+{
+		// dbg(9, "play_device:stream recovery ...\n");
+
+		// dbg(0, "ALSA:0010\n");
+
+
+        if (err == -EPIPE)
+		{
+				// dbg(9, "play_device:under-run ...\n");
+				/* under-run */
+                err = snd_pcm_prepare(handle);
+                if (err < 0)
+				{
+                        dbg(9, "play_device:underrun!: %s\n", snd_strerror(err));
+						// zzzzzz
+						// yieldcpu(20);
+						close_sound_play_device();
+						// dbg(9, "play_device:close_sound_play_device\n");
+						// zzzzzz
+						// yieldcpu(20);
+						init_sound_play_device(channels, sample_rate);
+						// dbg(9, "play_device:init_sound_play_device\n");
+				}
+                return 0;
+        }
+		else if (err == -ESTRPIPE)
+		{
+				// dbg(9, "play_device:snd_pcm_resume ...\n");
+                while ((err = snd_pcm_resume(handle)) == -EAGAIN)
+				{
+                        sleep(1); /* wait until the suspend flag is released */
+						// dbg(9, "play_device:snd_pcm_resume ... SLEEP\n");
+						// yieldcpu(100);
+						//if ((err = snd_pcm_resume(handle)) == -ENOSYS)
+						//{
+						//	dbg(9, "play_device:ENOSYS\n");
+						//
+						//	err = -1;
+						//	break;
+						//}
+				}
+				// dbg(9, "play_device:snd_pcm_resume ... READY\n");
+
+                if (err < 0)
+				{
+						// dbg(9, "play_device:snd_pcm_prepare\n");
+                        err = snd_pcm_prepare(handle);
+                        if (err < 0)
+						{
+                                dbg(9, "play_device:suspend!: %s\n", snd_strerror(err));
+								// zzzzzz
+								// yieldcpu(20);
+								close_sound_play_device();
+								// dbg(9, "play_device:close_sound_play_device\n");
+								// zzzzzz
+								// yieldcpu(20);
+								init_sound_play_device(channels, sample_rate);
+								// dbg(9, "play_device:init_sound_play_device\n");
+						}
+                }
+
+				dbg(0, "ALSA:011\n");
+
+                return 0;
+        }
+
+		// dbg(9, "play_device:stream recovery ... READY?\n");
+
+		dbg(0, "ALSA:012\n");
+
+        return err;
+}
+
+#endif
+
+
+
+
+
+
 
 
 void sigint_handler(int signo)
@@ -5321,11 +7349,16 @@ int main(int argc, char *argv[])
 	global_video_active = 0;
 	global_send_first_frame = 0;
 
+	global_show_fps_on_video = 0;
+
 	incoming_filetransfers = 0;
+
 
 	// valid audio bitrates: [ bit_rate < 6 || bit_rate > 510 ]
 	global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
 	global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+
+	default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
 
 	video_high = 0;
 
@@ -5450,6 +7483,79 @@ int main(int argc, char *argv[])
       }
   }
 
+
+    CLEAR(status_line_1_str);
+    CLEAR(status_line_2_str);
+	global_video_in_fps = 0;
+	global_video_out_fps = 0;
+
+	// snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", 0, 0, (int)global_video_bit_rate);
+	// snprintf(status_line_2_str, sizeof(status_line_2_str), "A:     OB %d", (int)global_audio_bit_rate);
+	update_status_line_1_text();
+	update_status_line_2_text();
+
+	// -- set priority of process with sudo command --
+#if 0
+	pid_t my_pid = getpid();
+    char cmd_001[1000];
+	CLEAR(cmd_001);
+    snprintf(cmd_001, sizeof(cmd_001), "sudo chrt -f -p 1 %d", (int)my_pid);
+	if (system(cmd_001));
+	dbg(9, "set priority of process with sudo command [no output]:%s\n", cmd_001);
+#endif
+	// -- set priority of process with sudo command --
+
+
+	pthread_setname_np(pthread_self(), "main thread");
+
+
+	dbg(9, "global__MAX_DECODE_TIME_US=%d\n", global__MAX_DECODE_TIME_US); // 0, 1, 1000000  (0 BEST, 1 REALTIME, 1000000 GOOD)
+	/*
+	VPX_DL_REALTIME       (1)
+	deadline parameter analogous to VPx REALTIME mode.
+	VPX_DL_GOOD_QUALITY   (1000000)
+	deadline parameter analogous to VPx GOOD QUALITY mode.
+	VPX_DL_BEST_QUALITY   (0)
+	deadline parameter analogous to VPx BEST QUALITY mode.
+	*/
+
+	dbg(9, "global__VP8E_SET_CPUUSED_VALUE=%d\n", global__VP8E_SET_CPUUSED_VALUE); // -16 .. 16 (-16 hard, 16 fast)
+	dbg(9, "global__VPX_END_USAGE=%d\n", global__VPX_END_USAGE); // 0 .. 3
+	/*
+		0 -> VPX_VBR Variable Bit Rate (VBR) mode
+		1 -> VPX_CBR Constant Bit Rate (CBR) mode
+		2 -> VPX_CQ  Constrained Quality (CQ)  mode
+		3 -> VPX_Q   Constant Quality (Q) mode
+	*/
+
+	global__MAX_DECODE_TIME_US = 1;
+	global__VP8E_SET_CPUUSED_VALUE = 16;
+	global__VPX_END_USAGE = 2;
+	global__VPX_KF_MAX_DIST = 12;
+	global__VPX_G_LAG_IN_FRAMES = 0;
+
+
+	// ------ thread priority ------
+	struct sched_param param;
+	int policy;
+	int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: main thread");
+	get_policy('o', &policy);
+	param.sched_priority = strtol("0", NULL, 0);
+#if 0
+	s = pthread_setschedparam(pthread_self(), policy, &param);
+	if (s != 0)
+	{
+		dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of main thread\n");
+	}
+	else
+	{
+	}
+#endif
+	display_thread_sched_attr("Scheduler attributes of [3]: main thread");
+	// ------ thread priority ------
+
+
 #ifdef HAVE_LIBAO
 	count_audio_play_threads_int = 0;
 
@@ -5464,6 +7570,22 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+#ifdef HAVE_ALSA_PLAY
+	init_sound_play_device(1, 48000);
+	count_audio_play_threads_int = 0;
+
+	if (sem_init(&count_audio_play_threads, 0, 1))
+	{
+		dbg(0, "Error in sem_init for count_audio_play_threads\n");
+	}
+
+	if (sem_init(&audio_play_lock, 0, 1))
+	{
+		dbg(0, "Error in sem_init for audio_play_lock\n");
+	}
+#endif
+
+
 	if (sem_init(&video_play_lock, 0, 1))
 	{
 		dbg(0, "Error in sem_init for video_play_lock\n");
@@ -5475,6 +7597,14 @@ int main(int argc, char *argv[])
 	{
 		dbg(0, "Error in sem_init for count_video_play_threads\n");
 	}
+
+	count_video_record_threads_int = 0;
+
+	if (sem_init(&count_video_record_threads, 0, 1))
+	{
+		dbg(0, "Error in sem_init for count_video_record_threads\n");
+	}
+
 
 	Tox *tox = create_tox();
 	global_start_time = time(NULL);
@@ -5566,7 +7696,7 @@ int main(int argc, char *argv[])
 
 
 	// start toxav thread ------------------------------
-	pthread_t tid[2]; // 0 -> toxav_iterate thread, 1 -> video send thread
+	pthread_t tid[5]; // 0 -> toxav_iterate thread, 1 -> video send thread, 2 -> audio recording thread, 3 -> read keys from pipe, 4 -> invite phonebook entries
 
 	// start toxav thread ------------------------------
 	toxav_iterate_thread_stop = 0;
@@ -5576,6 +7706,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
+		pthread_setname_np(tid[0], "thread_av");
         dbg(2, "AV iterate Thread successfully created\n");
 	}
 
@@ -5586,18 +7717,78 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
+		pthread_setname_np(tid[1], "thread_video_av");
         dbg(2, "AV video Thread successfully created\n");
 	}
 	// start toxav thread ------------------------------
 
-
 	// start audio recoding stuff ----------------------
-#ifdef HAVE_SOUND
-	init_sound_device();
-	record_from_sound_device();
-	close_sound_device();
+#ifdef HAVE_ALSA_REC
+
+	count_audio_record_threads_int = 0;
+
+	if (sem_init(&count_audio_record_threads, 0, 1))
+	{
+		dbg(0, "Error in sem_init for count_audio_record_threads\n");
+	}
+
+    if (pthread_create(&(tid[2]), NULL, thread_record_alsa_audio, (void *)mytox_av) != 0)
+	{
+        dbg(0, "AV Audio Thread create failed\n");
+	}
+	else
+	{
+		pthread_setname_np(tid[2], "t_rec_alsa_audio");
+        dbg(2, "AV Audio Thread successfully created\n");
+	}
+
 #endif
 	// start audio recoding stuff ----------------------
+
+
+#ifdef HAVE_EXTERNAL_KEYS
+    if (pthread_create(&(tid[3]), NULL, thread_ext_keys, (void *)tox) != 0)
+	{
+        dbg(0, "ExtKeys Thread create failed\n");
+	}
+	else
+	{
+		pthread_setname_np(tid[3], "t_ext_keys");
+        dbg(2, "ExtKeys Thread successfully created\n");
+	}
+#endif
+
+    if (pthread_create(&(tid[4]), NULL, thread_phonebook_invite, (void *)tox) != 0)
+	{
+        dbg(0, "Phonebook invite Thread create failed\n");
+	}
+	else
+	{
+		pthread_setname_np(tid[4], "t_pbook");
+        dbg(2, "Phonebook invite successfully created\n");
+	}
+
+
+
+	// ------ thread priority ------
+	yieldcpu(800); // wait for other thread to start up, and set their priority
+	// struct sched_param param;
+	// int policy;
+	// int s;
+	display_thread_sched_attr("Scheduler attributes of [1]: main thread");
+	get_policy('o', &policy);
+	param.sched_priority = strtol("0", NULL, 0);
+	s = pthread_setschedparam(pthread_self(), policy, &param);
+	if (s != 0)
+	{
+		dbg(0, "Scheduler attributes of [2]:error setting scheduling attributes of main thread\n");
+	}
+	else
+	{
+	}
+	display_thread_sched_attr("Scheduler attributes of [3]: main thread");
+	// ------ thread priority ------
+
 
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
@@ -5624,13 +7815,20 @@ int main(int argc, char *argv[])
 					global_qrcode_was_updated = 0;
 					delete_qrcode_generate_touchfile();
 					// fb_fill_black();
-					show_tox_id_qrcode();
+					if (global_video_active == 0)
+					{
+						show_tox_id_qrcode();
+					}
 				}
 			}
 
 		}
     }
 
+#ifdef HAVE_ALSA_REC
+	do_audio_recording = 0;
+	yieldcpu(800);
+#endif
 
     kill_all_file_transfers(tox);
     close_cam();
@@ -5640,8 +7838,26 @@ int main(int argc, char *argv[])
 #ifdef HAVE_LIBAO
 	sem_destroy(&count_audio_play_threads);
 	sem_destroy(&audio_play_lock);
-	sem_destroy(&count_video_play_threads);
-	sem_destroy(&video_play_lock);
+#endif
+
+sem_destroy(&count_video_play_threads);
+sem_destroy(&video_play_lock);
+
+#ifdef HAVE_ALSA_PLAY
+	close_sound_play_device();
+	sem_destroy(&count_audio_play_threads);
+	sem_destroy(&audio_play_lock);
+#endif
+
+#ifdef HAVE_ALSA_REC
+	sem_destroy(&count_audio_record_threads);
+#endif
+
+	do_phonebook_invite = 0;
+
+#ifdef HAVE_EXTERNAL_KEYS
+	do_read_ext_keys = 0;
+	yieldcpu(10);
 #endif
 
 
