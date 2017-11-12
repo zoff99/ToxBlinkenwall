@@ -62,6 +62,7 @@ while [ 1 == 1 ]; do
 	sleep 2
 	# ---- only for RASPI ----
 	if [ "$IS_ON""x" == "RASPI""x" ]; then
+	    :
 	fi
 	# ---- only for RASPI ----
 done
