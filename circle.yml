@@ -20,6 +20,7 @@ machine:
     RASPI_PKGSDIR: "/home/ubuntu/pkgs/"
 ## ----------- RASPI cross compile ----------------
     # ---------------------------------------------------
+    # v0.1.10 on the fly tweaks                07f32b34a61f982784a87c33068b62dd0a28ddce
     # v0.1.10 AV: lossy -> lossless            141764d32d081f919aab0577e2cdfc743f22a39c
     # v0.1.10 more vpx tweaks                  eab6e81ec9ed5b88aa712093ea53c802ff81d611
     # v0.1.10 more tweaks                      b308141c972eb05a18ab27672f5dc0b6152d189c
@@ -38,7 +39,7 @@ machine:
     # c-toxcore v0.1.2 a096c71db867ac83fc3e01e0fbe98573d20f9286
     # ---------------------------------------------------
     # c-toxcore version used
-    CTOXCORE_VERSION_HASH: b07a8df97f89a3f501211cdfe799db132f28c6a8
+    CTOXCORE_VERSION_HASH: 07f32b34a61f982784a87c33068b62dd0a28ddce
     # c-toxcore repo used
     # CTOXCORE_URL: "https://github.com/TokTok/c-toxcore"
     CTOXCORE_URL: "https://github.com/zoff99/c-toxcore"
