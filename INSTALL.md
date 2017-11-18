@@ -128,3 +128,21 @@ xserver-command=X -s 0 dpms
 # now save and reboot the pi!
 ```
 
+
+# overclock settings
+
+```
+arm_freq=1350
+over_voltage=5
+temp_limit=79
+
+gpu_mem=400
+core_freq=500
+gpu_freq=450
+
+sdram_freq=450
+sdram_schmoo=0x02000020
+over_voltage_sdram_p=6
+over_voltage_sdram_i=4
+over_voltage_sdram_c=4
+```
