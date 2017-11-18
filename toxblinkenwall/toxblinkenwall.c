@@ -594,6 +594,7 @@ char status_line_1_str[200];
 char status_line_2_str[200];
 uint32_t global_video_in_fps;
 uint32_t global_video_out_fps;
+char *global_upscaling_str = "";
 int update_fps_every = 20;
 int update_fps_counter = 0;
 const char *speaker_out_name_0 = "TV ";
@@ -2759,13 +2760,13 @@ void disconnect_all_calls(Tox *tox)
 
 void update_status_line_1_text()
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d %s", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate, global_upscaling_str);
 	// dbg(9, "update_status_line_1_text:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
 }
 
 void update_status_line_1_text_arg(int vbr_)
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", (int)global_video_in_fps, (int)global_video_out_fps, vbr_);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d %s", (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str);
 }
 
 void update_status_line_2_text()
@@ -5184,10 +5185,12 @@ void *video_play(void *dummy)
 				{
 					// downscale to video size / or leave as is
 					downscale = 1;
+					global_upscaling_str = "";
 				}
 				else
 				{
 					// upscale to video size
+					global_upscaling_str = "*";
 				}
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
@@ -5261,7 +5264,7 @@ void *video_play(void *dummy)
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
 
-					dbg(9, "scale image UP   ****\n");
+					// dbg(9, "scale image UP   ****\n");
 
 					float ww2_upscale = (float)vid_width / (float)frame_width_px1;
 					float hh2_upscale = (float)vid_height / (float)frame_height_px1;
@@ -7488,6 +7491,7 @@ int main(int argc, char *argv[])
     CLEAR(status_line_2_str);
 	global_video_in_fps = 0;
 	global_video_out_fps = 0;
+	global_upscaling_str = "";
 
 	// snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", 0, 0, (int)global_video_bit_rate);
 	// snprintf(status_line_2_str, sizeof(status_line_2_str), "A:     OB %d", (int)global_audio_bit_rate);
