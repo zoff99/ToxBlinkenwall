@@ -39,6 +39,7 @@ trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 chmod u+x scripts/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/ext_keys.py
+chmod a+x udev2.sh udev.sh toggle_alsa.sh
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh
