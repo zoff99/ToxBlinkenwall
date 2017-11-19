@@ -2954,11 +2954,11 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                         if (global__VPX_DECODER_USED == 0)
                         {
-                            global_decoder_string = "VP8";
+                            global_decoder_string = " VP8";
                         }
                         else
                         {
-                            global_decoder_string = "VP9";
+                            global_decoder_string = " VP9";
                         }
 
 						update_status_line_1_text();
@@ -5233,7 +5233,7 @@ void *video_play(void *dummy)
 				else
 				{
 					// upscale to video size
-					global_upscaling_str = " *";
+					global_upscaling_str = " U";
 				}
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
@@ -7535,7 +7535,7 @@ int main(int argc, char *argv[])
 	global_video_in_fps = 0;
 	global_video_out_fps = 0;
 	global_upscaling_str = "";
-    global_decoder_string = "";
+    global_decoder_string = " VP8";
 
 	// snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", 0, 0, (int)global_video_bit_rate);
 	// snprintf(status_line_2_str, sizeof(status_line_2_str), "A:     OB %d", (int)global_audio_bit_rate);
