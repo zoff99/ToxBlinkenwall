@@ -5548,6 +5548,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 			global_video_in_fps = 0;
 		}
 
+        if (global__VPX_DECODER_USED == 0)
+        {
+            global_decoder_string = " VP8";
+        }
+        else
+        {
+            global_decoder_string = " VP9";
+        }
+
 		update_fps_counter++;
 		if (update_fps_counter > update_fps_every)
 		{
