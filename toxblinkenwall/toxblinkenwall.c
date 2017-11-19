@@ -5539,9 +5539,10 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 		unsigned long long timspan_in_ms = 99999;
 		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
 
-		if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
+		if ((timspan_in_ms > 1) && (timspan_in_ms < 99999))
 		{
 			global_video_in_fps = (int)(1000 / timspan_in_ms);
+            dbg(9, "timspan_in_ms=%d global_video_in_fps=%d\n", (int)timspan_in_ms, (int)global_video_in_fps);
 		}
 		else
 		{
