@@ -140,6 +140,11 @@ extern int global__VP8E_SET_CPUUSED_VALUE;
 extern int global__VPX_END_USAGE;
 extern int global__VPX_KF_MAX_DIST;
 extern int global__VPX_G_LAG_IN_FRAMES;
+
+extern int global__VPX_ENCODER_USED; // 0 -> VP8, 1 -> VP9
+extern int global__VPX_DECODER_USED; // 0 -> VP8, 1 -> VP9
+extern int global__SEND_VIDEO_LOSSLESS; // 0 -> NO, 1 -> YES
+extern int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY; // 0 -> NO, 1 -> YES
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -181,8 +186,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 16
-static const char global_version_string[] = "0.99.16";
+#define VERSION_PATCH 17
+static const char global_version_string[] = "0.99.17";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -595,6 +600,7 @@ char status_line_2_str[200];
 uint32_t global_video_in_fps;
 uint32_t global_video_out_fps;
 char *global_upscaling_str = "";
+char *global_decoder_string = "";
 int update_fps_every = 20;
 int update_fps_counter = 0;
 const char *speaker_out_name_0 = "TV ";
@@ -2580,6 +2586,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
     send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
+    send_text_message_to_friend(tox, friend_number, " .vpxdec <num>       --> set VPX Decoder");
     send_text_message_to_friend(tox, friend_number, " .fps <delay ms>     --> set delay in ms between sent frames");
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
@@ -2760,13 +2767,13 @@ void disconnect_all_calls(Tox *tox)
 
 void update_status_line_1_text()
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d %s", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate, global_upscaling_str);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate, global_upscaling_str, global_decoder_string);
 	// dbg(9, "update_status_line_1_text:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
 }
 
 void update_status_line_1_text_arg(int vbr_)
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d %s", (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s", (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str, global_decoder_string);
 }
 
 void update_status_line_2_text()
@@ -2934,7 +2941,35 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 						dbg(9, "setting wait in ms: %d\n", (int)DEFAULT_FPS_SLEEP_MS);
 					}
 				}
-			}			
+			}
+			else if (strncmp((char*)message, ".vpxdec ", strlen((char*)".vpxdec ")) == 0)
+			{
+				if (strlen(message) > 8)
+				{
+					int num_new = get_number_in_string(message, (int)global__VPX_DECODER_USED);
+					if ((num_new >= 0) && (num_new <= 1))
+					{
+						global__VPX_DECODER_USED = num_new;
+						dbg(9, "setting vpx Decoder to: %d\n", global__VPX_DECODER_USED);
+
+                        if (global__VPX_DECODER_USED == 0)
+                        {
+                            global_decoder_string = "VP8";
+                        }
+                        else
+                        {
+                            global_decoder_string = "VP9";
+                        }
+
+						update_status_line_1_text();
+
+						if (mytox_av != NULL)
+						{
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+                    }
+                }
+            }
 			else if (strncmp((char*)message, ".vpxu ", strlen((char*)".vpxu ")) == 0) // set vpx end usage
 			{
 				if (strlen(message) > 6)
@@ -2959,6 +2994,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 						{
 							dbg(9, "setting vpx end usage: VPX_Q   Constant Quality (Q) mode\n");
 						}
+
+						update_status_line_1_text();
+
+						if (mytox_av != NULL)
+						{
+							toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+						}
+
 					}
 				}
 			}			
@@ -5190,7 +5233,7 @@ void *video_play(void *dummy)
 				else
 				{
 					// upscale to video size
-					global_upscaling_str = "*";
+					global_upscaling_str = " *";
 				}
 
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
@@ -7492,6 +7535,7 @@ int main(int argc, char *argv[])
 	global_video_in_fps = 0;
 	global_video_out_fps = 0;
 	global_upscaling_str = "";
+    global_decoder_string = "";
 
 	// snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", 0, 0, (int)global_video_bit_rate);
 	// snprintf(status_line_2_str, sizeof(status_line_2_str), "A:     OB %d", (int)global_audio_bit_rate);
@@ -7537,6 +7581,12 @@ int main(int argc, char *argv[])
 	global__VPX_END_USAGE = 2;
 	global__VPX_KF_MAX_DIST = 12;
 	global__VPX_G_LAG_IN_FRAMES = 0;
+
+
+    global__VPX_ENCODER_USED = 0; // 0 -> VP8, 1 -> VP9
+    global__VPX_DECODER_USED = 0; // 0 -> VP8, 1 -> VP9
+    global__SEND_VIDEO_LOSSLESS = 0; // 0 -> NO, 1 -> YES
+    global__SEND_VIDEO_VP9_LOSSLESS_QUALITY = 0; // 0 -> NO, 1 -> YES
 
 
 	// ------ thread priority ------
