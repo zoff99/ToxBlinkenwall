@@ -136,6 +136,7 @@ dbg\([^.]*, "[^\\]*"
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 extern int global__MAX_DECODE_TIME_US;
+extern int global__MAX_ENCODE_TIME_US;
 extern int global__VP8E_SET_CPUUSED_VALUE;
 extern int global__VPX_END_USAGE;
 extern int global__VPX_KF_MAX_DIST;
@@ -186,8 +187,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 17
-static const char global_version_string[] = "0.99.17";
+#define VERSION_PATCH 18
+static const char global_version_string[] = "0.99.18";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -598,6 +599,7 @@ int global_show_fps_on_video = 0;
 char status_line_1_str[200];
 char status_line_2_str[200];
 uint32_t global_video_in_fps;
+unsigned long long global_timespan_video_in;
 uint32_t global_video_out_fps;
 char *global_upscaling_str = "";
 char *global_decoder_string = "";
@@ -5539,6 +5541,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 		unsigned long long timspan_in_ms = 99999;
 		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
 
+        if (timspan_in_ms < 99999)
+        {
+            global_timespan_video_in = global_timespan_video_in + timspan_in_ms;
+        }
+
+/*
 		if ((timspan_in_ms > 1) && (timspan_in_ms < 99999))
 		{
 			global_video_in_fps = (int)(1000 / timspan_in_ms);
@@ -5548,6 +5556,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 		{
 			global_video_in_fps = 0;
 		}
+*/
 
 		update_fps_counter++;
 		if (update_fps_counter > update_fps_every)
@@ -5561,13 +5570,24 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 global_decoder_string = " VP9";
             }
 
+            if (global_timespan_video_in > 0)
+            {
+			    global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
+            }
+            else
+            {
+                global_video_in_fps = 0;
+            }
+
 			update_fps_counter = 0;
+            global_timespan_video_in = 0;
 			update_status_line_1_text();
 		}
 	}
 	else
 	{
 		first_incoming_video_frame = 0;
+        global_timespan_video_in = 0;
 	}
 	__utimer_start(&tm_incoming_video_frames);
 	// ---- DEBUG ----
@@ -7544,6 +7564,7 @@ int main(int argc, char *argv[])
     CLEAR(status_line_2_str);
 	global_video_in_fps = 0;
 	global_video_out_fps = 0;
+    global_timespan_video_in = 0;
 	global_upscaling_str = "";
     global_decoder_string = " VP8";
 
@@ -7586,7 +7607,8 @@ int main(int argc, char *argv[])
 		3 -> VPX_Q   Constant Quality (Q) mode
 	*/
 
-	global__MAX_DECODE_TIME_US = 1;
+	global__MAX_DECODE_TIME_US = 0;
+	global__MAX_ENCODE_TIME_US = 0;
 	global__VP8E_SET_CPUUSED_VALUE = 16;
 	global__VPX_END_USAGE = 2;
 	global__VPX_KF_MAX_DIST = 12;
