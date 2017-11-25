@@ -59,6 +59,7 @@ while [ 1 == 1 ]; do
 	cd ext_keys_scripts
 	./ext_keys.py &
 	cd ..
+	setterm -cursor off
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
 	# ---- only for RASPI ----
