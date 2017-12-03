@@ -59,13 +59,21 @@ while [ 1 == 1 ]; do
 	cd ext_keys_scripts
 	./ext_keys.py &
 	cd ..
+
+    # ---- only for RASPI ----
+    if [ "$IS_ON""x" == "RASPI""x" ]; then
+            sudo toggle_alsa.sh 0
+    fi
+    # ---- only for RASPI ----
+
 	setterm -cursor off
 	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
-	# ---- only for RASPI ----
-	if [ "$IS_ON""x" == "RASPI""x" ]; then
-	    :
-	fi
-	# ---- only for RASPI ----
+
+    # ---- only for RASPI ----
+    if [ "$IS_ON""x" == "RASPI""x" ]; then
+            sudo toggle_alsa.sh 0
+    fi
+    # ---- only for RASPI ----
 done
 

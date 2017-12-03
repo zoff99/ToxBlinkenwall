@@ -135,6 +135,8 @@ dbg\([^.]*, "[^\\]*"
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
+#if 0
+
 extern int global__MAX_DECODE_TIME_US;
 extern int global__MAX_ENCODE_TIME_US;
 extern int global__VP8E_SET_CPUUSED_VALUE;
@@ -146,6 +148,22 @@ extern int global__VPX_ENCODER_USED; // 0 -> VP8, 1 -> VP9
 extern int global__VPX_DECODER_USED; // 0 -> VP8, 1 -> VP9
 extern int global__SEND_VIDEO_LOSSLESS; // 0 -> NO, 1 -> YES
 extern int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY; // 0 -> NO, 1 -> YES
+
+#else
+
+int global__MAX_DECODE_TIME_US;
+int global__MAX_ENCODE_TIME_US;
+int global__VP8E_SET_CPUUSED_VALUE;
+int global__VPX_END_USAGE;
+int global__VPX_KF_MAX_DIST;
+int global__VPX_G_LAG_IN_FRAMES;
+
+int global__VPX_ENCODER_USED; // 0 -> VP8, 1 -> VP9
+int global__VPX_DECODER_USED; // 0 -> VP8, 1 -> VP9
+int global__SEND_VIDEO_LOSSLESS; // 0 -> NO, 1 -> YES
+int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY; // 0 -> NO, 1 -> YES
+
+#endif
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -187,8 +205,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 18
-static const char global_version_string[] = "0.99.18";
+#define VERSION_PATCH 19
+static const char global_version_string[] = "0.99.19";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -553,8 +571,8 @@ const char *audio_device = "default";
 // sysdefault:CARD
 int do_audio_recording = 1;
 int have_input_sound_device = 1;
-#define MAX_ALSA_RECORD_THREADS 4
-#define AUDIO_RECORD_AUDIO_LENGTH (120)
+#define MAX_ALSA_RECORD_THREADS 2
+#define AUDIO_RECORD_AUDIO_LENGTH (40)
 // frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
 // frame is also = ((AUDIO_RECORD_BUFFER_BYTES / DEFAULT_AUDIO_CAPTURE_CHANNELS) / 2)
 #define AUDIO_RECORD_BUFFER_FRAMES (((DEFAULT_AUDIO_CAPTURE_SAMPLERATE) * (AUDIO_RECORD_AUDIO_LENGTH)) / 1000)
@@ -6872,7 +6890,7 @@ void *thread_record_alsa_audio(void *data)
 	int s;
 	display_thread_sched_attr("Scheduler attributes of [1]: thread_record_alsa_audio");
 	get_policy('r', &policy);
-#if 0
+#if 1
 	param.sched_priority = strtol("2", NULL, 0);
 	s = pthread_setschedparam(pthread_self(), policy, &param);
 	if (s != 0)
@@ -6906,13 +6924,13 @@ void *thread_record_alsa_audio(void *data)
 					{
 						dbg(0, "play_device:yield a bit (2)\n");
 						// zzzzzz
-						yieldcpu(1);
+						yieldcpu(2);
 					}
 
 					close_sound_device();
 					dbg(9, "record_device:close_sound_device\n");
 					// zzzzzz
-					yieldcpu(20);
+					yieldcpu(2);
 					init_sound_device();
 				}
 				else
@@ -6955,8 +6973,8 @@ void *thread_record_alsa_audio(void *data)
 		else
 		{
 #endif
-			// sleep 0.5 seconds
-			yieldcpu(500);
+			// sleep 0.2 seconds
+			yieldcpu(200);
 #if 1
 		}
 #endif
