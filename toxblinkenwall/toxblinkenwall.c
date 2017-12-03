@@ -6912,7 +6912,7 @@ void *thread_record_alsa_audio(void *data)
 
 			if (have_input_sound_device == 1)
 			{
-				snd_pcm_reset(audio_capture_handle);
+				// snd_pcm_reset(audio_capture_handle);
 
 				int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
 				if ((err = snd_pcm_readi(audio_capture_handle, audio_buf_l, AUDIO_RECORD_BUFFER_FRAMES)) != AUDIO_RECORD_BUFFER_FRAMES)
