@@ -623,6 +623,7 @@ char *global_upscaling_str = "";
 char *global_decoder_string = "";
 int update_fps_every = 20;
 int update_fps_counter = 0;
+int update_out_fps_counter = 0;
 const char *speaker_out_name_0 = "TV ";
 const char *speaker_out_name_1 = "SPK";
 int speaker_out_num = 0;
@@ -5577,6 +5578,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 */
 
 		update_fps_counter++;
+        // dbg(9, "fps counter=%d\n", (int)update_fps_counter);
 		if (update_fps_counter > update_fps_every)
 		{
             if (global__VPX_DECODER_USED == 0)
@@ -5591,6 +5593,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             if (global_timespan_video_in > 0)
             {
 			    global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
+                // dbg(9, "fps counter 2 =%d global_timespan_video_in=%d\n", (int)update_fps_counter, (int)global_timespan_video_in);
             }
             else
             {
@@ -6041,10 +6044,10 @@ void *thread_av(void *data)
 						global_video_out_fps = 0;
 					}
 
-					update_fps_counter++;
-					if (update_fps_counter > update_fps_every)
+					update_out_fps_counter++;
+					if (update_out_fps_counter > update_fps_every)
 					{
-						update_fps_counter = 0;
+						update_out_fps_counter = 0;
 						update_status_line_1_text();
 					}
 
