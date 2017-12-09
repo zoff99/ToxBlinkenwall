@@ -527,14 +527,14 @@ sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
 #define MAX_ALSA_AUDIO_PLAY_THREADS 1
 sem_t audio_play_lock;
-#define ALSA_AUDIO_PLAY_START_THRESHOLD (10)
+#define ALSA_AUDIO_PLAY_START_THRESHOLD (2)
 #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (2)
 #endif
 
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 2
+#define MAX_VIDEO_PLAY_THREADS 1
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -571,8 +571,8 @@ const char *audio_device = "default";
 // sysdefault:CARD
 int do_audio_recording = 1;
 int have_input_sound_device = 1;
-#define MAX_ALSA_RECORD_THREADS 2
-#define AUDIO_RECORD_AUDIO_LENGTH (40)
+#define MAX_ALSA_RECORD_THREADS 1
+#define AUDIO_RECORD_AUDIO_LENGTH (120)
 // frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
 // frame is also = ((AUDIO_RECORD_BUFFER_BYTES / DEFAULT_AUDIO_CAPTURE_CHANNELS) / 2)
 #define AUDIO_RECORD_BUFFER_FRAMES (((DEFAULT_AUDIO_CAPTURE_SAMPLERATE) * (AUDIO_RECORD_AUDIO_LENGTH)) / 1000)
