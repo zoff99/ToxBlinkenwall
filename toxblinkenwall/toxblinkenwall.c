@@ -205,8 +205,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 19
-static const char global_version_string[] = "0.99.19";
+#define VERSION_PATCH 20
+static const char global_version_string[] = "0.99.20";
 // ----------- version -----------
 // ----------- version -----------
 
