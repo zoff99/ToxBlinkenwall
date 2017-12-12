@@ -135,22 +135,37 @@ dbg\([^.]*, "[^\\]*"
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
-#if 0
+#if 1
 
+extern int global__ON_THE_FLY_CHANGES;
+extern int global__VPX_RESIZE_ALLOWED;
+extern int global__VPX_DROPFRAME_THRESH;
+extern int global__VPX_END_RESIZE_UP_THRESH;
+extern int global__VPX_END_RESIZE_DOWN_THRESH;
 extern int global__MAX_DECODE_TIME_US;
 extern int global__MAX_ENCODE_TIME_US;
 extern int global__VP8E_SET_CPUUSED_VALUE;
 extern int global__VPX_END_USAGE;
-extern int global__VPX_KF_MAX_DIST;
-extern int global__VPX_G_LAG_IN_FRAMES;
 
-extern int global__VPX_ENCODER_USED; // 0 -> VP8, 1 -> VP9
-extern int global__VPX_DECODER_USED; // 0 -> VP8, 1 -> VP9
-extern int global__SEND_VIDEO_LOSSLESS; // 0 -> NO, 1 -> YES
-extern int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY; // 0 -> NO, 1 -> YES
+extern int UTOX_DEFAULT_BITRATE_V;
+
+// old ---
+int global__VPX_KF_MAX_DIST;
+int global__VPX_G_LAG_IN_FRAMES;
+int global__VPX_ENCODER_USED;
+int global__VPX_DECODER_USED;
+int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
+int global__SEND_VIDEO_LOSSLESS;
+int global__SEND_VIDEO_RAW_YUV;
+// old ---
 
 #else
 
+int global__ON_THE_FLY_CHANGES;
+int global__VPX_RESIZE_ALLOWED;
+int global__VPX_DROPFRAME_THRESH;
+int global__VPX_END_RESIZE_UP_THRESH;
+int global__VPX_END_RESIZE_DOWN_THRESH;
 int global__MAX_DECODE_TIME_US;
 int global__MAX_ENCODE_TIME_US;
 int global__VP8E_SET_CPUUSED_VALUE;
@@ -158,10 +173,13 @@ int global__VPX_END_USAGE;
 int global__VPX_KF_MAX_DIST;
 int global__VPX_G_LAG_IN_FRAMES;
 
-int global__VPX_ENCODER_USED; // 0 -> VP8, 1 -> VP9
-int global__VPX_DECODER_USED; // 0 -> VP8, 1 -> VP9
-int global__SEND_VIDEO_LOSSLESS; // 0 -> NO, 1 -> YES
-int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY; // 0 -> NO, 1 -> YES
+int UTOX_DEFAULT_BITRATE_V;
+
+int global__VPX_ENCODER_USED;
+int global__VPX_DECODER_USED;
+int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
+int global__SEND_VIDEO_LOSSLESS;
+int global__SEND_VIDEO_RAW_YUV;
 
 #endif
 // ---------- dirty hack ----------
@@ -534,7 +552,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 3
+#define MAX_VIDEO_PLAY_THREADS 2
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -771,6 +789,38 @@ unsigned int char_to_int(char c)
     if (c >= 'a' && c <= 'f')
     { return 10 + c - 'a'; }
     return -1;
+}
+
+int read_cpu_temp()
+{
+    char *cpu_temp_file = "/sys/class/thermal/thermal_zone0/temp";
+    FILE *fileptr;                          
+    char path[1035];
+    char output[1035];
+    int cpu_temp_int = -1;
+
+    CLEAR(path);
+    CLEAR(output);
+
+    fileptr = fopen(cpu_temp_file, "rb");   
+
+    if(fileptr != NULL)
+    {
+       	if (fgets(path, sizeof(path)-1, fileptr) != NULL)
+        {
+            snprintf(output, 299, "%s", (const char*)path);
+        }
+
+        cpu_temp_int = get_number_in_string(output, cpu_temp_int);
+        if (cpu_temp_int > -1)
+        {
+            cpu_temp_int = cpu_temp_int / 1000;
+        }
+
+        fclose(fileptr);
+    }
+    
+    return cpu_temp_int;
 }
 
 void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str)
@@ -2610,6 +2660,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
     send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
     send_text_message_to_friend(tox, friend_number, " .vpxdec <num>       --> set VPX Decoder");
+    send_text_message_to_friend(tox, friend_number, " .dectime <num>      --> set VPX Decoder Soft Deadline in us");
     send_text_message_to_friend(tox, friend_number, " .fps <delay ms>     --> set delay in ms between sent frames");
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
@@ -2790,13 +2841,17 @@ void disconnect_all_calls(Tox *tox)
 
 void update_status_line_1_text()
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s", (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate, global_upscaling_str, global_decoder_string);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s CPU:%dC",
+        (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate,
+        global_upscaling_str, global_decoder_string, read_cpu_temp());
 	// dbg(9, "update_status_line_1_text:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
 }
 
 void update_status_line_1_text_arg(int vbr_)
 {
-	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s", (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str, global_decoder_string);
+	snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s CPU:%dC",
+        (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str,
+        global_decoder_string, read_cpu_temp());
 }
 
 void update_status_line_2_text()
@@ -2965,6 +3020,19 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 					}
 				}
 			}
+			else if (strncmp((char*)message, ".dectime ", strlen((char*)".dectime ")) == 0)
+			{
+				if (strlen(message) > 9)
+				{
+					int num_new = get_number_in_string(message, (int)global__MAX_DECODE_TIME_US);
+					if ((num_new >= 0) && (num_new <= 1000000000))
+					{
+                        dbg(9, "setting MAX_DECODE_TIME_US to: %d\n", global__MAX_DECODE_TIME_US);
+                        global__MAX_DECODE_TIME_US = num_new;
+                        global__ON_THE_FLY_CHANGES = 1;
+                    }
+                }
+            }
 			else if (strncmp((char*)message, ".vpxdec ", strlen((char*)".vpxdec ")) == 0)
 			{
 				if (strlen(message) > 8)
@@ -7614,6 +7682,9 @@ int main(int argc, char *argv[])
 
 	pthread_setname_np(pthread_self(), "main thread");
 
+    int WANTED_MAX_DECODER_FPS = 25;
+    global__MAX_DECODE_TIME_US = (1000000 / WANTED_MAX_DECODER_FPS); // to allow x fps
+
 
 	dbg(9, "global__MAX_DECODE_TIME_US=%d\n", global__MAX_DECODE_TIME_US); // 0, 1, 1000000  (0 BEST, 1 REALTIME, 1000000 GOOD)
 	/*
@@ -7634,19 +7705,11 @@ int main(int argc, char *argv[])
 		3 -> VPX_Q   Constant Quality (Q) mode
 	*/
 
-	global__MAX_DECODE_TIME_US = 0;
-	global__MAX_ENCODE_TIME_US = 0;
+	global__MAX_ENCODE_TIME_US = 1;
 	global__VP8E_SET_CPUUSED_VALUE = 16;
-	global__VPX_END_USAGE = 2;
-	global__VPX_KF_MAX_DIST = 12;
-	global__VPX_G_LAG_IN_FRAMES = 0;
+	global__VPX_END_USAGE = 0;
 
-
-    global__VPX_ENCODER_USED = 0; // 0 -> VP8, 1 -> VP9
-    global__VPX_DECODER_USED = 0; // 0 -> VP8, 1 -> VP9
-    global__SEND_VIDEO_LOSSLESS = 0; // 0 -> NO, 1 -> YES
-    global__SEND_VIDEO_VP9_LOSSLESS_QUALITY = 0; // 0 -> NO, 1 -> YES
-
+    global__ON_THE_FLY_CHANGES = 1;
 
 	// ------ thread priority ------
 	struct sched_param param;
