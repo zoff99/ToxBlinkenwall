@@ -205,8 +205,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 20
-static const char global_version_string[] = "0.99.20";
+#define VERSION_PATCH 21
+static const char global_version_string[] = "0.99.21";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -606,7 +606,7 @@ int SHOW_EVERY_X_TH_VIDEO_FRAME = 1;
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
-uint32_t friend_to_send_video_to = -1;
+int32_t friend_to_send_video_to = -1;
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
@@ -628,6 +628,8 @@ const char *speaker_out_name_0 = "TV ";
 const char *speaker_out_name_1 = "SPK";
 int speaker_out_num = 0;
 int do_phonebook_invite = 0;
+int global_video_in_w = 0;
+int global_video_in_h = 0;
 
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
@@ -2801,11 +2803,11 @@ void update_status_line_2_text()
 {
 	if (speaker_out_num == 0)
 	{
-		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d", speaker_out_name_0, (int)global_audio_bit_rate);
+		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_0, (int)global_audio_bit_rate, (int)global_video_in_w, (int)global_video_in_h);
 	}
 	else
 	{
-		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d", speaker_out_name_1, (int)global_audio_bit_rate);
+		snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_1, (int)global_audio_bit_rate, (int)global_video_in_w, (int)global_video_in_h);
 	}
 }
 
@@ -4719,7 +4721,7 @@ void *alsa_audio_play(void *data)
 
 		sem_wait(&audio_play_lock);
 		int err;
-		if ((err = snd_pcm_writei(audio_play_handle, (char *)play_pcm_, adb->sample_count)) != adb->sample_count)
+		if ((err = snd_pcm_writei(audio_play_handle, (char *)play_pcm_, adb->sample_count)) != (int)adb->sample_count)
 		{
 			dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
 			if ((int)err == -11) // -> Resource temporarily unavailable
@@ -4929,7 +4931,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				has_error = 1;
 			}
 
-			if ((has_error == 1) || (err != sample_count))
+			if ((has_error == 1) || (err != (int)sample_count))
 			{
 				// dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
 
@@ -5272,7 +5274,7 @@ void *video_play(void *dummy)
 
 				uint8_t *bf_out_data = (uint8_t *)calloc(1, framebuffer_screensize);
 
-				unsigned long int i, j;
+				long int i, j;
 
 				// dbg(9, "full_width=%f vid_width=%f full_height=%f vid_height=%f\n", (float)full_width, (float)vid_width, (float)full_height, (float)vid_height);
 				float ww = (float)var_framebuffer_info.xres / (float)vid_width;
@@ -5557,7 +5559,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	// ---- DEBUG ----
 	if (first_incoming_video_frame == 0)
 	{
-		unsigned long long timspan_in_ms = 99999;
+		long long timspan_in_ms = 99999;
 		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
 
         if (timspan_in_ms < 99999)
@@ -5603,6 +5605,10 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 			update_fps_counter = 0;
             global_timespan_video_in = 0;
 			update_status_line_1_text();
+            
+            global_video_in_w = width;
+            global_video_in_h = height;
+			update_status_line_2_text();
 		}
 	}
 	else
@@ -5993,7 +5999,7 @@ void *thread_av(void *data)
 
 
 					// ---- DEBUG ----
-					unsigned long long timspan_in_ms = 99999;
+					long long timspan_in_ms = 99999;
 					if (first_outgoing_video_frame == 0)
 					{
 						timspan_in_ms = __utimer_stop(&tm_outgoing_video_frames, "sending video frame every:", 1);
