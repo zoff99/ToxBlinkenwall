@@ -534,7 +534,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 1
+#define MAX_VIDEO_PLAY_THREADS 3
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -5560,7 +5560,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	if (first_incoming_video_frame == 0)
 	{
 		long long timspan_in_ms = 99999;
-		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
+		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 0);
 
         if (timspan_in_ms < 99999)
         {
@@ -5675,7 +5675,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				}
 				else
 				{
-					// dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+					dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
 				}
 
 				sem_post(&video_play_lock);
