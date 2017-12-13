@@ -543,7 +543,7 @@ const char *audio_play_device = "default";
 int have_output_sound_device = 1;
 sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
-#define MAX_ALSA_AUDIO_PLAY_THREADS 1
+#define MAX_ALSA_AUDIO_PLAY_THREADS 2
 sem_t audio_play_lock;
 #define ALSA_AUDIO_PLAY_START_THRESHOLD (2)
 #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (2)
@@ -7706,7 +7706,7 @@ int main(int argc, char *argv[])
 	*/
 
 	global__MAX_ENCODE_TIME_US = 1;
-	global__VP8E_SET_CPUUSED_VALUE = 16;
+	global__VP8E_SET_CPUUSED_VALUE = 10;
 	global__VPX_END_USAGE = 0;
 
     global__ON_THE_FLY_CHANGES = 1;
