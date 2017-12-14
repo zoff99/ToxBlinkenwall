@@ -7682,7 +7682,7 @@ int main(int argc, char *argv[])
 
 	pthread_setname_np(pthread_self(), "main thread");
 
-    int WANTED_MAX_DECODER_FPS = 25;
+    int WANTED_MAX_DECODER_FPS = 40;
     global__MAX_DECODE_TIME_US = (1000000 / WANTED_MAX_DECODER_FPS); // to allow x fps
 
 
@@ -7706,7 +7706,7 @@ int main(int argc, char *argv[])
 	*/
 
 	global__MAX_ENCODE_TIME_US = 1;
-	global__VP8E_SET_CPUUSED_VALUE = 10;
+	global__VP8E_SET_CPUUSED_VALUE = 16;
 	global__VPX_END_USAGE = 0;
 
     global__ON_THE_FLY_CHANGES = 1;
