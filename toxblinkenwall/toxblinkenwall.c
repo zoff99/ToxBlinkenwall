@@ -135,7 +135,7 @@ dbg\([^.]*, "[^\\]*"
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
-#if 1
+#if 0
 
 extern int global__ON_THE_FLY_CHANGES;
 extern int global__VPX_RESIZE_ALLOWED;
@@ -4456,6 +4456,11 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 	if (accepting_calls != 1)
 	{
 		dbg(2, "Not accepting calls yet\n");
+        
+       	TOXAV_ERR_CALL_CONTROL error = 0;
+        toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+        // global_video_active = 0;
+
 		return;
 	}
 
@@ -5249,9 +5254,13 @@ void update_status_line_on_fb()
 }
 
 
-void *video_play(void *dummy)
+static void *video_play(void *dummy)
 {
+    dbg(9, "VP-DEBUG:001\n");
+    
 	sem_wait(&video_play_lock);
+
+    dbg(9, "VP-DEBUG:002\n");
 
 #if 0
 	int num = get_video_t_counter();
@@ -5281,6 +5290,8 @@ void *video_play(void *dummy)
 				int ustride_ = (int)ustride;
 				int vstride_ = (int)vstride;
 
+    dbg(9, "VP-DEBUG:003\n");
+
 				/*
 				* YUV420 frame with width * height
 				*
@@ -5292,17 +5303,26 @@ void *video_play(void *dummy)
 				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
 				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
+    dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
+    dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
+    dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
+
 
 	uint8_t *y = (uint8_t *)calloc(1, y_layer_size);
 	uint8_t *u = (uint8_t *)calloc(1, u_layer_size);
 	uint8_t *v = (uint8_t *)calloc(1, v_layer_size);
 
+    dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
 	memcpy(y, video__y, y_layer_size);
+    dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
 	memcpy(u, video__u, u_layer_size);
+    dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
 	memcpy(v, video__v, v_layer_size);
+    dbg(9, "VP-DEBUG:008\n");
 
 	sem_post(&video_play_lock);
 
+    dbg(9, "VP-DEBUG:009\n");
 
 
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
@@ -5327,6 +5347,8 @@ void *video_play(void *dummy)
 					global_upscaling_str = " U";
 				}
 
+    dbg(9, "VP-DEBUG:010\n");
+
 				int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
 
 				// dbg(9, "frame_width_px1=%d frame_width_px=%d frame_height_px1=%d\n", (int)frame_width_px1, (int)frame_width_px, (int)frame_height_px1);
@@ -5340,7 +5362,11 @@ void *video_play(void *dummy)
 				}
 
 
+    dbg(9, "VP-DEBUG:011\n");
+
 				uint8_t *bf_out_data = (uint8_t *)calloc(1, framebuffer_screensize);
+
+    dbg(9, "VP-DEBUG:012\n");
 
 				long int i, j;
 
@@ -5374,6 +5400,8 @@ void *video_play(void *dummy)
 				}
 				// dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
 
+    dbg(9, "VP-DEBUG:013\n");
+
 				int vid_width_needed = vid_width;
 				if (hh > 0)
 				{
@@ -5394,6 +5422,8 @@ void *video_play(void *dummy)
 				if (downscale == 0)
 				// if (((vid_height_needed + 10) < var_framebuffer_info.xres) && ((vid_height_needed + 10) < var_framebuffer_info.yres))
 				{
+                        dbg(9, "VP-DEBUG:014\n");
+
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
@@ -5491,9 +5521,14 @@ void *video_play(void *dummy)
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
 					// scale image up to output size -----------------------------
+
+    dbg(9, "VP-DEBUG:015\n");
+
 				}
 				else
 				{
+    dbg(9, "VP-DEBUG:016\n");
+
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
@@ -5588,25 +5623,37 @@ void *video_play(void *dummy)
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
 					// scale image down to output size (or leave as is) ----------
+
+                        dbg(9, "VP-DEBUG:017\n");
 				}
+
+    dbg(9, "VP-DEBUG:018\n");
 
 	if (y)
 	{
 		free((void *)y);
 	}
 
+    dbg(9, "VP-DEBUG:019\n");
+
 	if (u)
 	{
 		free((void *)u);
 	}
+
+    dbg(9, "VP-DEBUG:020\n");
 
 	if (v)
 	{
 		free((void *)v);
 	}
 
+    dbg(9, "VP-DEBUG:021\n");
 
 	dec_video_t_counter();
+
+    dbg(9, "VP-DEBUG:022\n");
+
 	pthread_exit(0);
 }
 
@@ -5623,6 +5670,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+    dbg(9, "VP-DEBUG:F:001:video__y=%p\n", y);
+
 
 	// ---- DEBUG ----
 	if (first_incoming_video_frame == 0)
@@ -5710,6 +5759,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 
 				sem_wait(&video_play_lock);
+
+                dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
 
 				video__width = width;
 				video__height = height;
