@@ -73,6 +73,22 @@ dbg\([^.]*, "[^\\]*"
 # sudo  lsusb -v | grep "idProduct\|MaxPower"
 
 
+# overclock --- in /boot/config.txt ---------
+arm_freq=1350
+over_voltage=5
+temp_limit=80
+
+gpu_mem=450
+core_freq=520
+gpu_freq=460
+
+sdram_freq=450
+sdram_schmoo=0x02000020
+over_voltage_sdram_p=6
+over_voltage_sdram_i=4
+over_voltage_sdram_c=4
+# overclock --- in /boot/config.txt ---------
+
 */
 
 #define _GNU_SOURCE
@@ -105,7 +121,6 @@ dbg\([^.]*, "[^\\]*"
 #include <tox/tox.h>
 #include <tox/toxav.h>
 
-#include <linux/fb.h>
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
@@ -113,7 +128,8 @@ dbg\([^.]*, "[^\\]*"
 #define V4LCONVERT 1
 
 // --------- video output: choose only 1 of those! ---------
-#define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
+// #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
+#define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
 // --------- video output: choose only 1 of those! ---------
 //
 // --------- audio recording: choose only 1 of those! ---------
@@ -187,6 +203,41 @@ int global__SEND_VIDEO_RAW_YUV;
 // ---------- dirty hack ----------
 
 
+
+#ifdef HAVE_FRAMEBUFFER
+#include <linux/fb.h>
+#endif
+
+#ifdef HAVE_OUTPUT_OPENGL
+#include <linux/fb.h>
+#include "openGL/esUtil.h"
+
+typedef struct
+{
+   // Handle to a program object
+   GLuint programObject;
+
+   // Attribute locations
+   GLint  positionLoc;
+   GLint  texCoordLoc;
+
+   // Sampler locations
+   GLint yplaneLoc;
+   GLint uplaneLoc;
+   GLint vplaneLoc;
+
+   // Texture handle
+   GLuint yplaneTexId;
+   GLuint uplaneTexId;
+   GLuint vplaneTexId;
+
+
+} openGL_UserData;
+
+#endif
+
+
+
 #if defined(HAVE_ALSA_REC) || defined(HAVE_ALSA_PLAY)
 #include <alsa/asoundlib.h>
 #endif
@@ -223,8 +274,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 21
-static const char global_version_string[] = "0.99.21";
+#define VERSION_PATCH 22
+static const char global_version_string[] = "0.99.22";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -459,6 +510,7 @@ void call_entry_num(Tox *tox, int entry_num);
 void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix, int start_y_pix, const char* text);
 void update_status_line_1_text();
 void update_status_line_1_text_arg(int vbr_);
+int get_number_in_string(const char *str, int default_value);
 
 
 const char *savedata_filename = "savedata.tox";
@@ -496,8 +548,17 @@ const char *global_overlay_timestamp_format = "%Y-%m-%d %H:%M:%S";
 uint64_t global_start_time;
 int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
+
+#ifdef HAVE_FRAMEBUFFER
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
+#endif
+
+#ifdef HAVE_OUTPUT_OPENGL
+struct fb_var_screeninfo var_framebuffer_info;
+struct fb_fix_screeninfo var_framebuffer_fix_info;
+#endif
+
 size_t framebuffer_screensize = 0;
 unsigned char *framebuffer_mappedmem = NULL;
 uint32_t n_buffers;
@@ -5241,6 +5302,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 void update_status_line_on_fb()
 {
+#ifdef HAVE_FRAMEBUFFER
 	unsigned char *bf_out_real_fb = framebuffer_mappedmem;
 
 	text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
@@ -5250,7 +5312,7 @@ void update_status_line_on_fb()
 	text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
 		var_framebuffer_fix_info.line_length, bf_out_real_fb,
 		10, var_framebuffer_info.yres - 30, status_line_2_str);
-
+#endif
 }
 
 
@@ -5328,6 +5390,7 @@ static void *video_play(void *dummy)
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
+#ifdef HAVE_FRAMEBUFFER
 				full_width = var_framebuffer_info.xres;
 				full_height = var_framebuffer_info.yres;
 
@@ -5626,6 +5689,8 @@ static void *video_play(void *dummy)
 
                         dbg(9, "VP-DEBUG:017\n");
 				}
+
+#endif
 
     dbg(9, "VP-DEBUG:018\n");
 
@@ -7560,6 +7625,283 @@ void sigint_handler(int signo)
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+// Create a shader object, load the shader source, and
+// compile the shader.
+//
+GLuint LoadShader ( GLenum type, const char *shaderSrc )
+{
+   GLuint shader;
+   GLint compiled;
+   
+   // Create the shader object
+   shader = glCreateShader ( type );
+
+   if ( shader == 0 )
+   	return 0;
+
+   // Load the shader source
+   glShaderSource ( shader, 1, &shaderSrc, NULL );
+   
+   // Compile the shader
+   glCompileShader ( shader );
+
+   // Check the compile status
+   glGetShaderiv ( shader, GL_COMPILE_STATUS, &compiled );
+
+   if ( !compiled ) 
+   {
+      GLint infoLen = 0;
+
+      glGetShaderiv ( shader, GL_INFO_LOG_LENGTH, &infoLen );
+      
+      if ( infoLen > 1 )
+      {
+         char* infoLog = calloc(1, sizeof(char) * 513);
+
+         glGetShaderInfoLog ( shader, 512, NULL, infoLog );
+         esLogMessage ( "Error compiling shader:\n%s\n", infoLog );            
+         
+         free (infoLog);
+      }
+
+      glDeleteShader (shader);
+      return 0;
+   }
+
+   return shader;
+
+}
+
+
+void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
+{
+    FILE *fileptr;
+    long filelen;
+    char yuf_frame_file[300];
+
+    snprintf(yuf_frame_file, sizeof(yuf_frame_file), "frame_%d.yuv", filenum);
+
+    fileptr = fopen(yuf_frame_file, "rb");
+    fseek(fileptr, 0, SEEK_END);
+    filelen = ftell(fileptr);
+    rewind(fileptr);
+
+    fread(buffer, max_length, 1, fileptr);
+    fclose(fileptr);
+}
+
+
+
+// Initialize the shader and program object
+//
+int Init ( ESContext *esContext )
+{
+   esContext->userData = malloc(sizeof(openGL_UserData));
+   openGL_UserData *userData = esContext->userData;
+
+#if 1
+   GLbyte vShaderStr[] = 
+      "attribute vec4 a_position;   \n"
+      "attribute vec2 a_texCoord;   \n"
+      "varying vec2 v_texCoord;     \n"
+      "void main()                  \n"
+      "{                            \n"
+      "   gl_Position = a_position; \n"
+      "   v_texCoord = a_texCoord;  \n"
+      "}                            \n";
+
+   GLbyte fShaderStr[] = 
+      "precision highp float;                              \n"
+      "varying vec2 v_texCoord;                            \n"
+      "uniform sampler2D s_yplane;                         \n"
+      "uniform sampler2D s_uplane;                         \n"
+      "uniform sampler2D s_vplane;                         \n"
+      "// swap u and v layers below                        \n"
+      "void main()                                         \n"
+      "{                                                   \n"
+    "   float y = texture2D(s_yplane, v_texCoord).r; \n"
+    "   float u = texture2D(s_vplane, v_texCoord).r - 0.5; \n"
+    "   float v = texture2D(s_uplane, v_texCoord).r - 0.5; \n"
+    "   float r = y + 1.13983 * v; \n"
+    "   float g = y - 0.39465 * u - 0.58060 * v; \n"
+    "   float b = y + 2.03211 * u; \n"
+    "  gl_FragColor = vec4(r, g, b, 1.0); \n"
+      "                                                    \n"
+      "}                                                   \n";
+#endif
+
+
+   userData->programObject = esLoadProgram ( vShaderStr, fShaderStr );
+
+
+           int ww = 1920;
+           int hh = 1080;
+           uint8_t *yy;
+           uint8_t *uu;
+           uint8_t *vv;
+
+           yy = calloc(1, (size_t)((ww * hh) * 1.5)); // 3110400.0 Bytes
+           uu = yy + (ww * hh);
+           vv = uu + ((ww / 2) * (hh / 2));
+
+           read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
+
+
+    GLubyte *Ytex,*Utex,*Vtex;
+
+    Ytex = yy;
+    Utex = uu;
+    Vtex = vv;
+
+
+   // Get the attribute locations
+   userData->positionLoc = glGetAttribLocation ( userData->programObject, "a_position" );
+   userData->texCoordLoc = glGetAttribLocation ( userData->programObject, "a_texCoord" );
+   
+   // Get the sampler location
+   userData->yplaneLoc = glGetUniformLocation ( userData->programObject, "s_yplane" );
+   userData->uplaneLoc = glGetUniformLocation ( userData->programObject, "s_uplane" );
+   userData->vplaneLoc = glGetUniformLocation ( userData->programObject, "s_vplane" );
+
+
+    // Use tightly packed data
+    glPixelStorei ( GL_UNPACK_ALIGNMENT, 1 );
+
+    /* bind the U texture. */
+   GLuint uplaneTexId;
+   glGenTextures ( 1, &uplaneTexId );
+   glBindTexture ( GL_TEXTURE_2D, uplaneTexId );
+   userData->uplaneTexId = uplaneTexId;
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    /* bind the U texture. */
+
+    /* bind the V texture. */
+   GLuint vplaneTexId;
+   glGenTextures ( 1, &vplaneTexId );
+   glBindTexture ( GL_TEXTURE_2D, vplaneTexId );
+   userData->vplaneTexId = vplaneTexId;
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    /* bind the V texture. */
+
+    /* bind the Y texture. */
+   GLuint yplaneTexId;
+   glGenTextures ( 1, &yplaneTexId );
+   glBindTexture ( GL_TEXTURE_2D, yplaneTexId );
+   userData->yplaneTexId = yplaneTexId;
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    /* bind the Y texture. */
+
+   free(yy);
+
+
+   glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+   return GL_TRUE;
+}
+
+
+// Draw a triangle using the shader pair created in Init()
+//
+void Draw ( ESContext *esContext )
+{
+   openGL_UserData *userData = esContext->userData;
+    
+   GLfloat vVertices[] = { -1.0f,  1.0f, 0.0f,  // Position 0
+                            0.0f,  0.0f,        // TexCoord 0 
+                           -1.0f, -1.0f, 0.0f,  // Position 1
+                            0.0f,  1.0f,        // TexCoord 1
+                            1.0f, -1.0f, 0.0f,  // Position 2
+                            1.0f,  1.0f,        // TexCoord 2
+                            1.0f,  1.0f, 0.0f,  // Position 3
+                            1.0f,  0.0f         // TexCoord 3
+                         };
+   GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
+
+
+   // Set the viewport
+   glViewport ( 0, 0, esContext->width, esContext->height );
+   
+   // Clear the color buffer
+   glClear ( GL_COLOR_BUFFER_BIT );
+
+   // Use the program object
+   glUseProgram ( userData->programObject );
+
+   // Load the vertex position
+   glVertexAttribPointer ( userData->positionLoc, 3, GL_FLOAT, 
+                           GL_FALSE, 5 * sizeof(GLfloat), vVertices );
+   // Load the texture coordinate
+   glVertexAttribPointer ( userData->texCoordLoc, 2, GL_FLOAT,
+                           GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3] );
+
+   glEnableVertexAttribArray ( userData->positionLoc );
+   glEnableVertexAttribArray ( userData->texCoordLoc );
+
+   // Bind the U map
+   glActiveTexture ( GL_TEXTURE1 );
+   glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
+   // Set the U map sampler to texture unit 1
+   glUniform1i ( userData->uplaneLoc, 1 );
+
+   // Bind the V map
+   glActiveTexture ( GL_TEXTURE2 );
+   glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
+   // Set the V map sampler to texture unit 2
+   glUniform1i ( userData->uplaneLoc, 2 );
+
+   // Bind the base map
+   glActiveTexture ( GL_TEXTURE0 );
+   glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+   // Set the base map sampler to texture unit to 0
+   glUniform1i ( userData->yplaneLoc, 0 );
+
+   glDrawElements ( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices );
+}
+
+
+//
+void ShutDown ( ESContext *esContext )
+{
+   openGL_UserData *userData = esContext->userData;
+
+   // Delete texture object
+   glDeleteTextures ( 1, &userData->yplaneTexId );
+   glDeleteTextures ( 1, &userData->uplaneTexId );
+   glDeleteTextures ( 1, &userData->vplaneTexId );
+
+   // Delete program object
+   glDeleteProgram ( userData->programObject );
+}
+
+
+
+
+
+
+
+
+
 int main(int argc, char *argv[])
 {
 	// don't accept calls until video device is ready
@@ -8015,6 +8357,70 @@ int main(int argc, char *argv[])
 	}
 	display_thread_sched_attr("Scheduler attributes of [3]: main thread");
 	// ------ thread priority ------
+
+
+
+#ifdef HAVE_OUTPUT_OPENGL
+
+// --------- openGL
+		if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
+		{
+			dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
+		}
+		else
+		{
+			dbg(2, "The Framebuffer device opened: %d\n", (int)global_framebuffer_device_fd);
+		}
+
+		// Get variable screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_VSCREENINFO, &var_framebuffer_info))
+		{
+			dbg(0, "Error reading Framebuffer info\n");
+		}
+
+		dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres, var_framebuffer_info.bits_per_pixel);
+
+    int fb_screen_width = (int)var_framebuffer_info.xres;
+    int fb_screen_height = (int)var_framebuffer_info.yres;
+
+
+		// Get fixed screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
+		{
+			dbg(0, "Error reading Framebuffer fixed information\n");
+		}
+
+		// map framebuffer to user memory
+		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
+		dbg(9, "framebuffer_screensize=%d\n", (int)framebuffer_screensize);
+
+   
+
+	if (global_framebuffer_device_fd > 0)
+	{
+		close(global_framebuffer_device_fd);
+		global_framebuffer_device_fd = 0;
+	}
+
+
+   ESContext esContext;
+   openGL_UserData  userData;
+
+   esInitContext (&esContext);
+   esContext.userData = &userData;
+   esCreateWindow (&esContext, "ToxBlinkenwall", fb_screen_width, fb_screen_height, fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
+   Init(&esContext);
+
+   esRegisterDrawFunc(&esContext, Draw);
+   esMainLoop(&esContext);
+// --------- openGL
+
+#endif
+
+
+
+
+
 
 
     tox_loop_running = 1;
