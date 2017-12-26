@@ -234,6 +234,8 @@ typedef struct
 
 } openGL_UserData;
 
+int opengl_shutdown = 0;
+
 #endif
 
 
@@ -7279,6 +7281,7 @@ void toggle_quality()
 }
 
 
+
 void *thread_phonebook_invite(void *data)
 {
 	Tox *tox = (Tox *)data;
@@ -7632,7 +7635,7 @@ void sigint_handler(int signo)
 
 
 
-
+#ifdef HAVE_OUTPUT_OPENGL
 
 
 // Create a shader object, load the shader source, and
@@ -7922,6 +7925,104 @@ void ShutDown ( ESContext *esContext )
 
 
 
+void *thread_opengl(void *data)
+{
+
+// --------- openGL
+		if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
+		{
+			dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
+		}
+		else
+		{
+			dbg(2, "The Framebuffer device opened: %d\n", (int)global_framebuffer_device_fd);
+		}
+
+		// Get variable screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_VSCREENINFO, &var_framebuffer_info))
+		{
+			dbg(0, "Error reading Framebuffer info\n");
+		}
+
+		dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres, var_framebuffer_info.bits_per_pixel);
+
+    int fb_screen_width = (int)var_framebuffer_info.xres;
+    int fb_screen_height = (int)var_framebuffer_info.yres;
+
+
+		// Get fixed screen information
+		if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
+		{
+			dbg(0, "Error reading Framebuffer fixed information\n");
+		}
+
+		// map framebuffer to user memory
+		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
+		dbg(9, "framebuffer_screensize=%d\n", (int)framebuffer_screensize);
+
+   
+
+	if (global_framebuffer_device_fd > 0)
+	{
+		close(global_framebuffer_device_fd);
+		global_framebuffer_device_fd = 0;
+	}
+
+
+   ESContext esContext;
+   openGL_UserData  userData;
+
+   esInitContext (&esContext);
+   esContext.userData = &userData;
+   esCreateWindow (&esContext, "ToxBlinkenwall", (int)(1280*1.0), (int)(720*1.0), fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
+   Init(&esContext);
+
+   esRegisterDrawFunc(&esContext, Draw);
+
+    struct timeval t1, t2;
+    struct timezone tz;
+    float deltatime;
+    float totaltime = 0.0f;
+    unsigned int frames = 0;
+
+    gettimeofday ( &t1 , &tz );
+   
+   while(opengl_shutdown == 0)
+   {
+        gettimeofday(&t2, &tz);
+        deltatime = (float)(t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6);
+        t1 = t2;
+
+        if (esContext.updateFunc != NULL)
+        {
+            esContext.updateFunc(&esContext, deltatime);
+        }
+
+        if (esContext.drawFunc != NULL)
+        {
+            esContext.drawFunc(&esContext);
+        }
+
+        eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
+
+        totaltime += deltatime;
+        frames++;
+        if (totaltime >  2.0f)
+        {
+            // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
+            totaltime -= 2.0f;
+            frames = 0;
+        }
+   }
+   
+   // esMainLoop(&esContext);
+// --------- openGL
+
+
+    ShutDown(&esContext);
+}
+
+#endif
 
 
 
@@ -8291,7 +8392,9 @@ int main(int argc, char *argv[])
 
 
 	// start toxav thread ------------------------------
-	pthread_t tid[5]; // 0 -> toxav_iterate thread, 1 -> video send thread, 2 -> audio recording thread, 3 -> read keys from pipe, 4 -> invite phonebook entries
+	pthread_t tid[6]; // 0 -> toxav_iterate thread, 1 -> video send thread
+                      // 2 -> audio recording thread, 3 -> read keys from pipe
+                      // 4 -> invite phonebook entries, 5 -> openGL thread
 
 	// start toxav thread ------------------------------
 	toxav_iterate_thread_stop = 0;
@@ -8363,6 +8466,18 @@ int main(int argc, char *argv[])
         dbg(2, "Phonebook invite successfully created\n");
 	}
 
+#ifdef HAVE_OUTPUT_OPENGL
+    if (pthread_create(&(tid[5]), NULL, thread_opengl, (void *)tox) != 0)
+	{
+        dbg(0, "openGL Thread create failed\n");
+	}
+	else
+	{
+		pthread_setname_np(tid[5], "t_opengl");
+        dbg(2, "openGL Thread successfully created\n");
+	}
+#endif
+
 
 
 	// ------ thread priority ------
@@ -8383,69 +8498,6 @@ int main(int argc, char *argv[])
 	}
 	display_thread_sched_attr("Scheduler attributes of [3]: main thread");
 	// ------ thread priority ------
-
-
-
-#ifdef HAVE_OUTPUT_OPENGL
-
-// --------- openGL
-		if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
-		{
-			dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
-		}
-		else
-		{
-			dbg(2, "The Framebuffer device opened: %d\n", (int)global_framebuffer_device_fd);
-		}
-
-		// Get variable screen information
-		if (ioctl(global_framebuffer_device_fd, FBIOGET_VSCREENINFO, &var_framebuffer_info))
-		{
-			dbg(0, "Error reading Framebuffer info\n");
-		}
-
-		dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres, var_framebuffer_info.bits_per_pixel);
-
-    int fb_screen_width = (int)var_framebuffer_info.xres;
-    int fb_screen_height = (int)var_framebuffer_info.yres;
-
-
-		// Get fixed screen information
-		if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
-		{
-			dbg(0, "Error reading Framebuffer fixed information\n");
-		}
-
-		// map framebuffer to user memory
-		framebuffer_screensize = (size_t)var_framebuffer_fix_info.smem_len;
-		dbg(9, "framebuffer_screensize=%d\n", (int)framebuffer_screensize);
-
-   
-
-	if (global_framebuffer_device_fd > 0)
-	{
-		close(global_framebuffer_device_fd);
-		global_framebuffer_device_fd = 0;
-	}
-
-
-   ESContext esContext;
-   openGL_UserData  userData;
-
-   esInitContext (&esContext);
-   esContext.userData = &userData;
-   esCreateWindow (&esContext, "ToxBlinkenwall", fb_screen_width, fb_screen_height, fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
-   Init(&esContext);
-
-   esRegisterDrawFunc(&esContext, Draw);
-   esMainLoop(&esContext);
-// --------- openGL
-
-#endif
-
-
-
-
 
 
 
@@ -8483,6 +8535,12 @@ int main(int argc, char *argv[])
 
 		}
     }
+
+
+#ifdef HAVE_OUTPUT_OPENGL
+    opengl_shutdown = 1;
+	yieldcpu(100);
+#endif
 
 #ifdef HAVE_ALSA_REC
 	do_audio_recording = 0;
