@@ -624,7 +624,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 2
+#define MAX_VIDEO_PLAY_THREADS 1
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -5329,11 +5329,11 @@ void update_status_line_on_fb()
 
 static void *video_play(void *dummy)
 {
-    dbg(9, "VP-DEBUG:001\n");
+    //dbg(9, "VP-DEBUG:001\n");
     
 	sem_wait(&video_play_lock);
 
-    dbg(9, "VP-DEBUG:002\n");
+    //dbg(9, "VP-DEBUG:002\n");
 
 #if 0
 	int num = get_video_t_counter();
@@ -5363,7 +5363,7 @@ static void *video_play(void *dummy)
 				int ustride_ = (int)ustride;
 				int vstride_ = (int)vstride;
 
-    dbg(9, "VP-DEBUG:003\n");
+    //dbg(9, "VP-DEBUG:003\n");
 
 				/*
 				* YUV420 frame with width * height
@@ -5376,9 +5376,9 @@ static void *video_play(void *dummy)
 				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
 				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
-    dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
-    dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
-    dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
+    //dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
+    //dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
+    //dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
 
 
 	uint8_t *y = (uint8_t *)calloc(1, y_layer_size);
@@ -5389,13 +5389,13 @@ static void *video_play(void *dummy)
 	memcpy(y, video__y, y_layer_size);
     //dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
 	memcpy(u, video__u, u_layer_size);
-    dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
+    //dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
 	memcpy(v, video__v, v_layer_size);
-    dbg(9, "VP-DEBUG:008\n");
+    //dbg(9, "VP-DEBUG:008\n");
 
 	sem_post(&video_play_lock);
 
-    dbg(9, "VP-DEBUG:009\n");
+    //dbg(9, "VP-DEBUG:009\n");
 
 
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
@@ -5739,7 +5739,7 @@ static void *video_play(void *dummy)
 
 	dec_video_t_counter();
 
-    dbg(9, "VP-DEBUG:022\n");
+    //dbg(9, "VP-DEBUG:022\n");
 
 	pthread_exit(0);
 }
@@ -5757,7 +5757,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
-    dbg(9, "VP-DEBUG:F:001:video__y=%p\n", y);
+    //dbg(9, "VP-DEBUG:F:001:video__y=%p\n", y);
 
 
 	// ---- DEBUG ----
@@ -5850,7 +5850,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				sem_wait(&video_play_lock);
 
-                dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
+                //dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
 
 				video__width = width;
 				video__height = height;
@@ -7795,8 +7795,7 @@ int Init ( ESContext *esContext, int ww, int hh )
            vv = uu + ((ww / 2) * (hh / 2));
 
            // read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
-
-           memset(yy, 0, (size_t)((ww * hh) * 1.5));
+           // memset(yy, 0, (size_t)((ww * hh) * 1.5));
 
     GLubyte *Ytex,*Utex,*Vtex;
 
@@ -7869,7 +7868,7 @@ int Init ( ESContext *esContext, int ww, int hh )
 
 void Update (ESContext *esContext, float deltatime)
 {
-    dbg(9, "openGL: Update\n");
+    //dbg(9, "openGL: Update\n");
     
     openGL_UserData *userData = esContext->userData;
 
@@ -7946,6 +7945,7 @@ void Update (ESContext *esContext, float deltatime)
             glActiveTexture ( GL_TEXTURE1 );
             glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
             glUniform1i ( userData->uplaneLoc, 1 );
+            glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width/2),
@@ -7957,6 +7957,7 @@ void Update (ESContext *esContext, float deltatime)
             glActiveTexture ( GL_TEXTURE2 );
             glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
             glUniform1i ( userData->vplaneLoc, 2 );
+            glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width/2),
@@ -7968,6 +7969,7 @@ void Update (ESContext *esContext, float deltatime)
             glActiveTexture ( GL_TEXTURE0 );
             glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
             glUniform1i ( userData->yplaneLoc, 0 );
+            glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width),
@@ -8024,28 +8026,6 @@ void Draw (ESContext *esContext)
 
    glEnableVertexAttribArray ( userData->positionLoc );
    glEnableVertexAttribArray ( userData->texCoordLoc );
-
-   // glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
-
-#if 0
-   // Bind the base map
-   glActiveTexture ( GL_TEXTURE0 );
-   glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
-   // Set the base map sampler to texture unit to 0
-   glUniform1i ( userData->yplaneLoc, 0 );
-
-   // Bind the U map
-   glActiveTexture ( GL_TEXTURE1 );
-   glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
-   // Set the U map sampler to texture unit 1
-   glUniform1i ( userData->uplaneLoc, 1 );
-
-   // Bind the V map
-   glActiveTexture ( GL_TEXTURE2 );
-   glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
-   // Set the V map sampler to texture unit 2
-   glUniform1i ( userData->vplaneLoc, 2 );
-#endif
 
    Update(esContext, 0);
 
@@ -8116,15 +8096,8 @@ void *thread_opengl(void *data)
    ESContext esContext;
    openGL_UserData  userData;
 
-#if 0
-   esInitContext (&esContext);
-   esContext.userData = &userData;
-   esCreateWindow (&esContext, "ToxBlinkenwall", (int)(fb_screen_width*1.0), (int)(fb_screen_height*1.0), fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
-   Init(&esContext, fb_screen_width, fb_screen_height);
-
-   esRegisterDrawFunc(&esContext, Draw);
-   // esRegisterUpdateFunc(&esContext, Update);
-#endif
+   float w_factor = 1.5;
+   float h_factor = 1.5f;
 
     int opengl_active = 0;
 
@@ -8149,11 +8122,11 @@ void *thread_opengl(void *data)
                    esContext.userData = &userData;
                    esCreateWindow(&esContext,
                         "ToxBlinkenwall",
-                        (int)(fb_screen_width*1.0),
-                        (int)(fb_screen_height*1.0),
+                        (int)(fb_screen_width*w_factor),
+                        (int)(fb_screen_height*h_factor),
                         fb_screen_width,
                         fb_screen_height,
-                        ES_WINDOW_RGB);
+                        ES_WINDOW_ALPHA); // ES_WINDOW_RGB
 
                    Init(&esContext, incoming_video_width, incoming_video_height);
 
