@@ -5393,7 +5393,6 @@ static void *video_play(void *dummy)
 	memcpy(v, video__v, v_layer_size);
     //dbg(9, "VP-DEBUG:008\n");
 
-	sem_post(&video_play_lock);
 
     //dbg(9, "VP-DEBUG:009\n");
 
@@ -5408,7 +5407,16 @@ static void *video_play(void *dummy)
     incoming_video_frame_u = u;
     incoming_video_frame_v = v;
     incoming_video_have_new_frame = 1;
+    
+    //free(incoming_video_frame_y);
+    //incoming_video_frame_y = NULL;
+    //free(incoming_video_frame_u);
+    //incoming_video_frame_u = NULL;
+    //free(incoming_video_frame_v);
+    //incoming_video_frame_v = NULL;    
 #endif
+
+	sem_post(&video_play_lock);
 
 
 #ifdef HAVE_FRAMEBUFFER
@@ -7872,6 +7880,8 @@ void Update (ESContext *esContext, float deltatime)
     
     openGL_UserData *userData = esContext->userData;
 
+sem_wait(&video_play_lock);
+
     if ((incoming_video_width != incoming_video_width_prev) || (incoming_video_height != incoming_video_height_prev))
     {
         if ((incoming_video_frame_y) && (incoming_video_frame_u) && (incoming_video_frame_v) && (incoming_video_have_new_frame == 1))
@@ -7942,10 +7952,10 @@ void Update (ESContext *esContext, float deltatime)
 
             dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
 
-            glActiveTexture ( GL_TEXTURE1 );
+            //glActiveTexture ( GL_TEXTURE1 );
             glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
             glUniform1i ( userData->uplaneLoc, 1 );
-            glEnable(GL_TEXTURE_2D);
+            //glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width/2),
@@ -7954,10 +7964,10 @@ void Update (ESContext *esContext, float deltatime)
                 GL_UNSIGNED_BYTE,
                 (GLubyte *)incoming_video_frame_u);
 
-            glActiveTexture ( GL_TEXTURE2 );
+            //glActiveTexture ( GL_TEXTURE2 );
             glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
             glUniform1i ( userData->vplaneLoc, 2 );
-            glEnable(GL_TEXTURE_2D);
+            //glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width/2),
@@ -7966,10 +7976,10 @@ void Update (ESContext *esContext, float deltatime)
                 GL_UNSIGNED_BYTE,
                 (GLubyte *)incoming_video_frame_v);
 
-            glActiveTexture ( GL_TEXTURE0 );
+            //glActiveTexture ( GL_TEXTURE0 );
             glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
             glUniform1i ( userData->yplaneLoc, 0 );
-            glEnable(GL_TEXTURE_2D);
+            //glEnable(GL_TEXTURE_2D);
             glTexSubImage2D(GL_TEXTURE_2D,
                 0,0,0,
                 (incoming_video_width),
@@ -7988,6 +7998,9 @@ void Update (ESContext *esContext, float deltatime)
             incoming_video_have_new_frame = 0;
         }
     }
+    
+sem_post(&video_play_lock);
+
 }
 
 // Draw a triangle using the shader pair created in Init()
@@ -8010,7 +8023,7 @@ void Draw (ESContext *esContext)
 
    // Set the viewport
    glViewport ( 0, 0, esContext->width, esContext->height );
-   
+
    // Clear the color buffer
    glClear ( GL_COLOR_BUFFER_BIT );
 
@@ -8029,12 +8042,12 @@ void Draw (ESContext *esContext)
 
    Update(esContext, 0);
 
-   glDrawElements ( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices );
+   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
 
 
 //
-void ShutDown ( ESContext *esContext )
+void ShutDown(ESContext *esContext)
 {
    openGL_UserData *userData = esContext->userData;
 
