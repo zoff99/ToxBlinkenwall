@@ -7730,39 +7730,31 @@ int Init ( ESContext *esContext )
       "uniform sampler2D s_uplane;                         \n"
       "uniform sampler2D s_vplane;                         \n"
       "// swap u and v layers below                        \n"
+      "  \n"
       "void main()                                         \n"
       "{                                                   \n"
     "   float y = texture2D(s_yplane, v_texCoord).r; \n"
-    "   float u = texture2D(s_vplane, v_texCoord).r - 0.5; \n"
-    "   float v = texture2D(s_uplane, v_texCoord).r - 0.5; \n"
-
-    " highp vec3 yuv2; \n"
-    " highp vec3 rgb2; \n"
-    " yuv2.x = y; \n"
-    " yuv2.y = u; \n"
-    " yuv2.z = v; \n"
-
-
-    " // BT.601, which is the standard for SDTV is provided as a reference \n"
-    "  /*\n"
-    "  rgb2 = mat3(      1,       1,       1, \n"
-    "  0, -.39465, 2.03211, \n"
-    "  1.13983, -.58060,       0) * yuv2; \n"
-    "  */\n"
-
+    "   float u = texture2D(s_uplane, v_texCoord).r - 0.5; \n"
+    "   float v = texture2D(s_vplane, v_texCoord).r - 0.5; \n"
+    "  \n"
+    " mediump vec3 yuv2; \n"
+    " mediump vec3 rgb2; \n"
+    " yuv2.r = y; \n"
+    " yuv2.g = u; \n"
+    " yuv2.b = v; \n"
+    "              \n"
+    "  \n"
     " // Using BT.709 which is the standard for HDTV \n"
     " \n"
     " rgb2 = mat3(      1,       1,       1, \n"
     "            0, -.21482, 2.12798, \n"
     "            1.28033, -.38059,       0) * yuv2; \n"
     "   \n"
-
-    " gl_FragColor = vec4(rgb2, 1); \n"
-
-    "//   float r = y + 1.13983 * v; \n"
-    "//   float g = y - 0.39465 * u - 0.58060 * v; \n"
-    "//   float b = y + 2.03211 * u; \n"
-    "//  gl_FragColor = vec4(r, g, b, 1.0); \n"
+    "  \n"
+    " gl_FragColor = vec4(rgb2.r, rgb2.g, rgb2.b, 1.0); \n"
+    "  \n"
+    " // gl_FragColor = vec4(y,y,y,1.0); \n"
+    "  \n"
       "                                                    \n"
       "}                                                   \n";
 #endif
@@ -7783,12 +7775,14 @@ int Init ( ESContext *esContext )
 
            read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
 
+            // fill buffer
+            // memset(yy, 0, (size_t)((ww * hh) * 1.5));
 
     GLubyte *Ytex,*Utex,*Vtex;
 
-    Ytex = yy;
-    Utex = uu;
-    Vtex = vv;
+    Ytex = (GLubyte *)yy;
+    Utex = (GLubyte *)uu;
+    Vtex = (GLubyte *)vv;
 
 
    // Get the attribute locations
@@ -7809,11 +7803,13 @@ int Init ( ESContext *esContext )
    glGenTextures ( 1, &uplaneTexId );
    glBindTexture ( GL_TEXTURE_2D, uplaneTexId );
    userData->uplaneTexId = uplaneTexId;
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 1);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 2);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
     /* bind the U texture. */
 
     /* bind the V texture. */
@@ -7821,11 +7817,11 @@ int Init ( ESContext *esContext )
    glGenTextures ( 1, &vplaneTexId );
    glBindTexture ( GL_TEXTURE_2D, vplaneTexId );
    userData->vplaneTexId = vplaneTexId;
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
     /* bind the V texture. */
 
     /* bind the Y texture. */
@@ -7833,11 +7829,15 @@ int Init ( ESContext *esContext )
    glGenTextures ( 1, &yplaneTexId );
    glBindTexture ( GL_TEXTURE_2D, yplaneTexId );
    userData->yplaneTexId = yplaneTexId;
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);
+    
+    // float color[] = { 1.0f, 0.0f, 0.0f, 1.0f };
+    // glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);
+    
     /* bind the Y texture. */
 
    free(yy);
@@ -7903,7 +7903,7 @@ void Draw ( ESContext *esContext )
    glActiveTexture ( GL_TEXTURE2 );
    glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
    // Set the V map sampler to texture unit 2
-   glUniform1i ( userData->uplaneLoc, 2 );
+   glUniform1i ( userData->vplaneLoc, 2 );
 
    glDrawElements ( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices );
 }
