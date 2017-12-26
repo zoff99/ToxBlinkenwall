@@ -236,6 +236,15 @@ typedef struct
 
 int opengl_shutdown = 0;
 
+int incoming_video_width = 0;
+int incoming_video_height = 0;
+int incoming_video_width_prev = 0;
+int incoming_video_height_prev = 0;
+int incoming_video_have_new_frame = 0;
+uint8_t *incoming_video_frame_y = NULL;
+uint8_t *incoming_video_frame_u = NULL;
+uint8_t *incoming_video_frame_v = NULL;
+
 #endif
 
 
@@ -5376,9 +5385,9 @@ static void *video_play(void *dummy)
 	uint8_t *u = (uint8_t *)calloc(1, u_layer_size);
 	uint8_t *v = (uint8_t *)calloc(1, v_layer_size);
 
-    dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
+    //dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
 	memcpy(y, video__y, y_layer_size);
-    dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
+    //dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
 	memcpy(u, video__u, u_layer_size);
     dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
 	memcpy(v, video__v, v_layer_size);
@@ -5391,6 +5400,16 @@ static void *video_play(void *dummy)
 
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
+
+#ifdef HAVE_OUTPUT_OPENGL
+    incoming_video_width = frame_width_px;
+    incoming_video_height = frame_height_px;
+    incoming_video_frame_y = y;
+    incoming_video_frame_u = u;
+    incoming_video_frame_v = v;
+    incoming_video_have_new_frame = 1;
+#endif
+
 
 #ifdef HAVE_FRAMEBUFFER
 				full_width = var_framebuffer_info.xres;
@@ -5692,7 +5711,6 @@ static void *video_play(void *dummy)
                         dbg(9, "VP-DEBUG:017\n");
 				}
 
-#endif
 
     dbg(9, "VP-DEBUG:018\n");
 
@@ -5716,6 +5734,8 @@ static void *video_play(void *dummy)
 	}
 
     dbg(9, "VP-DEBUG:021\n");
+
+#endif
 
 	dec_video_t_counter();
 
@@ -5805,13 +5825,16 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 
 
-#ifdef HAVE_FRAMEBUFFER
 
 	if (global_video_active == 1)
 	{
 		if (friend_to_send_video_to == friend_number)
 		{
+#ifdef HAVE_FRAMEBUFFER
 			if (global_framebuffer_device_fd != 0)
+#else
+            if (1 == 1)
+#endif
 			{
 				toggle_display_frame++;
 				if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
@@ -5876,7 +5899,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	{
 	}
 
-#endif
+
 }
 
 void set_av_video_frame()
@@ -7686,6 +7709,7 @@ GLuint LoadShader ( GLenum type, const char *shaderSrc )
 }
 
 
+#if 0
 void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 {
     FILE *fileptr;
@@ -7702,12 +7726,12 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
     fread(buffer, max_length, 1, fileptr);
     fclose(fileptr);
 }
-
+#endif
 
 
 // Initialize the shader and program object
 //
-int Init ( ESContext *esContext )
+int Init ( ESContext *esContext, int ww, int hh )
 {
    esContext->userData = malloc(sizeof(openGL_UserData));
    openGL_UserData *userData = esContext->userData;
@@ -7762,9 +7786,6 @@ int Init ( ESContext *esContext )
 
    userData->programObject = esLoadProgram ( vShaderStr, fShaderStr );
 
-
-           int ww = 1920;
-           int hh = 1080;
            uint8_t *yy;
            uint8_t *uu;
            uint8_t *vv;
@@ -7773,10 +7794,9 @@ int Init ( ESContext *esContext )
            uu = yy + (ww * hh);
            vv = uu + ((ww / 2) * (hh / 2));
 
-           read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
+           // read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
 
-            // fill buffer
-            // memset(yy, 0, (size_t)((ww * hh) * 1.5));
+           memset(yy, 0, (size_t)((ww * hh) * 1.5));
 
     GLubyte *Ytex,*Utex,*Vtex;
 
@@ -7805,10 +7825,9 @@ int Init ( ESContext *esContext )
    userData->uplaneTexId = uplaneTexId;
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 1);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 2);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glEnable(GL_TEXTURE_2D);
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
     /* bind the U texture. */
 
@@ -7821,6 +7840,7 @@ int Init ( ESContext *esContext )
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glEnable(GL_TEXTURE_2D);
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
     /* bind the V texture. */
 
@@ -7833,24 +7853,144 @@ int Init ( ESContext *esContext )
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);
-    
-    // float color[] = { 1.0f, 0.0f, 0.0f, 1.0f };
-    // glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);
-    
+    glEnable(GL_TEXTURE_2D);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);   
     /* bind the Y texture. */
 
    free(yy);
 
+
    // fill background with black color
-   glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+   // glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+
    return GL_TRUE;
 }
 
 
+void Update (ESContext *esContext, float deltatime)
+{
+    dbg(9, "openGL: Update\n");
+    
+    openGL_UserData *userData = esContext->userData;
+
+    if ((incoming_video_width != incoming_video_width_prev) || (incoming_video_height != incoming_video_height_prev))
+    {
+        if ((incoming_video_frame_y) && (incoming_video_frame_u) && (incoming_video_frame_v) && (incoming_video_have_new_frame == 1))
+        {
+            // * video size changed *
+
+            dbg(9, "openGL: video size changed\n");
+
+    /* bind the U texture. */
+
+    glActiveTexture ( GL_TEXTURE1 );
+    glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
+    glUniform1i ( userData->uplaneLoc, 1 );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+        (incoming_video_width/2), (incoming_video_height/2),
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_u);
+    /* bind the U texture. */
+
+    /* bind the V texture. */
+    glActiveTexture ( GL_TEXTURE2 );
+    glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
+    glUniform1i ( userData->uplaneLoc, 2 );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+        (incoming_video_width/2), (incoming_video_height/2),
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_v);
+    /* bind the V texture. */
+
+    /* bind the Y texture. */
+    glActiveTexture ( GL_TEXTURE0 );
+    glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+    glUniform1i ( userData->yplaneLoc, 0 );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+        incoming_video_width, incoming_video_height,
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_y);   
+    /* bind the Y texture. */
+
+
+            incoming_video_width_prev = incoming_video_width;
+            incoming_video_height_prev = incoming_video_height;
+
+            free(incoming_video_frame_y);
+            incoming_video_frame_y = NULL;
+            free(incoming_video_frame_u);
+            incoming_video_frame_u = NULL;
+            free(incoming_video_frame_v);
+            incoming_video_frame_v = NULL;
+
+            incoming_video_have_new_frame = 0;
+        }
+    }
+    else
+    {
+        if ((incoming_video_frame_y) && (incoming_video_frame_u) && (incoming_video_frame_v) && (incoming_video_have_new_frame == 1))
+        {
+            // video size is the same
+
+            dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
+
+            glActiveTexture ( GL_TEXTURE1 );
+            glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
+            glUniform1i ( userData->uplaneLoc, 1 );
+            glTexSubImage2D(GL_TEXTURE_2D,
+                0,0,0,
+                (incoming_video_width/2),
+                (incoming_video_height/2),
+                GL_LUMINANCE,
+                GL_UNSIGNED_BYTE,
+                (GLubyte *)incoming_video_frame_u);
+
+            glActiveTexture ( GL_TEXTURE2 );
+            glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
+            glUniform1i ( userData->vplaneLoc, 2 );
+            glTexSubImage2D(GL_TEXTURE_2D,
+                0,0,0,
+                (incoming_video_width/2),
+                (incoming_video_height/2),
+                GL_LUMINANCE,
+                GL_UNSIGNED_BYTE,
+                (GLubyte *)incoming_video_frame_v);
+
+            glActiveTexture ( GL_TEXTURE0 );
+            glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+            glUniform1i ( userData->yplaneLoc, 0 );
+            glTexSubImage2D(GL_TEXTURE_2D,
+                0,0,0,
+                (incoming_video_width),
+                (incoming_video_height),
+                GL_LUMINANCE,
+                GL_UNSIGNED_BYTE,
+                (GLubyte *)incoming_video_frame_y);
+
+            free(incoming_video_frame_y);
+            incoming_video_frame_y = NULL;
+            free(incoming_video_frame_u);
+            incoming_video_frame_u = NULL;
+            free(incoming_video_frame_v);
+            incoming_video_frame_v = NULL;
+            
+            incoming_video_have_new_frame = 0;
+        }
+    }
+}
+
 // Draw a triangle using the shader pair created in Init()
 //
-void Draw ( ESContext *esContext )
+void Draw (ESContext *esContext)
 {
    openGL_UserData *userData = esContext->userData;
     
@@ -7887,6 +8027,7 @@ void Draw ( ESContext *esContext )
 
    // glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
 
+#if 0
    // Bind the base map
    glActiveTexture ( GL_TEXTURE0 );
    glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
@@ -7904,6 +8045,9 @@ void Draw ( ESContext *esContext )
    glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
    // Set the V map sampler to texture unit 2
    glUniform1i ( userData->vplaneLoc, 2 );
+#endif
+
+   Update(esContext, 0);
 
    glDrawElements ( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices );
 }
@@ -7972,12 +8116,18 @@ void *thread_opengl(void *data)
    ESContext esContext;
    openGL_UserData  userData;
 
+#if 0
    esInitContext (&esContext);
    esContext.userData = &userData;
-   esCreateWindow (&esContext, "ToxBlinkenwall", (int)(1280*1.0), (int)(720*1.0), fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
-   Init(&esContext);
+   esCreateWindow (&esContext, "ToxBlinkenwall", (int)(fb_screen_width*1.0), (int)(fb_screen_height*1.0), fb_screen_width, fb_screen_height, ES_WINDOW_RGB);
+   Init(&esContext, fb_screen_width, fb_screen_height);
 
    esRegisterDrawFunc(&esContext, Draw);
+   // esRegisterUpdateFunc(&esContext, Update);
+#endif
+
+    int opengl_active = 0;
+
 
     struct timeval t1, t2;
     struct timezone tz;
@@ -7985,41 +8135,86 @@ void *thread_opengl(void *data)
     float totaltime = 0.0f;
     unsigned int frames = 0;
 
-    gettimeofday ( &t1 , &tz );
+    gettimeofday(&t1,&tz);
    
-   while(opengl_shutdown == 0)
+   while (opengl_shutdown == 0)
    {
-        gettimeofday(&t2, &tz);
-        deltatime = (float)(t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6);
-        t1 = t2;
-
-        if (esContext.updateFunc != NULL)
+        if (global_video_active == 1)
         {
-            esContext.updateFunc(&esContext, deltatime);
+            if (opengl_active == 0)
+            {
+                if ((incoming_video_width > 1) && (incoming_video_height > 1))
+                {
+                   esInitContext(&esContext);
+                   esContext.userData = &userData;
+                   esCreateWindow(&esContext,
+                        "ToxBlinkenwall",
+                        (int)(fb_screen_width*1.0),
+                        (int)(fb_screen_height*1.0),
+                        fb_screen_width,
+                        fb_screen_height,
+                        ES_WINDOW_RGB);
+
+                   Init(&esContext, incoming_video_width, incoming_video_height);
+
+                   esRegisterDrawFunc(&esContext, Draw);
+                   // esRegisterUpdateFunc(&esContext, Update);
+
+                    opengl_active = 1;
+                }
+                else
+                {
+                    yieldcpu(10);
+                    continue;
+                }
+            }
+            
+            gettimeofday(&t2, &tz);
+            deltatime = (float)(t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6);
+            t1 = t2;
+
+            //if (esContext.updateFunc != NULL)
+            //{
+            //    esContext.updateFunc(&esContext, deltatime);
+            //}
+
+            if (esContext.drawFunc != NULL)
+            {
+                esContext.drawFunc(&esContext);
+            }
+
+            eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
+
+            totaltime += deltatime;
+            frames++;
+            if (totaltime >  2.0f)
+            {
+                // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
+                totaltime -= 2.0f;
+                frames = 0;
+            }
         }
-
-        if (esContext.drawFunc != NULL)
+        else
         {
-            esContext.drawFunc(&esContext);
-        }
-
-        eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
-
-        totaltime += deltatime;
-        frames++;
-        if (totaltime >  2.0f)
-        {
-            // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
-            totaltime -= 2.0f;
-            frames = 0;
+            if (opengl_active == 1)
+            {
+                ShutDown(&esContext);
+                opengl_active = 0;
+            }
+            
+            yieldcpu(100);
         }
    }
    
    // esMainLoop(&esContext);
 // --------- openGL
 
+    if (opengl_active == 1)
+    {
+        ShutDown(&esContext);
+        opengl_active = 0;
+    }
 
-    ShutDown(&esContext);
 }
 
 #endif
