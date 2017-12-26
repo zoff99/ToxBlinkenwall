@@ -7669,7 +7669,7 @@ GLuint LoadShader ( GLenum type, const char *shaderSrc )
          char* infoLog = calloc(1, sizeof(char) * 513);
 
          glGetShaderInfoLog ( shader, 512, NULL, infoLog );
-         esLogMessage ( "Error compiling shader:\n%s\n", infoLog );            
+         dbg(9, "Error compiling shader:\n%s\n", infoLog );            
          
          free (infoLog);
       }
@@ -7732,10 +7732,34 @@ int Init ( ESContext *esContext )
     "   float y = texture2D(s_yplane, v_texCoord).r; \n"
     "   float u = texture2D(s_vplane, v_texCoord).r - 0.5; \n"
     "   float v = texture2D(s_uplane, v_texCoord).r - 0.5; \n"
-    "   float r = y + 1.13983 * v; \n"
-    "   float g = y - 0.39465 * u - 0.58060 * v; \n"
-    "   float b = y + 2.03211 * u; \n"
-    "  gl_FragColor = vec4(r, g, b, 1.0); \n"
+
+    " highp vec3 yuv2; \n"
+    " highp vec3 rgb2; \n"
+    " yuv2.x = y; \n"
+    " yuv2.y = u; \n"
+    " yuv2.z = v; \n"
+
+
+    " // BT.601, which is the standard for SDTV is provided as a reference \n"
+    "  /*\n"
+    "  rgb2 = mat3(      1,       1,       1, \n"
+    "  0, -.39465, 2.03211, \n"
+    "  1.13983, -.58060,       0) * yuv2; \n"
+    "  */\n"
+
+    " // Using BT.709 which is the standard for HDTV \n"
+    " \n"
+    " rgb2 = mat3(      1,       1,       1, \n"
+    "            0, -.21482, 2.12798, \n"
+    "            1.28033, -.38059,       0) * yuv2; \n"
+    "   \n"
+
+    " gl_FragColor = vec4(rgb2, 1); \n"
+
+    "//   float r = y + 1.13983 * v; \n"
+    "//   float g = y - 0.39465 * u - 0.58060 * v; \n"
+    "//   float b = y + 2.03211 * u; \n"
+    "//  gl_FragColor = vec4(r, g, b, 1.0); \n"
       "                                                    \n"
       "}                                                   \n";
 #endif
@@ -7785,8 +7809,8 @@ int Init ( ESContext *esContext )
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     /* bind the U texture. */
 
     /* bind the V texture. */
@@ -7797,8 +7821,8 @@ int Init ( ESContext *esContext )
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     /* bind the V texture. */
 
     /* bind the Y texture. */
@@ -7809,13 +7833,13 @@ int Init ( ESContext *esContext )
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     /* bind the Y texture. */
 
    free(yy);
 
-
+   // fill background with black color
    glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
    return GL_TRUE;
 }
@@ -7858,6 +7882,14 @@ void Draw ( ESContext *esContext )
    glEnableVertexAttribArray ( userData->positionLoc );
    glEnableVertexAttribArray ( userData->texCoordLoc );
 
+   // glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
+
+   // Bind the base map
+   glActiveTexture ( GL_TEXTURE0 );
+   glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+   // Set the base map sampler to texture unit to 0
+   glUniform1i ( userData->yplaneLoc, 0 );
+
    // Bind the U map
    glActiveTexture ( GL_TEXTURE1 );
    glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
@@ -7869,12 +7901,6 @@ void Draw ( ESContext *esContext )
    glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
    // Set the V map sampler to texture unit 2
    glUniform1i ( userData->uplaneLoc, 2 );
-
-   // Bind the base map
-   glActiveTexture ( GL_TEXTURE0 );
-   glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
-   // Set the base map sampler to texture unit to 0
-   glUniform1i ( userData->yplaneLoc, 0 );
 
    glDrawElements ( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices );
 }
