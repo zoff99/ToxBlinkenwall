@@ -231,6 +231,7 @@ typedef struct
    GLuint uplaneTexId;
    GLuint vplaneTexId;
 
+   int did_draw_frame;
 
 } openGL_UserData;
 
@@ -244,6 +245,8 @@ int incoming_video_have_new_frame = 0;
 uint8_t *incoming_video_frame_y = NULL;
 uint8_t *incoming_video_frame_u = NULL;
 uint8_t *incoming_video_frame_v = NULL;
+
+int global_did_draw_frame = 0;
 
 #endif
 
@@ -615,7 +618,7 @@ const char *audio_play_device = "default";
 int have_output_sound_device = 1;
 sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
-#define MAX_ALSA_AUDIO_PLAY_THREADS 2
+#define MAX_ALSA_AUDIO_PLAY_THREADS 1
 sem_t audio_play_lock;
 #define ALSA_AUDIO_PLAY_START_THRESHOLD (2)
 #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (2)
@@ -624,7 +627,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 1
+#define MAX_VIDEO_PLAY_THREADS 3
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -5118,7 +5121,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 			adb->sample_count = sample_count;
 
 			pthread_t audio_play_thread;
-			if (get_audio_t_counter() <= MAX_ALSA_AUDIO_PLAY_THREADS)
+			if (get_audio_t_counter() < MAX_ALSA_AUDIO_PLAY_THREADS)
 			{
 				inc_audio_t_counter();
 				if (pthread_create(&audio_play_thread, NULL, alsa_audio_play, (void *)adb))
@@ -5135,7 +5138,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 					}
 
 					// zzzzzz
-					yieldcpu(1);
+					// yieldcpu(1);
 				}
 			}
 			else
@@ -5329,9 +5332,12 @@ void update_status_line_on_fb()
 
 static void *video_play(void *dummy)
 {
-    //dbg(9, "VP-DEBUG:001\n");
+    // dbg(9, "VP-DEBUG:001:thread_start\n");
     
 	sem_wait(&video_play_lock);
+
+    // struct timeval tm_01;
+    // __utimer_start(&tm_01);
 
     //dbg(9, "VP-DEBUG:002\n");
 
@@ -5376,22 +5382,22 @@ static void *video_play(void *dummy)
 				int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
 				int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
 
-    //dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
-    //dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
-    //dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
+    // dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
+    // dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
+    // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
 
 
 	uint8_t *y = (uint8_t *)calloc(1, y_layer_size);
 	uint8_t *u = (uint8_t *)calloc(1, u_layer_size);
 	uint8_t *v = (uint8_t *)calloc(1, v_layer_size);
 
-    //dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
+    // dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
 	memcpy(y, video__y, y_layer_size);
-    //dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
+    // dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
 	memcpy(u, video__u, u_layer_size);
-    //dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
+    // dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
 	memcpy(v, video__v, v_layer_size);
-    //dbg(9, "VP-DEBUG:008\n");
+    // dbg(9, "VP-DEBUG:008\n");
 
 
     //dbg(9, "VP-DEBUG:009\n");
@@ -5400,23 +5406,63 @@ static void *video_play(void *dummy)
 				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
 				int frame_height_px = (int) frame_height_px1;
 
+	sem_post(&video_play_lock);
+
+
 #ifdef HAVE_OUTPUT_OPENGL
     incoming_video_width = frame_width_px;
     incoming_video_height = frame_height_px;
     incoming_video_frame_y = y;
     incoming_video_frame_u = u;
     incoming_video_frame_v = v;
-    incoming_video_have_new_frame = 1;
-    
-    //free(incoming_video_frame_y);
-    //incoming_video_frame_y = NULL;
-    //free(incoming_video_frame_u);
-    //incoming_video_frame_u = NULL;
-    //free(incoming_video_frame_v);
-    //incoming_video_frame_v = NULL;    
+    if ((y) && (u) && (v))
+    {
+        incoming_video_have_new_frame = 1;
+    }
+    else
+    {
+        incoming_video_have_new_frame = 0;
+    }
+
+    // long long timspan_in_ms = 99999;
+    // timspan_in_ms = __utimer_stop(&tm_01, "video_play_stage_1:", 0);
+
+    while (incoming_video_have_new_frame == 1)
+    {
+        // wait for openGL thread to comsume the video frame data
+        yieldcpu(3);
+    }
+
+
+    incoming_video_frame_y = NULL;
+    incoming_video_frame_u = NULL;
+    incoming_video_frame_v = NULL;
+
+    // dbg(9, "VP-DEBUG:018\n");
+
+	if (y)
+	{
+		free((void *)y);
+	}
+
+    // dbg(9, "VP-DEBUG:019\n");
+
+	if (u)
+	{
+		free((void *)u);
+	}
+
+    // dbg(9, "VP-DEBUG:020\n");
+
+	if (v)
+	{
+		free((void *)v);
+	}
+
+    // dbg(9, "VP-DEBUG:021\n");
+
 #endif
 
-	sem_post(&video_play_lock);
 
 
 #ifdef HAVE_FRAMEBUFFER
@@ -5747,7 +5793,7 @@ static void *video_play(void *dummy)
 
 	dec_video_t_counter();
 
-    //dbg(9, "VP-DEBUG:022\n");
+    // dbg(9, "VP-DEBUG:022-EXIT\n");
 
 	pthread_exit(0);
 }
@@ -5765,14 +5811,14 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
-    //dbg(9, "VP-DEBUG:F:001:video__y=%p\n", y);
+    // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
 
 
 	// ---- DEBUG ----
 	if (first_incoming_video_frame == 0)
 	{
 		long long timspan_in_ms = 99999;
-		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
+		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 0);
 
         if (timspan_in_ms < 99999)
         {
@@ -5832,8 +5878,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	// ---- DEBUG ----
 
 
-
-
 	if (global_video_active == 1)
 	{
 		if (friend_to_send_video_to == friend_number)
@@ -5847,7 +5891,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 				toggle_display_frame++;
 				if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
 				{
-					// dbg(9, "skipping video frame ...\n");
+					dbg(9, "skipping video frame ...\n");
 					return;
 				}
 				else
@@ -5858,7 +5902,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				sem_wait(&video_play_lock);
 
-                //dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
+                // dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
 
 				video__width = width;
 				video__height = height;
@@ -5871,28 +5915,29 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 				pthread_t video_play_thread;
 
-				if (get_video_t_counter() <= MAX_VIDEO_PLAY_THREADS)
+				if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
 				{
 					inc_video_t_counter();
-					if (pthread_create(&video_play_thread, NULL, video_play, NULL))
+                    int res_ = pthread_create(&video_play_thread, NULL, video_play, NULL);
+					if (res_ != 0)
 					{
 						dec_video_t_counter();
-						dbg(0, "error creating video play thread\n");
+						dbg(0, "error creating video play thread ERRNO=%d\n", res_);
 					}
 					else
 					{
-						// dbg(0, "creating video play thread #%d\n", get_video_t_counter());
+						// dbg(2, "creating video play thread #%d\n", get_video_t_counter());
 						if (pthread_detach(video_play_thread))
 						{
 							dbg(0, "error detaching video play thread\n");
 						}
 						// zzzzzz
-						yieldcpu(1);
+						// yieldcpu(1);
 					}
 				}
 				else
 				{
-					// dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+					dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
 				}
 
 				sem_post(&video_play_lock);
@@ -6345,7 +6390,7 @@ void *thread_av(void *data)
 							dbg(0, "error detaching video record thread\n");
 						}
 						// zzzzzz
-						yieldcpu(1);
+						// yieldcpu(1);
 					}
 				}
 				else
@@ -7756,7 +7801,7 @@ int Init ( ESContext *esContext, int ww, int hh )
       "}                            \n";
 
    GLbyte fShaderStr[] = 
-      "precision highp float;                              \n"
+      "precision mediump float;                              \n"
       "varying vec2 v_texCoord;                            \n"
       "uniform sampler2D s_yplane;                         \n"
       "uniform sampler2D s_uplane;                         \n"
@@ -7868,19 +7913,19 @@ int Init ( ESContext *esContext, int ww, int hh )
 
 
    // fill background with black color
-   // glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+   glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
 
    return GL_TRUE;
 }
 
 
-void Update (ESContext *esContext, float deltatime)
+inline void Update (ESContext *esContext, float deltatime)
 {
     //dbg(9, "openGL: Update\n");
-    
+    int res = 0;
     openGL_UserData *userData = esContext->userData;
 
-sem_wait(&video_play_lock);
+//sem_wait(&video_play_lock);
 
     if ((incoming_video_width != incoming_video_width_prev) || (incoming_video_height != incoming_video_height_prev))
     {
@@ -7934,14 +7979,7 @@ sem_wait(&video_play_lock);
             incoming_video_width_prev = incoming_video_width;
             incoming_video_height_prev = incoming_video_height;
 
-            free(incoming_video_frame_y);
-            incoming_video_frame_y = NULL;
-            free(incoming_video_frame_u);
-            incoming_video_frame_u = NULL;
-            free(incoming_video_frame_v);
-            incoming_video_frame_v = NULL;
-
-            incoming_video_have_new_frame = 0;
+            res = 1;
         }
     }
     else
@@ -7950,7 +7988,7 @@ sem_wait(&video_play_lock);
         {
             // video size is the same
 
-            dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
+            // dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
 
             //glActiveTexture ( GL_TEXTURE1 );
             glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
@@ -7988,26 +8026,37 @@ sem_wait(&video_play_lock);
                 GL_UNSIGNED_BYTE,
                 (GLubyte *)incoming_video_frame_y);
 
-            free(incoming_video_frame_y);
-            incoming_video_frame_y = NULL;
-            free(incoming_video_frame_u);
-            incoming_video_frame_u = NULL;
-            free(incoming_video_frame_v);
-            incoming_video_frame_v = NULL;
-            
-            incoming_video_have_new_frame = 0;
+            res = 1;
+
+        }
+        else
+        {
+            // no new frame data available
+            // yieldcpu(2);
         }
     }
-    
-sem_post(&video_play_lock);
 
+    incoming_video_have_new_frame = 0;
+
+//    sem_post(&video_play_lock);
+
+    global_did_draw_frame = res;
+    // dbg(9, "global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
 }
 
 // Draw a triangle using the shader pair created in Init()
 //
-void Draw (ESContext *esContext)
+void Draw(ESContext *esContext)
 {
+   // dbg(9, "opengl:draw\n"); 
+    
    openGL_UserData *userData = esContext->userData;
+   
+   if (incoming_video_have_new_frame == 0)
+   {
+       // nothing to draw
+       return;
+   }
     
    GLfloat vVertices[] = { -1.0f,  1.0f, 0.0f,  // Position 0
                             0.0f,  0.0f,        // TexCoord 0 
@@ -8043,6 +8092,7 @@ void Draw (ESContext *esContext)
    Update(esContext, 0);
 
    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+
 }
 
 
@@ -8050,6 +8100,12 @@ void Draw (ESContext *esContext)
 void ShutDown(ESContext *esContext)
 {
    openGL_UserData *userData = esContext->userData;
+
+   // Clear the color buffer
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // fill with black color
+   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
    // Delete texture object
    glDeleteTextures ( 1, &userData->yplaneTexId );
@@ -8155,6 +8211,8 @@ void *thread_opengl(void *data)
                 }
             }
             
+            // dbg(9, "openGL:cycle-start\n");
+            
             gettimeofday(&t2, &tz);
             deltatime = (float)(t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6);
             t1 = t2;
@@ -8164,21 +8222,44 @@ void *thread_opengl(void *data)
             //    esContext.updateFunc(&esContext, deltatime);
             //}
 
+
+            // struct timeval tm_01;
+            // __utimer_start(&tm_01);
+
+
+            int did_draw_frame2 = 0;
             if (esContext.drawFunc != NULL)
             {
                 esContext.drawFunc(&esContext);
+                // dbg(9, "global_did_draw_frame:002:%d\n", (int)global_did_draw_frame);
+                did_draw_frame2 = global_did_draw_frame;
+            }
+            
+            // reset global flag!
+            global_did_draw_frame = 0;
+
+            if (did_draw_frame2 == 1)
+            {
+                eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
             }
 
-            eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
-
             totaltime += deltatime;
-            frames++;
+            if (did_draw_frame2 == 1)
+            {
+                // long long timspan_in_ms = 99999;
+                // timspan_in_ms = __utimer_stop(&tm_01, "opengl_draw_cycle:", 0);
+                frames++;
+            }
+
             if (totaltime >  2.0f)
             {
-                // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
+                dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
                 totaltime -= 2.0f;
                 frames = 0;
             }
+
+            // dbg(9, "openGL:cycle-END\n");
+
         }
         else
         {
