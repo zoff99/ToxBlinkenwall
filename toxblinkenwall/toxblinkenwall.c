@@ -5062,24 +5062,35 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 			int err;
 			int has_error = 0;
-			int avail_bytes_in_play_buffer = (int)snd_pcm_avail_update(audio_play_handle);
-			// dbg(9, "snd_pcm_avail [1]:%d sample_count=%d\n", avail_bytes_in_play_buffer, sample_count);
+			snd_pcm_sframes_t avail_frames_in_play_buffer;
+            snd_pcm_sframes_t delay_in_samples;
+            snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+            
+            float ms_per_frame = (1000.0f / libao_sampling_rate);
+            
+			dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+                avail_frames_in_play_buffer, sample_count, delay_in_samples);
+			dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
+                (float)(avail_frames_in_play_buffer * ms_per_frame),
+                sample_count,
+                (float)((delay_in_samples / libao_channels) * ms_per_frame));
 
 			// dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
 
 
-			if ((int)avail_bytes_in_play_buffer > (int)sample_count)
-			{
+			//if ((int)avail_frames_in_play_buffer > (int)sample_count)
+			//{
 				err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
 				has_error = 0;
-			}
-			else
-			{
-				err = avail_bytes_in_play_buffer;
-				has_error = 1;
-			}
+			//}
+			//else
+			//{
+				// err = (int)avail_frames_in_play_buffer;
+				// has_error = 1;
+			//}
 
-			if ((has_error == 1) || (err != (int)sample_count))
+			// if ((has_error == 1) || (err != (int)sample_count))
+			if (err != (int)sample_count)
 			{
 				// dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
 
@@ -5089,12 +5100,13 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				//	dbg(0, "play_device:Resource temporarily unavailable (1)\n");
 				//	// zzzzzz
 				//	yieldcpu(1);
-				//}
+				//}                
 				if (err == -EAGAIN)
 				{
 					dbg(0, "play_device:EAGAIN\n");
 					// zzzzzz
-					yieldcpu(1);
+					yieldcpu(5);
+       				err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
 				}
 				else
 				{
@@ -5104,9 +5116,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 			sem_post(&audio_play_lock);
 
-
-			// avail_bytes_in_play_buffer = (int)snd_pcm_avail_update(audio_play_handle);
-			// dbg(9, "snd_pcm_avail [2]:%d\n", avail_bytes_in_play_buffer);
 
 			// dbg(0, "ALSA:014\n");
 
@@ -7477,7 +7486,7 @@ void init_sound_play_device(int channels, int sample_rate)
 
 		have_output_sound_device = 1;
 
-		// open in blocking mode for playing
+		// open in NON blocking mode for playing
 		if ((err = snd_pcm_open(&audio_play_handle, audio_play_device, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
 			dbg(9, "play_device:cannot open audio play device %s (%s)\n",
 				 audio_play_device,
@@ -7530,6 +7539,18 @@ void init_sound_play_device(int channels, int sample_rate)
 				 snd_strerror (err));
 			//exit (1);
 		}
+
+
+        snd_pcm_uframes_t bufsize = 5000;
+        snd_pcm_uframes_t periodsize = 5000 * 2;
+        err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &periodsize);
+        if (err < 0)
+        {
+            dbg(9, "play_device:cannot set buffer size %ld (%s)\n", (long)periodsize, snd_strerror(err));
+        }
+
+
+
 
 		if ((err = snd_pcm_hw_params (audio_play_handle, hw_params)) < 0) {
 			dbg(9, "play_device:cannot set parameters (%s)\n",
