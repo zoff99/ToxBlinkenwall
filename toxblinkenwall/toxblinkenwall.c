@@ -7541,8 +7541,8 @@ void init_sound_play_device(int channels, int sample_rate)
 		}
 
 
-        snd_pcm_uframes_t bufsize = 5000;
-        snd_pcm_uframes_t periodsize = 5000 * 2;
+        snd_pcm_uframes_t bufsize = 8000;
+        snd_pcm_uframes_t periodsize = 8000 * 2;
         err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &periodsize);
         if (err < 0)
         {
@@ -7805,7 +7805,7 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 
 // Initialize the shader and program object
 //
-int Init ( ESContext *esContext, int ww, int hh )
+int Init(ESContext *esContext, int ww, int hh)
 {
    esContext->userData = malloc(sizeof(openGL_UserData));
    openGL_UserData *userData = esContext->userData;
@@ -7858,7 +7858,7 @@ int Init ( ESContext *esContext, int ww, int hh )
 #endif
 
 
-   userData->programObject = esLoadProgram ( vShaderStr, fShaderStr );
+   userData->programObject = esLoadProgram(vShaderStr, fShaderStr);
 
            uint8_t *yy;
            uint8_t *uu;
@@ -7879,28 +7879,28 @@ int Init ( ESContext *esContext, int ww, int hh )
 
 
    // Get the attribute locations
-   userData->positionLoc = glGetAttribLocation ( userData->programObject, "a_position" );
-   userData->texCoordLoc = glGetAttribLocation ( userData->programObject, "a_texCoord" );
+   userData->positionLoc = glGetAttribLocation(userData->programObject, "a_position");
+   userData->texCoordLoc = glGetAttribLocation(userData->programObject, "a_texCoord");
    
    // Get the sampler location
-   userData->yplaneLoc = glGetUniformLocation ( userData->programObject, "s_yplane" );
-   userData->uplaneLoc = glGetUniformLocation ( userData->programObject, "s_uplane" );
-   userData->vplaneLoc = glGetUniformLocation ( userData->programObject, "s_vplane" );
+   userData->yplaneLoc = glGetUniformLocation(userData->programObject, "s_yplane");
+   userData->uplaneLoc = glGetUniformLocation(userData->programObject, "s_uplane");
+   userData->vplaneLoc = glGetUniformLocation(userData->programObject, "s_vplane");
 
 
     // Use tightly packed data
-    glPixelStorei ( GL_UNPACK_ALIGNMENT, 1 );
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     /* bind the U texture. */
    GLuint uplaneTexId;
-   glGenTextures ( 1, &uplaneTexId );
-   glBindTexture ( GL_TEXTURE_2D, uplaneTexId );
+   glGenTextures(1, &uplaneTexId);
+   glBindTexture(GL_TEXTURE_2D, uplaneTexId);
    userData->uplaneTexId = uplaneTexId;
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glEnable(GL_TEXTURE_2D);
+    //glEnable(GL_TEXTURE_2D);
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Utex);
     /* bind the U texture. */
 
@@ -7913,7 +7913,7 @@ int Init ( ESContext *esContext, int ww, int hh )
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glEnable(GL_TEXTURE_2D);
+    //glEnable(GL_TEXTURE_2D);
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (ww/2), (hh/2),0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Vtex);
     /* bind the V texture. */
 
@@ -7926,7 +7926,7 @@ int Init ( ESContext *esContext, int ww, int hh )
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glEnable(GL_TEXTURE_2D);
+    //glEnable(GL_TEXTURE_2D);
     glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, ww, hh,0,GL_LUMINANCE,GL_UNSIGNED_BYTE,Ytex);   
     /* bind the Y texture. */
 
@@ -7940,7 +7940,7 @@ int Init ( ESContext *esContext, int ww, int hh )
 }
 
 
-inline void Update (ESContext *esContext, float deltatime)
+inline void Update(ESContext *esContext, float deltatime)
 {
     //dbg(9, "openGL: Update\n");
     int res = 0;
@@ -7973,7 +7973,7 @@ inline void Update (ESContext *esContext, float deltatime)
     /* bind the V texture. */
     glActiveTexture ( GL_TEXTURE2 );
     glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
-    glUniform1i ( userData->uplaneLoc, 2 );
+    glUniform1i ( userData->vplaneLoc, 2 );
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
