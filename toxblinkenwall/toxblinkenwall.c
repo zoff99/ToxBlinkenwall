@@ -125,6 +125,8 @@ over_voltage_sdram_c=4
 #include <vpx/vpx_image.h>
 #include <sys/mman.h>
 
+#include "rb.h"
+
 #define V4LCONVERT 1
 
 // --------- video output: choose only 1 of those! ---------
@@ -250,6 +252,8 @@ int global_did_draw_frame = 0;
 
 #endif
 
+
+BWRingBuffer *video_play_rb = NULL;
 
 
 #if defined(HAVE_ALSA_REC) || defined(HAVE_ALSA_PLAY)
@@ -627,7 +631,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 3
+#define MAX_VIDEO_PLAY_THREADS 4
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -4597,6 +4601,13 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
 	{
 		global_video_active = 0;
+        
+        if (video_play_rb != NULL)
+        {
+            bw_rb_kill(video_play_rb);
+            video_play_rb = NULL;
+        }
+        
 		dbg(9, "Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
 		friend_to_send_video_to = -1;
 
@@ -4606,6 +4617,13 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 	else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	{
 		global_video_active = 0;
+
+        if (video_play_rb != NULL)
+        {
+            bw_rb_kill(video_play_rb);
+            video_play_rb = NULL;
+        }
+
 		dbg(9, "Call with friend %d errored, global_video_active=%d\n", friend_number, global_video_active);
 		friend_to_send_video_to = -1;
 
@@ -5396,9 +5414,9 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
 
 
-	uint8_t *y = (uint8_t *)calloc(1, y_layer_size);
-	uint8_t *u = (uint8_t *)calloc(1, u_layer_size);
-	uint8_t *v = (uint8_t *)calloc(1, v_layer_size);
+	uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
+	uint8_t *u = (uint8_t *)(y + y_layer_size);
+	uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
 
     // dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
 	memcpy(y, video__y, y_layer_size);
@@ -5412,65 +5430,48 @@ static void *video_play(void *dummy)
     //dbg(9, "VP-DEBUG:009\n");
 
 
-				int frame_width_px = (int) max(frame_width_px1, abs(ystride_));
-				int frame_height_px = (int) frame_height_px1;
-
-	sem_post(&video_play_lock);
+				uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
+				uint32_t frame_height_px = (uint32_t) frame_height_px1;
 
 
 #ifdef HAVE_OUTPUT_OPENGL
-    incoming_video_width = frame_width_px;
-    incoming_video_height = frame_height_px;
-    incoming_video_frame_y = y;
-    incoming_video_frame_u = u;
-    incoming_video_frame_v = v;
+    incoming_video_width = (int)frame_width_px;
+    incoming_video_height = (int)frame_height_px;
+    //incoming_video_frame_y = y;
+    //incoming_video_frame_u = u;
+    //incoming_video_frame_v = v;
+    
+    if (video_play_rb == NULL)
+    {
+        video_play_rb = bw_rb_new(5); // store max. 5 video frame pointers
+    }
+
     if ((y) && (u) && (v))
     {
-        incoming_video_have_new_frame = 1;
-    }
-    else
-    {
-        incoming_video_have_new_frame = 0;
+        if (bw_rb_size(video_play_rb) > 4)
+        {
+            free(y);
+        }
+        else
+        {
+            uint8_t dummy = 0;
+            void *res = bw_rb_write(video_play_rb, y, frame_width_px, frame_height_px);
+            if (res != NULL)
+            {
+                free(y);
+            }
+        }
     }
 
     // long long timspan_in_ms = 99999;
     // timspan_in_ms = __utimer_stop(&tm_01, "video_play_stage_1:", 0);
 
-    while (incoming_video_have_new_frame == 1)
-    {
-        // wait for openGL thread to comsume the video frame data
-        yieldcpu(3);
-    }
-
-
-    incoming_video_frame_y = NULL;
-    incoming_video_frame_u = NULL;
-    incoming_video_frame_v = NULL;
-
-    // dbg(9, "VP-DEBUG:018\n");
-
-	if (y)
-	{
-		free((void *)y);
-	}
-
-    // dbg(9, "VP-DEBUG:019\n");
-
-	if (u)
-	{
-		free((void *)u);
-	}
-
-    // dbg(9, "VP-DEBUG:020\n");
-
-	if (v)
-	{
-		free((void *)v);
-	}
-
     // dbg(9, "VP-DEBUG:021\n");
 
 #endif
+
+
+	sem_post(&video_play_lock);
 
 
 
@@ -6514,7 +6515,13 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 	{
 		really_in_call = 1;
 	}
-	
+    
+    if (video_play_rb != NULL)
+    {
+        bw_rb_kill(video_play_rb);
+        video_play_rb = NULL;
+    }
+
 	dbg(9, "av_local_disconnect\n");
 	TOXAV_ERR_CALL_CONTROL error = 0;
 	toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
@@ -7948,107 +7955,132 @@ inline void Update(ESContext *esContext, float deltatime)
 
 //sem_wait(&video_play_lock);
 
+    int incoming_frames_count = 0;
+    if (video_play_rb)
+    {
+        incoming_frames_count = bw_rb_size(video_play_rb);
+    }
+
     if ((incoming_video_width != incoming_video_width_prev) || (incoming_video_height != incoming_video_height_prev))
     {
-        if ((incoming_video_frame_y) && (incoming_video_frame_u) && (incoming_video_frame_v) && (incoming_video_have_new_frame == 1))
+        if (incoming_frames_count > 0)
         {
             // * video size changed *
+            uint32_t ww;
+            uint32_t hh;
+            uint8_t *p;
+            if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
+            {
 
-            dbg(9, "openGL: video size changed\n");
+                dbg(9, "openGL: video size changed\n");
 
-    /* bind the U texture. */
+                /* bind the U texture. */
 
-    glActiveTexture ( GL_TEXTURE1 );
-    glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
-    glUniform1i ( userData->uplaneLoc, 1 );
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-        (incoming_video_width/2), (incoming_video_height/2),
-        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_u);
-    /* bind the U texture. */
+                glActiveTexture ( GL_TEXTURE1 );
+                glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
+                glUniform1i ( userData->uplaneLoc, 1 );
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+                glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+                    (incoming_video_width/2), (incoming_video_height/2),
+                    0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
+                    (GLubyte *)(p + (ww * hh)));
+                /* bind the U texture. */
 
-    /* bind the V texture. */
-    glActiveTexture ( GL_TEXTURE2 );
-    glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
-    glUniform1i ( userData->vplaneLoc, 2 );
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-        (incoming_video_width/2), (incoming_video_height/2),
-        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_v);
-    /* bind the V texture. */
+                /* bind the V texture. */
+                glActiveTexture ( GL_TEXTURE2 );
+                glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
+                glUniform1i ( userData->vplaneLoc, 2 );
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+                glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+                    (incoming_video_width/2), (incoming_video_height/2),
+                    0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
+                    (GLubyte *)(p + (ww * hh) + ((ww/2) * (hh/2))));
+                /* bind the V texture. */
 
-    /* bind the Y texture. */
-    glActiveTexture ( GL_TEXTURE0 );
-    glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
-    glUniform1i ( userData->yplaneLoc, 0 );
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-        incoming_video_width, incoming_video_height,
-        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,(GLubyte *)incoming_video_frame_y);   
-    /* bind the Y texture. */
+                /* bind the Y texture. */
+                glActiveTexture ( GL_TEXTURE0 );
+                glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+                glUniform1i ( userData->yplaneLoc, 0 );
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+                glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
+                    incoming_video_width, incoming_video_height,
+                    0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
+                    (GLubyte *)p);   
+                /* bind the Y texture. */
 
 
-            incoming_video_width_prev = incoming_video_width;
-            incoming_video_height_prev = incoming_video_height;
+                incoming_video_width_prev = ww;
+                incoming_video_height_prev = hh;
 
-            res = 1;
+                res = 1;
+
+                free(p);
+            }
         }
     }
     else
     {
-        if ((incoming_video_frame_y) && (incoming_video_frame_u) && (incoming_video_frame_v) && (incoming_video_have_new_frame == 1))
+        if (incoming_frames_count > 0)
         {
             // video size is the same
 
-            // dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
+            uint32_t ww;
+            uint32_t hh;
+            uint8_t *p;
+            if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
+            {
 
-            //glActiveTexture ( GL_TEXTURE1 );
-            glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
-            glUniform1i ( userData->uplaneLoc, 1 );
-            //glEnable(GL_TEXTURE_2D);
-            glTexSubImage2D(GL_TEXTURE_2D,
-                0,0,0,
-                (incoming_video_width/2),
-                (incoming_video_height/2),
-                GL_LUMINANCE,
-                GL_UNSIGNED_BYTE,
-                (GLubyte *)incoming_video_frame_u);
+                // dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
 
-            //glActiveTexture ( GL_TEXTURE2 );
-            glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
-            glUniform1i ( userData->vplaneLoc, 2 );
-            //glEnable(GL_TEXTURE_2D);
-            glTexSubImage2D(GL_TEXTURE_2D,
-                0,0,0,
-                (incoming_video_width/2),
-                (incoming_video_height/2),
-                GL_LUMINANCE,
-                GL_UNSIGNED_BYTE,
-                (GLubyte *)incoming_video_frame_v);
+                //glActiveTexture ( GL_TEXTURE1 );
+                glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
+                glUniform1i ( userData->uplaneLoc, 1 );
+                //glEnable(GL_TEXTURE_2D);
+                glTexSubImage2D(GL_TEXTURE_2D,
+                    0,0,0,
+                    (ww/2),
+                    (hh/2),
+                    GL_LUMINANCE,
+                    GL_UNSIGNED_BYTE,
+                    (GLubyte *)(p + (ww * hh)));
 
-            //glActiveTexture ( GL_TEXTURE0 );
-            glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
-            glUniform1i ( userData->yplaneLoc, 0 );
-            //glEnable(GL_TEXTURE_2D);
-            glTexSubImage2D(GL_TEXTURE_2D,
-                0,0,0,
-                (incoming_video_width),
-                (incoming_video_height),
-                GL_LUMINANCE,
-                GL_UNSIGNED_BYTE,
-                (GLubyte *)incoming_video_frame_y);
+                //glActiveTexture ( GL_TEXTURE2 );
+                glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
+                glUniform1i ( userData->vplaneLoc, 2 );
+                //glEnable(GL_TEXTURE_2D);
+                glTexSubImage2D(GL_TEXTURE_2D,
+                    0,0,0,
+                    (incoming_video_width/2),
+                    (incoming_video_height/2),
+                    GL_LUMINANCE,
+                    GL_UNSIGNED_BYTE,
+                    (GLubyte *)(p + (ww * hh) + ((ww/2) * (hh/2))));
 
-            res = 1;
+                //glActiveTexture ( GL_TEXTURE0 );
+                glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
+                glUniform1i ( userData->yplaneLoc, 0 );
+                //glEnable(GL_TEXTURE_2D);
+                glTexSubImage2D(GL_TEXTURE_2D,
+                    0,0,0,
+                    (incoming_video_width),
+                    (incoming_video_height),
+                    GL_LUMINANCE,
+                    GL_UNSIGNED_BYTE,
+                    (GLubyte *)p);
 
+                res = 1;
+                
+                free(p);
+            }
         }
         else
         {
@@ -8056,8 +8088,6 @@ inline void Update(ESContext *esContext, float deltatime)
             // yieldcpu(2);
         }
     }
-
-    incoming_video_have_new_frame = 0;
 
 //    sem_post(&video_play_lock);
 
@@ -8073,10 +8103,13 @@ void Draw(ESContext *esContext)
     
    openGL_UserData *userData = esContext->userData;
    
-   if (incoming_video_have_new_frame == 0)
+   if (video_play_rb)
    {
-       // nothing to draw
-       return;
+       if (bw_rb_size(video_play_rb) == 0)
+       {
+           // nothing to draw
+           return;
+       }
    }
     
    GLfloat vVertices[] = { -1.0f,  1.0f, 0.0f,  // Position 0
