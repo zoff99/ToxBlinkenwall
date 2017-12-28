@@ -5068,12 +5068,12 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             
             float ms_per_frame = (1000.0f / libao_sampling_rate);
             
-			dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
-                avail_frames_in_play_buffer, sample_count, delay_in_samples);
-			dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
-                (float)(avail_frames_in_play_buffer * ms_per_frame),
-                sample_count,
-                (float)((delay_in_samples / libao_channels) * ms_per_frame));
+			//dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+            //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
+			//dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
+            //    (float)(avail_frames_in_play_buffer * ms_per_frame),
+            //    sample_count,
+            //    (float)((delay_in_samples / libao_channels) * ms_per_frame));
 
 			// dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
 
@@ -5827,7 +5827,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 	if (first_incoming_video_frame == 0)
 	{
 		long long timspan_in_ms = 99999;
-		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 0);
+		timspan_in_ms = __utimer_stop(&tm_incoming_video_frames, "=== Video frame incoming every === :", 1);
 
         if (timspan_in_ms < 99999)
         {
