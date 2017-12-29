@@ -248,6 +248,8 @@ uint8_t *incoming_video_frame_y = NULL;
 uint8_t *incoming_video_frame_u = NULL;
 uint8_t *incoming_video_frame_v = NULL;
 
+#define OPENGL_DISPLAY_FPS_AFTER_SECONDS (10)
+
 int global_did_draw_frame = 0;
 
 #endif
@@ -612,7 +614,7 @@ ao_sample_format _ao_format;
 int _ao_default_driver = -1;
 sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
-#define MAX_AO_PLAY_THREADS 3
+#define MAX_AO_PLAY_THREADS 2
 sem_t audio_play_lock;
 #endif
 
@@ -622,10 +624,14 @@ const char *audio_play_device = "default";
 int have_output_sound_device = 1;
 sem_t count_audio_play_threads;
 int count_audio_play_threads_int;
+long debug_alsa_play_001 = 0;
 #define MAX_ALSA_AUDIO_PLAY_THREADS 1
 sem_t audio_play_lock;
-#define ALSA_AUDIO_PLAY_START_THRESHOLD (2)
-#define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (2)
+#define ALSA_AUDIO_PLAY_START_THRESHOLD (300)
+#define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
+#define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
+#define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
+#define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (400)
 #endif
 
 
@@ -5086,12 +5092,16 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             
             float ms_per_frame = (1000.0f / libao_sampling_rate);
             
-			//dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
-            //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
-			//dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
-            //    (float)(avail_frames_in_play_buffer * ms_per_frame),
-            //    sample_count,
-            //    (float)((delay_in_samples / libao_channels) * ms_per_frame));
+            debug_alsa_play_001++;
+            if (debug_alsa_play_001 > ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES)
+            {
+                debug_alsa_play_001 = 0;
+                //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+                //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
+                dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
+                    (float)(avail_frames_in_play_buffer * ms_per_frame),
+                    (float)((delay_in_samples / libao_channels) * ms_per_frame));
+            }
 
 			// dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
 
@@ -5121,14 +5131,60 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 				//}                
 				if (err == -EAGAIN)
 				{
-					dbg(0, "play_device:EAGAIN\n");
+					dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
 					// zzzzzz
 					yieldcpu(5);
        				err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
 				}
-				else
+				else if (err < 0)
 				{
-					sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                    
+                    if (err == -EPIPE)
+                    {
+                        dbg(0, "play_device:BUFFER UNDERRUN: trying to compensate ... \n");
+
+                        //snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+
+                        //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+                        //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
+
+                        //dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
+                        //    (float)(avail_frames_in_play_buffer * ms_per_frame),
+                        //    (float)((delay_in_samples / libao_channels) * ms_per_frame),
+                        //    snd_strerror(err));
+
+                        dbg(9, "play_device: (2)opened device: %s | state: %s\n",
+                            snd_pcm_name(audio_play_handle),
+                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+
+
+                        snd_pcm_prepare(audio_play_handle);
+                        err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+
+                        dbg(9, "play_device: (3)opened device: %s | state: %s\n",
+                            snd_pcm_name(audio_play_handle),
+                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+
+                    }                    
+                    
+                    if (err < 0)
+                    {
+                        snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+
+                        dbg(0, "play_device:BUFFER UNDERRUN err=%d -EPIPE=%d, -ESTRIPE=%d\n", (int)err, (int)-EPIPE, (int)-ESTRPIPE);
+                        dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d errstr=%s\n",
+                            avail_frames_in_play_buffer, sample_count, delay_in_samples, snd_strerror(err));
+                        dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
+                            (float)(avail_frames_in_play_buffer * ms_per_frame),
+                            (float)((delay_in_samples / libao_channels) * ms_per_frame),
+                            snd_strerror(err));
+
+                        dbg(9, "play_device: opened device: %s | state: %s\n",
+                            snd_pcm_name(audio_play_handle),
+                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+
+                        sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                    }
 				}
 			}
 
@@ -7028,6 +7084,7 @@ void close_sound_device()
 {
 	if (have_input_sound_device == 1)
 	{
+        snd_pcm_drain(audio_capture_handle);
 		snd_pcm_close(audio_capture_handle);
 	}
 }
@@ -7476,6 +7533,7 @@ void close_sound_play_device()
 
 	if (have_output_sound_device == 1)
 	{
+        snd_pcm_drain(audio_play_handle);
 		snd_pcm_close(audio_play_handle);
 	}
 
@@ -7547,14 +7605,49 @@ void init_sound_play_device(int channels, int sample_rate)
 			//exit (1);
 		}
 
+#if 0
 
-        snd_pcm_uframes_t bufsize = 8000;
-        snd_pcm_uframes_t periodsize = 8000 * 2;
-        err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &periodsize);
+        snd_pcm_uframes_t bufsize = ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES;
+        err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &bufsize);
         if (err < 0)
         {
-            dbg(9, "play_device:cannot set buffer size %ld (%s)\n", (long)periodsize, snd_strerror(err));
+            dbg(9, "play_device:cannot set buffer size %ld (%s)\n", (long)bufsize, snd_strerror(err));
         }
+#endif
+
+        unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
+        unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
+        snd_pcm_sframes_t buffer_size;
+        snd_pcm_sframes_t period_size;
+        snd_pcm_uframes_t size;
+        int dir;
+
+        err = snd_pcm_hw_params_set_buffer_time_near(audio_play_handle, hw_params, &buffer_time, &dir);
+        if (err < 0) {
+                dbg(9, "Unable to set buffer time %i for playback: %s\n", buffer_time, snd_strerror(err));
+        }
+        err = snd_pcm_hw_params_get_buffer_size(hw_params, &size);
+        if (err < 0) {
+                dbg(9, "Unable to get buffer size for playback: %s\n", snd_strerror(err));
+        }
+
+        buffer_size = size;
+        dbg(9, "buffer_size=%ld\n", (long)buffer_size);
+
+        /* set the period time */
+        err = snd_pcm_hw_params_set_period_time_near(audio_play_handle, hw_params, &period_time, &dir);
+        if (err < 0) {
+                dbg(9, "Unable to set period time %i for playback: %s\n", period_time, snd_strerror(err));
+        }
+        err = snd_pcm_hw_params_get_period_size(hw_params, &size, &dir);
+        if (err < 0) {
+                dbg(9, "Unable to get period size for playback: %s\n", snd_strerror(err));
+        }
+        period_size = size;
+        dbg(9, "period_size=%ld\n", (long)period_size);
+
+        snd_pcm_uframes_t start_threshold = (snd_pcm_uframes_t)((buffer_size / period_size) * period_size);
+        dbg(9, "start_threshold: %ld\n", (long)start_threshold);
 
 
 
@@ -7588,24 +7681,35 @@ void init_sound_play_device(int channels, int sample_rate)
 		err = snd_pcm_sw_params_get_silence_threshold(swparams, &val);
 		dbg(9, "play_device:get_silence_threshold:%d\n", (int)val);
 
+
         /* start the transfer when the buffer is almost full: */
         /* (buffer_size / avail_min) * avail_min */
-        err = snd_pcm_sw_params_set_start_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)ALSA_AUDIO_PLAY_START_THRESHOLD);
+        err = snd_pcm_sw_params_set_start_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)start_threshold);
         if (err < 0)
 		{
 			dbg(9, "play_device:Unable to set start threshold mode for playback: %s\n", snd_strerror(err));
 		}
 
+#if 0
+        err = snd_pcm_sw_params_set_stop_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)ALSA_AUDIO_PLAY_STOP_THRESHOLD);
+        if (err < 0)
+		{
+			dbg(9, "play_device:Unable to set stop threshold mode for playback: %s\n", snd_strerror(err));
+		}
+#endif
+
+#if 0
         err = snd_pcm_sw_params_set_silence_threshold(audio_play_handle, swparams, (snd_pcm_uframes_t)ALSA_AUDIO_PLAY_SILENCE_THRESHOLD);
         if (err < 0)
 		{
 			dbg(9, "play_device:Unable to set silence threshold mode for playback: %s\n", snd_strerror(err));
 		}
+#endif
 
 		err = snd_pcm_sw_params_get_start_threshold(swparams, &val);
-		dbg(9, "play_device:get_start_threshold (after):%d\n", (int)val);
+		dbg(9, "play_device:get_start_threshold (after):%ld\n", (long)val);
 		err = snd_pcm_sw_params_get_silence_threshold(swparams, &val);
-		dbg(9, "play_device:get_silence_threshold (after):%d\n", (int)val);
+		dbg(9, "play_device:get_silence_threshold (after):%ld\n", (long)val);
 
 
         /* write the parameters to the playback device */
@@ -7634,22 +7738,23 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
 
         if (err == -EPIPE)
 		{
-				// dbg(9, "play_device:under-run ...\n");
-				/* under-run */
-                err = snd_pcm_prepare(handle);
-                if (err < 0)
-				{
-                        dbg(9, "play_device:underrun!: %s\n", snd_strerror(err));
-						// zzzzzz
-						// yieldcpu(20);
-						close_sound_play_device();
-						// dbg(9, "play_device:close_sound_play_device\n");
-						// zzzzzz
-						// yieldcpu(20);
-						init_sound_play_device(channels, sample_rate);
-						// dbg(9, "play_device:init_sound_play_device\n");
-				}
-                return 0;
+            // dbg(9, "play_device:under-run ...\n");
+            /* under-run */
+            err = snd_pcm_recover(handle, err, 0);
+
+            if (err < 0)
+            {
+                    dbg(9, "play_device:underrun!: %s\n", snd_strerror(err));
+                    // zzzzzz
+                    // yieldcpu(20);
+                    close_sound_play_device();
+                    // dbg(9, "play_device:close_sound_play_device\n");
+                    // zzzzzz
+                    // yieldcpu(20);
+                    init_sound_play_device(channels, sample_rate);
+                    // dbg(9, "play_device:init_sound_play_device\n");
+            }
+            return 0;
         }
 		else if (err == -ESTRPIPE)
 		{
@@ -7876,7 +7981,11 @@ int Init(ESContext *esContext, int ww, int hh)
            vv = uu + ((ww / 2) * (hh / 2));
 
            // read_yuf_file(3, yy, (size_t)((ww * hh) * 1.5));
-           // memset(yy, 0, (size_t)((ww * hh) * 1.5));
+
+           // make yuv area black
+           memset(yy, 0, (size_t)(ww * hh));
+           memset(uu, 128, (size_t)((ww/2) * (hh/2)));
+           memset(vv, 128, (size_t)((ww/2) * (hh/2)));
 
     GLubyte *Ytex,*Utex,*Vtex;
 
@@ -7940,8 +8049,14 @@ int Init(ESContext *esContext, int ww, int hh)
    free(yy);
 
 
-   // fill background with black color
-   glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+   // fill background with some color
+   glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
+   eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
+
+   glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
+   eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
 
    return GL_TRUE;
 }
@@ -7974,8 +8089,14 @@ inline void Update(ESContext *esContext, float deltatime)
 
                 dbg(9, "openGL: video size changed\n");
 
+                glDeleteTextures(1, &userData->yplaneTexId);
+                glDeleteTextures(1, &userData->uplaneTexId);
+                glDeleteTextures(1, &userData->vplaneTexId);
+
+
                 /* bind the U texture. */
 
+                glGenTextures(1, &userData->uplaneTexId);
                 glActiveTexture ( GL_TEXTURE1 );
                 glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
                 glUniform1i ( userData->uplaneLoc, 1 );
@@ -7990,6 +8111,7 @@ inline void Update(ESContext *esContext, float deltatime)
                 /* bind the U texture. */
 
                 /* bind the V texture. */
+                glGenTextures(1, &userData->vplaneTexId);
                 glActiveTexture ( GL_TEXTURE2 );
                 glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
                 glUniform1i ( userData->vplaneLoc, 2 );
@@ -8004,6 +8126,7 @@ inline void Update(ESContext *esContext, float deltatime)
                 /* bind the V texture. */
 
                 /* bind the Y texture. */
+                glGenTextures(1, &userData->yplaneTexId);
                 glActiveTexture ( GL_TEXTURE0 );
                 glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
                 glUniform1i ( userData->yplaneLoc, 0 );
@@ -8095,8 +8218,7 @@ inline void Update(ESContext *esContext, float deltatime)
     // dbg(9, "global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
 }
 
-// Draw a triangle using the shader pair created in Init()
-//
+
 void Draw(ESContext *esContext)
 {
    // dbg(9, "opengl:draw\n"); 
@@ -8125,23 +8247,23 @@ void Draw(ESContext *esContext)
 
 
    // Set the viewport
-   glViewport ( 0, 0, esContext->width, esContext->height );
+   glViewport(0, 0, esContext->width, esContext->height);
 
-   // Clear the color buffer
-   glClear ( GL_COLOR_BUFFER_BIT );
+   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
 
    // Use the program object
-   glUseProgram ( userData->programObject );
+   glUseProgram(userData->programObject);
 
    // Load the vertex position
-   glVertexAttribPointer ( userData->positionLoc, 3, GL_FLOAT, 
+   glVertexAttribPointer(userData->positionLoc, 3, GL_FLOAT, 
                            GL_FALSE, 5 * sizeof(GLfloat), vVertices );
    // Load the texture coordinate
-   glVertexAttribPointer ( userData->texCoordLoc, 2, GL_FLOAT,
+   glVertexAttribPointer(userData->texCoordLoc, 2, GL_FLOAT,
                            GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3] );
 
-   glEnableVertexAttribArray ( userData->positionLoc );
-   glEnableVertexAttribArray ( userData->texCoordLoc );
+   glEnableVertexAttribArray(userData->positionLoc );
+   glEnableVertexAttribArray(userData->texCoordLoc );
 
    Update(esContext, 0);
 
@@ -8153,21 +8275,19 @@ void Draw(ESContext *esContext)
 //
 void ShutDown(ESContext *esContext)
 {
-   openGL_UserData *userData = esContext->userData;
+    openGL_UserData *userData = esContext->userData;
 
-   // Clear the color buffer
-   glClear(GL_COLOR_BUFFER_BIT);
+    // Delete texture object
+    glDeleteTextures(1, &userData->yplaneTexId);
+    glDeleteTextures(1, &userData->uplaneTexId);
+    glDeleteTextures(1, &userData->vplaneTexId);
 
-   // fill with black color
-   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
 
-   // Delete texture object
-   glDeleteTextures ( 1, &userData->yplaneTexId );
-   glDeleteTextures ( 1, &userData->uplaneTexId );
-   glDeleteTextures ( 1, &userData->vplaneTexId );
-
-   // Delete program object
-   glDeleteProgram ( userData->programObject );
+    // Delete program object
+    glDeleteProgram(userData->programObject);
 }
 
 
@@ -8245,13 +8365,13 @@ void *thread_opengl(void *data)
                    esContext.userData = &userData;
                    esCreateWindow(&esContext,
                         "ToxBlinkenwall",
-                        (int)(fb_screen_width*w_factor),
-                        (int)(fb_screen_height*h_factor),
+                        (int)(fb_screen_width * w_factor),
+                        (int)(fb_screen_height * h_factor),
                         fb_screen_width,
                         fb_screen_height,
                         ES_WINDOW_ALPHA); // ES_WINDOW_RGB
 
-                   Init(&esContext, incoming_video_width, incoming_video_height);
+                   Init(&esContext, 64, 64);
 
                    esRegisterDrawFunc(&esContext, Draw);
                    // esRegisterUpdateFunc(&esContext, Update);
@@ -8288,6 +8408,8 @@ void *thread_opengl(void *data)
                 // dbg(9, "global_did_draw_frame:002:%d\n", (int)global_did_draw_frame);
                 did_draw_frame2 = global_did_draw_frame;
             }
+
+            totaltime += deltatime;
             
             // reset global flag!
             global_did_draw_frame = 0;
@@ -8295,25 +8417,23 @@ void *thread_opengl(void *data)
             if (did_draw_frame2 == 1)
             {
                 eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
-            }
-
-            totaltime += deltatime;
-            if (did_draw_frame2 == 1)
-            {
                 // long long timspan_in_ms = 99999;
                 // timspan_in_ms = __utimer_stop(&tm_01, "opengl_draw_cycle:", 0);
                 frames++;
-            }
 
-            if (totaltime >  2.0f)
+                if (totaltime > (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS)
+                {
+                    dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
+                    totaltime -= (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS;
+                    frames = 0;
+                }
+            }
+            else
             {
-                dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
-                totaltime -= 2.0f;
-                frames = 0;
+                yieldcpu(10);
             }
 
             // dbg(9, "openGL:cycle-END\n");
-
         }
         else
         {
@@ -8323,7 +8443,7 @@ void *thread_opengl(void *data)
                 opengl_active = 0;
             }
             
-            yieldcpu(100);
+            yieldcpu(200);
         }
    }
    
