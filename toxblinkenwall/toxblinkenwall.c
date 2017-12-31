@@ -7617,8 +7617,8 @@ void init_sound_play_device(int channels, int sample_rate)
 
         // unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
         // unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
-        unsigned int buffer_time = (200000) * 2;     // 200ms    /* ring buffer length in us */
-        unsigned int period_time = (200000 / 5) * 2; //  40ms    /* period time in us */
+        unsigned int buffer_time = (180000) * 2;     // xx ms    /* ring buffer length in us */
+        unsigned int period_time = (180000 / 5) * 2; // xx ms    /* period time in us */
         snd_pcm_sframes_t buffer_size;
         snd_pcm_sframes_t period_size;
         snd_pcm_uframes_t size;
@@ -8069,7 +8069,7 @@ int Init(ESContext *esContext, int ww, int hh)
 }
 
 
-inline void Update(ESContext *esContext, float deltatime)
+void Update(ESContext *esContext, float deltatime)
 {
     //dbg(9, "openGL: Update\n");
     int res = 0;
