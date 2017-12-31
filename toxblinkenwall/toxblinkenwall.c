@@ -8291,11 +8291,16 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
 
     // Delete program object
     glDeleteProgram(userData->programObject);
-    
+
+    eglMakeCurrent(esContext->eglDisplay,EGL_NO_SURFACE,EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroySurface(esContext->eglDisplay, esContext->eglSurface); 
+    eglDestroyContext(esContext->eglDisplay, esContext);
+    eglTerminate(esContext->eglDisplay); 
     // --------------------------------------
     // --------------------------------------
 
-    
+
+#if 0    
     // --------------------------------------
     // --------------------------------------
     // --- clear bg ---
@@ -8328,6 +8333,8 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
 
     // --------------------------------------
     // --------------------------------------
+#endif
+
 }
 
 
