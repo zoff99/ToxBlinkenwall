@@ -5491,8 +5491,8 @@ static void *video_play(void *dummy)
 
 
 #ifdef HAVE_OUTPUT_OPENGL
-    incoming_video_width = (int)frame_width_px;
-    incoming_video_height = (int)frame_height_px;
+    //incoming_video_width = (int)frame_width_px;
+    //incoming_video_height = (int)frame_height_px;
     //incoming_video_frame_y = y;
     //incoming_video_frame_u = u;
     //incoming_video_frame_v = v;
@@ -7615,8 +7615,10 @@ void init_sound_play_device(int channels, int sample_rate)
         }
 #endif
 
-        unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
-        unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
+        // unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
+        // unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
+        unsigned int buffer_time = (200000) * 2;     // 200ms    /* ring buffer length in us */
+        unsigned int period_time = (200000 / 5) * 2; //  40ms    /* period time in us */
         snd_pcm_sframes_t buffer_size;
         snd_pcm_sframes_t period_size;
         snd_pcm_uframes_t size;
@@ -7858,35 +7860,37 @@ GLuint LoadShader ( GLenum type, const char *shaderSrc )
    // Create the shader object
    shader = glCreateShader ( type );
 
-   if ( shader == 0 )
-   	return 0;
+   if (shader == 0)
+   {
+        return 0;
+   }
 
    // Load the shader source
-   glShaderSource ( shader, 1, &shaderSrc, NULL );
+   glShaderSource( shader, 1, &shaderSrc, NULL );
    
    // Compile the shader
-   glCompileShader ( shader );
+   glCompileShader( shader );
 
    // Check the compile status
-   glGetShaderiv ( shader, GL_COMPILE_STATUS, &compiled );
+   glGetShaderiv( shader, GL_COMPILE_STATUS, &compiled );
 
-   if ( !compiled ) 
+   if (!compiled) 
    {
       GLint infoLen = 0;
 
-      glGetShaderiv ( shader, GL_INFO_LOG_LENGTH, &infoLen );
+      glGetShaderiv( shader, GL_INFO_LOG_LENGTH, &infoLen );
       
-      if ( infoLen > 1 )
+      if (infoLen > 1)
       {
          char* infoLog = calloc(1, sizeof(char) * 513);
 
          glGetShaderInfoLog ( shader, 512, NULL, infoLog );
          dbg(9, "Error compiling shader:\n%s\n", infoLog );            
          
-         free (infoLog);
+         free(infoLog);
       }
 
-      glDeleteShader (shader);
+      glDeleteShader(shader);
       return 0;
    }
 
@@ -8010,7 +8014,9 @@ int Init(ESContext *esContext, int ww, int hh)
     /* bind the U texture. */
    GLuint uplaneTexId;
    glGenTextures(1, &uplaneTexId);
+   //glActiveTexture ( GL_TEXTURE1 );
    glBindTexture(GL_TEXTURE_2D, uplaneTexId);
+   //glUniform1i ( userData->uplaneLoc, 1 );
    userData->uplaneTexId = uplaneTexId;
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -8023,7 +8029,9 @@ int Init(ESContext *esContext, int ww, int hh)
     /* bind the V texture. */
    GLuint vplaneTexId;
    glGenTextures ( 1, &vplaneTexId );
+   //glActiveTexture ( GL_TEXTURE2 );
    glBindTexture ( GL_TEXTURE_2D, vplaneTexId );
+   //glUniform1i ( userData->vplaneLoc, 2 );
    userData->vplaneTexId = vplaneTexId;
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -8036,7 +8044,9 @@ int Init(ESContext *esContext, int ww, int hh)
     /* bind the Y texture. */
    GLuint yplaneTexId;
    glGenTextures ( 1, &yplaneTexId );
+   //glActiveTexture ( GL_TEXTURE0 );
    glBindTexture ( GL_TEXTURE_2D, yplaneTexId );
+   //glUniform1i ( userData->yplaneLoc, 0 );
    userData->yplaneTexId = yplaneTexId;
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -8048,13 +8058,10 @@ int Init(ESContext *esContext, int ww, int hh)
 
    free(yy);
 
+   dbg(9, "openGL: Init\n");
 
    // fill background with some color
-   glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-   glClear(GL_COLOR_BUFFER_BIT);
-   eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-
-   glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+   // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
    glClear(GL_COLOR_BUFFER_BIT);
    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
 
@@ -8068,7 +8075,7 @@ inline void Update(ESContext *esContext, float deltatime)
     int res = 0;
     openGL_UserData *userData = esContext->userData;
 
-//sem_wait(&video_play_lock);
+    //sem_wait(&video_play_lock);
 
     int incoming_frames_count = 0;
     if (video_play_rb)
@@ -8076,17 +8083,19 @@ inline void Update(ESContext *esContext, float deltatime)
         incoming_frames_count = bw_rb_size(video_play_rb);
     }
 
-    if ((incoming_video_width != incoming_video_width_prev) || (incoming_video_height != incoming_video_height_prev))
+    if (incoming_frames_count > 0)
     {
-        if (incoming_frames_count > 0)
+        uint32_t ww;
+        uint32_t hh;
+        uint8_t *p;
+        if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
         {
-            // * video size changed *
-            uint32_t ww;
-            uint32_t hh;
-            uint8_t *p;
-            if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
+            if (
+                (ww != incoming_video_width_prev)
+                ||
+                (hh != incoming_video_height_prev)
+               )
             {
-
                 dbg(9, "openGL: video size changed\n");
 
                 glDeleteTextures(1, &userData->yplaneTexId);
@@ -8095,7 +8104,6 @@ inline void Update(ESContext *esContext, float deltatime)
 
 
                 /* bind the U texture. */
-
                 glGenTextures(1, &userData->uplaneTexId);
                 glActiveTexture ( GL_TEXTURE1 );
                 glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
@@ -8105,7 +8113,7 @@ inline void Update(ESContext *esContext, float deltatime)
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
                 glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-                    (incoming_video_width/2), (incoming_video_height/2),
+                    (ww/2), (hh/2),
                     0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
                     (GLubyte *)(p + (ww * hh)));
                 /* bind the U texture. */
@@ -8120,7 +8128,7 @@ inline void Update(ESContext *esContext, float deltatime)
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
                 glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-                    (incoming_video_width/2), (incoming_video_height/2),
+                    (ww/2), (hh/2),
                     0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
                     (GLubyte *)(p + (ww * hh) + ((ww/2) * (hh/2))));
                 /* bind the V texture. */
@@ -8135,7 +8143,7 @@ inline void Update(ESContext *esContext, float deltatime)
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
                 glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE,
-                    incoming_video_width, incoming_video_height,
+                    ww, hh,
                     0,GL_LUMINANCE,GL_UNSIGNED_BYTE,
                     (GLubyte *)p);   
                 /* bind the Y texture. */
@@ -8144,27 +8152,12 @@ inline void Update(ESContext *esContext, float deltatime)
                 incoming_video_width_prev = ww;
                 incoming_video_height_prev = hh;
 
-                res = 1;
-
-                free(p);
             }
-        }
-    }
-    else
-    {
-        if (incoming_frames_count > 0)
-        {
-            // video size is the same
-
-            uint32_t ww;
-            uint32_t hh;
-            uint8_t *p;
-            if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
+            else
             {
+                // dbg(9, "openGL: video size same w=%d h=%d\n", ww, hh);
 
-                // dbg(9, "openGL: video size same w=%d h=%d\n", incoming_video_width, incoming_video_height);
-
-                //glActiveTexture ( GL_TEXTURE1 );
+                glActiveTexture ( GL_TEXTURE1 );
                 glBindTexture ( GL_TEXTURE_2D, userData->uplaneTexId );
                 glUniform1i ( userData->uplaneLoc, 1 );
                 //glEnable(GL_TEXTURE_2D);
@@ -8176,46 +8169,48 @@ inline void Update(ESContext *esContext, float deltatime)
                     GL_UNSIGNED_BYTE,
                     (GLubyte *)(p + (ww * hh)));
 
-                //glActiveTexture ( GL_TEXTURE2 );
+                glActiveTexture ( GL_TEXTURE2 );
                 glBindTexture ( GL_TEXTURE_2D, userData->vplaneTexId );
                 glUniform1i ( userData->vplaneLoc, 2 );
                 //glEnable(GL_TEXTURE_2D);
                 glTexSubImage2D(GL_TEXTURE_2D,
                     0,0,0,
-                    (incoming_video_width/2),
-                    (incoming_video_height/2),
+                    (ww/2),
+                    (hh/2),
                     GL_LUMINANCE,
                     GL_UNSIGNED_BYTE,
                     (GLubyte *)(p + (ww * hh) + ((ww/2) * (hh/2))));
 
-                //glActiveTexture ( GL_TEXTURE0 );
+                glActiveTexture ( GL_TEXTURE0 );
                 glBindTexture ( GL_TEXTURE_2D, userData->yplaneTexId );
                 glUniform1i ( userData->yplaneLoc, 0 );
                 //glEnable(GL_TEXTURE_2D);
                 glTexSubImage2D(GL_TEXTURE_2D,
                     0,0,0,
-                    (incoming_video_width),
-                    (incoming_video_height),
+                    (ww),
+                    (hh),
                     GL_LUMINANCE,
                     GL_UNSIGNED_BYTE,
                     (GLubyte *)p);
 
-                res = 1;
-                
-                free(p);
             }
-        }
-        else
-        {
-            // no new frame data available
-            // yieldcpu(2);
+
+
+            res = 1;
+            free(p);
         }
     }
-
-//    sem_post(&video_play_lock);
+    else
+    {
+        // no new frame data available
+        // dbg(9, "openGL: no new frame data available\n");
+        // yieldcpu(2);
+    }
 
     global_did_draw_frame = res;
-    // dbg(9, "global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
+    // dbg(9, "openGL: global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
+
+    //    sem_post(&video_play_lock);
 }
 
 
@@ -8273,9 +8268,15 @@ void Draw(ESContext *esContext)
 
 
 //
-void ShutDown(ESContext *esContext)
+void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, int w_factor, int h_factor)
 {
     openGL_UserData *userData = esContext->userData;
+
+    incoming_video_width_prev = 0;
+    incoming_video_height_prev = 0;
+
+    // --------------------------------------
+    // --------------------------------------
 
     // Delete texture object
     glDeleteTextures(1, &userData->yplaneTexId);
@@ -8286,8 +8287,47 @@ void ShutDown(ESContext *esContext)
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
 
+    dbg(9, "openGL: ShutDown [part1]\n");
+
     // Delete program object
     glDeleteProgram(userData->programObject);
+    
+    // --------------------------------------
+    // --------------------------------------
+
+    
+    // --------------------------------------
+    // --------------------------------------
+    // --- clear bg ---
+
+    esInitContext(esContext);
+    esContext->userData = userData;
+    esCreateWindow(esContext,
+        "ToxBlinkenwall",
+        (int)(fb_screen_width * w_factor),
+        (int)(fb_screen_height * h_factor),
+        fb_screen_width,
+        fb_screen_height,
+        ES_WINDOW_RGB); //
+
+    Init(esContext, 64, 64);
+    Draw(esContext);
+    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
+    Draw(esContext);
+    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
+
+    // Delete texture object
+    glDeleteTextures(1, &userData->yplaneTexId);
+    glDeleteTextures(1, &userData->uplaneTexId);
+    glDeleteTextures(1, &userData->vplaneTexId);
+
+    dbg(9, "openGL: ShutDown [part2]\n");
+
+    // Delete program object
+    glDeleteProgram(userData->programObject);
+
+    // --------------------------------------
+    // --------------------------------------
 }
 
 
@@ -8337,7 +8377,7 @@ void *thread_opengl(void *data)
 
 
    ESContext esContext;
-   openGL_UserData  userData;
+   openGL_UserData userData;
 
    float w_factor = 1.5;
    float h_factor = 1.5f;
@@ -8359,30 +8399,20 @@ void *thread_opengl(void *data)
         {
             if (opengl_active == 0)
             {
-                if ((incoming_video_width > 1) && (incoming_video_height > 1))
-                {
-                   esInitContext(&esContext);
-                   esContext.userData = &userData;
-                   esCreateWindow(&esContext,
-                        "ToxBlinkenwall",
-                        (int)(fb_screen_width * w_factor),
-                        (int)(fb_screen_height * h_factor),
-                        fb_screen_width,
-                        fb_screen_height,
-                        ES_WINDOW_ALPHA); // ES_WINDOW_RGB
+                esInitContext(&esContext);
+                esContext.userData = &userData;
+                esCreateWindow(&esContext,
+                    "ToxBlinkenwall",
+                    (int)(fb_screen_width * w_factor),
+                    (int)(fb_screen_height * h_factor),
+                    fb_screen_width,
+                    fb_screen_height,
+                    ES_WINDOW_ALPHA); // ES_WINDOW_RGB
 
-                   Init(&esContext, 64, 64);
+                Init(&esContext, 64, 64);
+                esRegisterDrawFunc(&esContext, Draw);
 
-                   esRegisterDrawFunc(&esContext, Draw);
-                   // esRegisterUpdateFunc(&esContext, Update);
-
-                    opengl_active = 1;
-                }
-                else
-                {
-                    yieldcpu(10);
-                    continue;
-                }
+                opengl_active = 1;
             }
             
             // dbg(9, "openGL:cycle-start\n");
@@ -8439,8 +8469,8 @@ void *thread_opengl(void *data)
         {
             if (opengl_active == 1)
             {
-                ShutDown(&esContext);
                 opengl_active = 0;
+                ShutDown(&esContext, fb_screen_width, fb_screen_height, w_factor, h_factor);
             }
             
             yieldcpu(200);
@@ -8452,8 +8482,8 @@ void *thread_opengl(void *data)
 
     if (opengl_active == 1)
     {
-        ShutDown(&esContext);
         opengl_active = 0;
+        ShutDown(&esContext, fb_screen_width, fb_screen_height, w_factor, h_factor);
     }
 
 }
