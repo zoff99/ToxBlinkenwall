@@ -64,11 +64,25 @@ dependencies:
     - sudo apt-get install libjpeg-dev
     - sudo apt-get install libpulse-dev
     - sudo apt-get install libconfig-dev
+    - sudo apt-get install astyle ; exit 0
 
     - sudo bash -c "echo '::1             localhost ipv6-localhost ipv6-loopback' >> /etc/hosts" # ipv6 localhost entry
 
     - gcc --version ; exit 0
     - clang --version ; exit 0
+    - astyle --version ; exit 0
+
+
+    ### ----- check code style ------
+    - cd .. ; cp -av ToxBlinkenwall ./astyle_check/
+    - cd ../astyle_check/ ; ls -al other/astyle/astylerc
+    - cd ../astyle_check/ ;
+      SOURCES=`find . -name '*.[ch]'|sort`;
+      astyle -n --options=./astyle/astylerc $SOURCES ; exit 0
+    - cd ../astyle_check/ ; git --no-pager diff
+    - cd ../astyle_check/ ; git diff | cat > $CIRCLE_ARTIFACTS/astyle_check.patch 2>&1
+    ### ----- check code style ------
+
 
     ### submodules ----------------
     - git submodule add --force https://github.com/TokTok/c-toxcore c-toxcore ; echo ok
