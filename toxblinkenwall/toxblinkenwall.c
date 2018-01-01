@@ -232,6 +232,18 @@ typedef struct
    GLuint yplaneTexId;
    GLuint uplaneTexId;
    GLuint vplaneTexId;
+   GLuint ol_yplaneTexId;
+   GLuint ol_uplaneTexId;
+   GLuint ol_vplaneTexId;
+
+   uint8_t *ol_yy;
+   uint8_t *ol_uu;
+   uint8_t *ol_vv;
+   
+   float fps;
+   
+   int ol_ww;
+   int ol_hh;
 
    int did_draw_frame;
 
@@ -248,7 +260,7 @@ uint8_t *incoming_video_frame_y = NULL;
 uint8_t *incoming_video_frame_u = NULL;
 uint8_t *incoming_video_frame_v = NULL;
 
-#define OPENGL_DISPLAY_FPS_AFTER_SECONDS (10)
+#define OPENGL_DISPLAY_FPS_AFTER_SECONDS (2)
 
 int global_did_draw_frame = 0;
 
@@ -6768,6 +6780,39 @@ char font8x8_basic[128][8] = {
 // ":" -> [58]
 
 
+void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
+uint8_t col_value, uint8_t *yy, int w)
+{
+	int font_w = 8;
+	int font_h = 8;
+
+	uint8_t *y_plane = yy;
+	// uint8_t col_value = 0; // black
+	char *bitmap = font8x8_basic[font_char_num];
+
+	int k;
+	int j;
+	int offset = 0;
+	int set = 0;
+
+	for (k=0;k<font_h;k++)
+	{
+		y_plane = yy + ((start_y_pix + k) * w);
+		y_plane = y_plane + start_x_pix;
+		for (j=0;j<font_w;j++)
+		{
+			set = bitmap[k] & 1 << j;
+			if (set)
+			{
+				*y_plane = col_value; // set luma value
+			}
+			y_plane = y_plane + 1;
+		}
+	}
+
+}
+
+
 void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value)
 {
 	int font_w = 8;
@@ -6975,6 +7020,32 @@ void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t 
 
 
 
+void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char* text, uint8_t *yy,
+int w, int h)
+{
+	int carriage = 0;
+	const int letter_width = 8;
+	const int letter_spacing = 1;
+
+	int block_needed_width = 2 + 2 + (strlen(text) * (letter_width + letter_spacing));
+
+	int looper;
+
+	for(looper=0;(int)looper < (int)strlen(text);looper++)
+	{
+		uint8_t c = text[looper];
+		if ((c > 0) && (c < 127))
+		{
+			print_font_char_ptr((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+            2 + start_y_pix, c, 0, yy, w);
+		}
+		else
+		{
+			// leave a blank
+		}
+		carriage++;
+	}
+}
 
 
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char* text)
@@ -7973,6 +8044,7 @@ int Init(ESContext *esContext, int ww, int hh)
       "}                                                   \n";
 #endif
 
+    userData->fps = 0;
 
    userData->programObject = esLoadProgram(vShaderStr, fShaderStr);
 
@@ -8065,7 +8137,68 @@ int Init(ESContext *esContext, int ww, int hh)
    glClear(GL_COLOR_BUFFER_BIT);
    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
 
+
+
+
+    // prepare overlay texture
+    userData->ol_ww = 150;
+    userData->ol_hh = 30;
+
+    userData->ol_yy = calloc(1, (size_t)((userData->ol_ww * userData->ol_hh) * 1.5));
+    userData->ol_uu = userData->ol_yy + (userData->ol_ww * userData->ol_hh);
+    userData->ol_vv = userData->ol_uu + ((userData->ol_ww / 2) * (userData->ol_hh / 2));
+
+    // init yuv area with white BG
+    memset(userData->ol_yy, 255, (size_t)(userData->ol_ww * userData->ol_hh));
+    memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
+    memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
+
+    GLubyte *ol_Ytex,*ol_Utex,*ol_Vtex;
+
+    ol_Ytex = (GLubyte *)userData->ol_yy;
+    ol_Utex = (GLubyte *)userData->ol_uu;
+    ol_Vtex = (GLubyte *)userData->ol_vv;
+
+    /* bind the U texture. */
+    glGenTextures ( 1, &(userData->ol_uplaneTexId) );
+    glActiveTexture ( GL_TEXTURE4 );
+    glBindTexture ( GL_TEXTURE_2D, userData->ol_uplaneTexId );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (userData->ol_ww/2), (userData->ol_hh/2),
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,ol_Utex);   
+    /* bind the U texture. */
+
+    /* bind the V texture. */
+    glGenTextures ( 1, &(userData->ol_vplaneTexId) );
+    glActiveTexture ( GL_TEXTURE5 );
+    glBindTexture ( GL_TEXTURE_2D, userData->ol_vplaneTexId );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, (userData->ol_ww/2), (userData->ol_hh/2),
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,ol_Vtex);   
+    /* bind the V texture. */
+
+    /* bind the Y texture. */
+    glGenTextures ( 1, &(userData->ol_yplaneTexId) );
+    glActiveTexture ( GL_TEXTURE3 );
+    glBindTexture ( GL_TEXTURE_2D, userData->ol_yplaneTexId );
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_LUMINANCE, userData->ol_ww, userData->ol_hh,
+        0,GL_LUMINANCE,GL_UNSIGNED_BYTE,ol_Ytex);   
+    /* bind the Y texture. */
+
+
+
    return GL_TRUE;
+
 }
 
 
@@ -8213,6 +8346,89 @@ void Update(ESContext *esContext, float deltatime)
     //    sem_post(&video_play_lock);
 }
 
+void draw_fps_to_overlay(ESContext *esContext, float fps)
+{
+    openGL_UserData *userData = esContext->userData;
+
+    // init yuv area with white BG
+    memset(userData->ol_yy, 255, (size_t)(userData->ol_ww * userData->ol_hh));
+    // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
+    // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
+    // print FPS in texture
+    char fps_str[20];
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)fps);
+    // dbg(9, "openGL: fps(2)=%d\n", (int)fps);
+    text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
+}
+
+void DrawOverlay(ESContext *esContext)
+{
+   openGL_UserData *userData = esContext->userData;
+
+   GLfloat vVertices[] = { -1.0f, -0.9f, 0.0f,  // left top postion
+                            0.0f,  0.0f,        // TexCoord 0
+                           -1.0f, -1.0f, 0.0f,  // left bottom postion
+                            0.0f,  1.0f,        // TexCoord 1
+                           -0.7f, -1.0f, 0.0f,  // right bottom postion
+                            1.0f,  1.0f,        // TexCoord 2
+                           -0.7f, -0.9f, 0.0f,  // right top postion
+                            1.0f,  0.0f         // TexCoord 3
+                         };
+   GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
+
+   // Load the vertex position
+   glVertexAttribPointer(userData->positionLoc, 3, GL_FLOAT, 
+                           GL_FALSE, 5 * sizeof(GLfloat), vVertices);
+   // Load the texture coordinate
+   glVertexAttribPointer(userData->texCoordLoc, 2, GL_FLOAT,
+                           GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3]);
+
+   glEnableVertexAttribArray(userData->positionLoc);
+   glEnableVertexAttribArray(userData->texCoordLoc);
+
+    /*  U */
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, userData->ol_uplaneTexId);
+    glUniform1i(userData->uplaneLoc, 4);
+    //glEnable(GL_TEXTURE_2D);
+    glTexSubImage2D(GL_TEXTURE_2D,
+    0,0,0,
+    (userData->ol_ww/2),
+    (userData->ol_hh/2),
+    GL_LUMINANCE,
+    GL_UNSIGNED_BYTE,
+    (GLubyte *)userData->ol_uu);
+
+    /*  V */
+    glActiveTexture(GL_TEXTURE5);
+    glBindTexture(GL_TEXTURE_2D, userData->ol_vplaneTexId);
+    glUniform1i(userData->vplaneLoc, 5);
+    //glEnable(GL_TEXTURE_2D);
+    glTexSubImage2D(GL_TEXTURE_2D,
+    0,0,0,
+    (userData->ol_ww/2),
+    (userData->ol_hh/2),
+    GL_LUMINANCE,
+    GL_UNSIGNED_BYTE,
+    (GLubyte *)userData->ol_vv);
+
+    /*  Y */
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, userData->ol_yplaneTexId);
+    glUniform1i(userData->yplaneLoc, 3);
+    //glEnable(GL_TEXTURE_2D);
+    glTexSubImage2D(GL_TEXTURE_2D,
+    0,0,0,
+    (userData->ol_ww),
+    (userData->ol_hh),
+    GL_LUMINANCE,
+    GL_UNSIGNED_BYTE,
+    (GLubyte *)userData->ol_yy);
+
+   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+
+}
 
 void Draw(ESContext *esContext)
 {
@@ -8257,13 +8473,14 @@ void Draw(ESContext *esContext)
    glVertexAttribPointer(userData->texCoordLoc, 2, GL_FLOAT,
                            GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3] );
 
-   glEnableVertexAttribArray(userData->positionLoc );
-   glEnableVertexAttribArray(userData->texCoordLoc );
+   glEnableVertexAttribArray(userData->positionLoc);
+   glEnableVertexAttribArray(userData->texCoordLoc);
 
    Update(esContext, 0);
 
    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 
+   DrawOverlay(esContext);
 }
 
 
@@ -8283,6 +8500,10 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
     glDeleteTextures(1, &userData->uplaneTexId);
     glDeleteTextures(1, &userData->vplaneTexId);
 
+    glDeleteTextures(1, &userData->ol_yplaneTexId);
+    glDeleteTextures(1, &userData->ol_uplaneTexId);
+    glDeleteTextures(1, &userData->ol_vplaneTexId);
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
@@ -8296,6 +8517,9 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
     eglDestroySurface(esContext->eglDisplay, esContext->eglSurface); 
     eglDestroyContext(esContext->eglDisplay, esContext);
     eglTerminate(esContext->eglDisplay); 
+
+    free(userData->ol_yy);
+
     // --------------------------------------
     // --------------------------------------
 }
@@ -8423,9 +8647,12 @@ void *thread_opengl(void *data)
 
                 if (totaltime > (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS)
                 {
-                    dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
+                    userData.fps = (float)frames / (float)totaltime;
+                    // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, (float)(userData.fps));
                     totaltime -= (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS;
                     frames = 0;
+                    
+                    draw_fps_to_overlay(&esContext, userData.fps);
                 }
             }
             else
