@@ -8298,43 +8298,6 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
     eglTerminate(esContext->eglDisplay); 
     // --------------------------------------
     // --------------------------------------
-
-
-#if 0    
-    // --------------------------------------
-    // --------------------------------------
-    // --- clear bg ---
-
-    esInitContext(esContext);
-    esContext->userData = userData;
-    esCreateWindow(esContext,
-        "ToxBlinkenwall",
-        (int)(fb_screen_width * w_factor),
-        (int)(fb_screen_height * h_factor),
-        fb_screen_width,
-        fb_screen_height,
-        ES_WINDOW_RGB); //
-
-    Init(esContext, 64, 64);
-    Draw(esContext);
-    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-    Draw(esContext);
-    eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-
-    // Delete texture object
-    glDeleteTextures(1, &userData->yplaneTexId);
-    glDeleteTextures(1, &userData->uplaneTexId);
-    glDeleteTextures(1, &userData->vplaneTexId);
-
-    dbg(9, "openGL: ShutDown [part2]\n");
-
-    // Delete program object
-    glDeleteProgram(userData->programObject);
-
-    // --------------------------------------
-    // --------------------------------------
-#endif
-
 }
 
 
