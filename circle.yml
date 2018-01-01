@@ -75,7 +75,7 @@ dependencies:
 
     ### ----- check code style ------
     - cd .. ; cp -av ToxBlinkenwall ./astyle_check/
-    - cd ../astyle_check/ ; ls -al other/astyle/astylerc
+    - cd ../astyle_check/ ; ls -al ./astyle/astylerc
     - cd ../astyle_check/ ;
       SOURCES=`find . -name '*.[ch]'|sort`;
       astyle -n --options=./astyle/astylerc $SOURCES ; exit 0
