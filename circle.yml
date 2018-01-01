@@ -86,7 +86,7 @@ dependencies:
     ### ----- turn off openGL -----
     - sed -i -e 'sx#define HAVE_OUTPUT_OPENGLx\/\/#define HAVE_OUTPUT_OPENGLxg' toxblinkenwall/toxblinkenwall.c
     - cat toxblinkenwall/toxblinkenwall.c | grep 'define HAVE_OUTPUT_O'
-    - sed -i -e 'sx.. .define HAVE_FRAMEBUFFERxFFFFFxg' toxblinkenwall/toxblinkenwall.c
+    - sed -i -e 'sx.. .define HAVE_FRAMEBUFFERx#define HAVE_FRAMEBUFFERxg' toxblinkenwall/toxblinkenwall.c
     - cat toxblinkenwall/toxblinkenwall.c | grep 'define HAVE_FRAMEBUFFER'
     ### ----- turn off openGL -----
 
