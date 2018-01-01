@@ -8139,10 +8139,12 @@ int Init(ESContext *esContext, int ww, int hh)
 
 
 
+#define OVERLAY_TEXTURE_WIDTH  (110)
+#define OVERLAY_TEXTURE_HEIGHT (22)
 
     // prepare overlay texture
-    userData->ol_ww = 150;
-    userData->ol_hh = 30;
+    userData->ol_ww = OVERLAY_TEXTURE_WIDTH;
+    userData->ol_hh = OVERLAY_TEXTURE_HEIGHT;
 
     userData->ol_yy = calloc(1, (size_t)((userData->ol_ww * userData->ol_hh) * 1.5));
     userData->ol_uu = userData->ol_yy + (userData->ol_ww * userData->ol_hh);
@@ -8223,6 +8225,9 @@ void Update(ESContext *esContext, float deltatime)
         uint8_t *p;
         if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
         {
+            incoming_video_width = ww;
+            incoming_video_height = hh;
+            
             if (
                 (ww != incoming_video_width_prev)
                 ||
@@ -8355,24 +8360,32 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // print FPS in texture
-    char fps_str[20];
+    char fps_str[12];
     CLEAR(fps_str);
     snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)fps);
-    // dbg(9, "openGL: fps(2)=%d\n", (int)fps);
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "%d x %d", (int)incoming_video_width, (int)incoming_video_height);
+    text_on_yuf_frame_xy_ptr(0, 11, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
+
 }
 
 void DrawOverlay(ESContext *esContext)
 {
    openGL_UserData *userData = esContext->userData;
 
-   GLfloat vVertices[] = { -1.0f, -0.9f, 0.0f,  // left top postion
+#define OVERLAY_LEFT_COORD   (-1.0f)
+#define OVERLAY_RIGHT_COORD  (-0.85f) // width 15% of framebuffer
+#define OVERLAY_TOP_COORD    (-0.95f) // height 5% of framebuffer
+#define OVERLAY_BOTTOM_COORD (-1.0f)
+
+   GLfloat vVertices[] = { OVERLAY_LEFT_COORD, OVERLAY_TOP_COORD, 0.0f,  // left top postion
                             0.0f,  0.0f,        // TexCoord 0
-                           -1.0f, -1.0f, 0.0f,  // left bottom postion
+                           OVERLAY_LEFT_COORD, OVERLAY_BOTTOM_COORD, 0.0f,  // left bottom postion
                             0.0f,  1.0f,        // TexCoord 1
-                           -0.7f, -1.0f, 0.0f,  // right bottom postion
+                           OVERLAY_RIGHT_COORD, OVERLAY_BOTTOM_COORD, 0.0f,  // right bottom postion
                             1.0f,  1.0f,        // TexCoord 2
-                           -0.7f, -0.9f, 0.0f,  // right top postion
+                           OVERLAY_RIGHT_COORD, OVERLAY_TOP_COORD, 0.0f,  // right top postion
                             1.0f,  0.0f         // TexCoord 3
                          };
    GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
@@ -8491,6 +8504,8 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, i
 
     incoming_video_width_prev = 0;
     incoming_video_height_prev = 0;
+    incoming_video_width = 0;
+    incoming_video_height = 0;
 
     // --------------------------------------
     // --------------------------------------
