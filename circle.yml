@@ -77,7 +77,7 @@ dependencies:
     - cd .. ; cp -av ToxBlinkenwall ./astyle_check/
     - cd ../astyle_check/ ; ls -al ./astyle/astylerc
     - cd ../astyle_check/ ;
-      SOURCES=`find . -name '*.[ch]'|sort`;
+      SOURCES=`ls -1 ./toxblinkenwall/toxblinkenwall.c ./toxblinkenwall/rb.c ./toxblinkenwall/rb.h toxblinkenwall/ringbuf.c toxblinkenwall/ringbuf.h toxblinkenwall/a.c toxblinkenwall/print_cam_formats.c|sort`;
       astyle -n --options=./astyle/astylerc $SOURCES ; exit 0
     - cd ../astyle_check/ ; git --no-pager diff
     - cd ../astyle_check/ ; git diff | cat > $CIRCLE_ARTIFACTS/astyle_check.patch 2>&1
