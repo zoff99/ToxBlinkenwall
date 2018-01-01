@@ -1,5 +1,5 @@
 # Bracket Style Options
---style=kr
+--style=allman
 
 # Tab Options
 --indent=spaces=4
