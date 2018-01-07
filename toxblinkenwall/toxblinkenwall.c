@@ -370,6 +370,11 @@ int default_fps_sleep_corrected;
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 
+#define min(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
 
 #define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
 
@@ -642,8 +647,9 @@ sem_t audio_play_lock;
 #define ALSA_AUDIO_PLAY_START_THRESHOLD (300)
 #define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
 #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
-#define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
-#define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (400)
+// #define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
+#define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.2)
+#define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
 
@@ -7688,8 +7694,8 @@ void init_sound_play_device(int channels, int sample_rate)
 
         // unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
         // unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
-        unsigned int buffer_time = (180000) * 2;     // xx ms    /* ring buffer length in us */
-        unsigned int period_time = (180000 / 5) * 2; // xx ms    /* period time in us */
+        unsigned int buffer_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES) * 2;     // xx ms    /* ring buffer length in us */
+        unsigned int period_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES / 5) * 2; // xx ms    /* period time in us */
         snd_pcm_sframes_t buffer_size;
         snd_pcm_sframes_t period_size;
         snd_pcm_uframes_t size;
@@ -7920,10 +7926,79 @@ void sigint_handler(int signo)
 #ifdef HAVE_OUTPUT_OPENGL
 
 
+/*
+float get_scale_factor(int dst_width, int dst_height, int src_width, int src_height)
+{
+    float scale = min(dst_width/src_width, dst_height/src_height);
+    return scale;
+}
+*/
+
+float get_aspect_ratio(int dst_width, int dst_height, int src_width, int src_height)
+{
+    if (dst_height == 0)
+    {
+        dst_height = 1;
+    }
+
+    // dbg(9, "opengl get_aspect_ratio:w=%d h=%d\n", src_width, src_height);
+
+    float aspect_dst = ((float)dst_width / (float)dst_height);
+
+    // dbg(9, "opengl get_aspect_ratio:aspect_dst=%.2f\n", (float)aspect_dst);
+
+    if (aspect_dst == 0)
+    {
+        aspect_dst = 0.001f;
+    }
+
+    if (src_height == 0)
+    {
+        src_height = 1;
+    }
+
+    float aspect = ((float)src_width / (float)src_height) / (aspect_dst);
+    return aspect;
+}
+
+float get_opengl_h_factor(float scale)
+{
+    if (scale == 0)
+    {
+        scale = 0.001f;
+    }
+
+    if (scale < 1)
+    {
+        return 1.0f;
+    }
+    else
+    {
+        return (1 / scale);
+    }
+}
+
+float get_opengl_w_factor(float scale)
+{
+    if (scale == 0)
+    {
+        scale = 0.001f;
+    }
+
+    if (scale < 1)
+    {
+        return scale;
+    }
+    else
+    {
+        return 1.0f;
+    }
+}
+
 // Create a shader object, load the shader source, and
 // compile the shader.
 //
-GLuint LoadShader ( GLenum type, const char *shaderSrc )
+GLuint LoadShader(GLenum type, const char *shaderSrc)
 {
    GLuint shader;
    GLint compiled;
@@ -8457,14 +8532,22 @@ void Draw(ESContext *esContext)
            return;
        }
    }
-    
-   GLfloat vVertices[] = { -1.0f,  1.0f, 0.0f,  // Position 0
+
+    float aspect = get_aspect_ratio(esContext->width, esContext->height,
+        (int)incoming_video_width, (int)incoming_video_height);
+   // dbg(9, "opengl context:aspect=%.2f\n", (float)aspect);
+
+    float right = get_opengl_w_factor(aspect);
+    float top = get_opengl_h_factor(aspect);
+   // dbg(9, "opengl context:w factor=%.2f h factor=%.2f\n", (float)right, (float)top);
+
+   GLfloat vVertices[] = { -right,  top, 0.0f,  // left top postion
                             0.0f,  0.0f,        // TexCoord 0 
-                           -1.0f, -1.0f, 0.0f,  // Position 1
+                           -right, -top, 0.0f,  // left bottom postion
                             0.0f,  1.0f,        // TexCoord 1
-                            1.0f, -1.0f, 0.0f,  // Position 2
+                            right, -top, 0.0f,  // right bottom postion
                             1.0f,  1.0f,        // TexCoord 2
-                            1.0f,  1.0f, 0.0f,  // Position 3
+                            right,  top, 0.0f,  // right top postion
                             1.0f,  0.0f         // TexCoord 3
                          };
    GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
@@ -8472,6 +8555,7 @@ void Draw(ESContext *esContext)
 
    // Set the viewport
    glViewport(0, 0, esContext->width, esContext->height);
+   // dbg(9, "opengl context:w=%d h=%d\n", (int)esContext->width, (int)esContext->height);
 
    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
    glClear(GL_COLOR_BUFFER_BIT);
@@ -8596,12 +8680,12 @@ void *thread_opengl(void *data)
 
     struct timeval t1, t2;
     struct timezone tz;
-    float deltatime;
+    float deltatime = 0.0f;
     float totaltime = 0.0f;
     unsigned int frames = 0;
 
     gettimeofday(&t1,&tz);
-   
+
    while (opengl_shutdown == 0)
    {
         if (global_video_active == 1)
@@ -8622,6 +8706,12 @@ void *thread_opengl(void *data)
                 esRegisterDrawFunc(&esContext, Draw);
 
                 opengl_active = 1;
+                deltatime = 0.0f;
+                totaltime = 0.0f;
+                frames = 0;
+                gettimeofday(&t1,&tz);
+                t1 = t2;
+
             }
             
             // dbg(9, "openGL:cycle-start\n");
@@ -8664,9 +8754,9 @@ void *thread_opengl(void *data)
                 {
                     userData.fps = (float)frames / (float)totaltime;
                     // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, (float)(userData.fps));
-                    totaltime -= (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS;
+                    totaltime = 0;
                     frames = 0;
-                    
+
                     draw_fps_to_overlay(&esContext, userData.fps);
                 }
             }
@@ -8685,10 +8775,12 @@ void *thread_opengl(void *data)
                 ShutDown(&esContext, fb_screen_width, fb_screen_height, w_factor, h_factor);
             }
             
+            totaltime = 0.0f;
+            
             yieldcpu(200);
         }
    }
-   
+
    // esMainLoop(&esContext);
 // --------- openGL
 
