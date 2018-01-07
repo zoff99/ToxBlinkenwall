@@ -357,7 +357,8 @@ uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
 #define DEFAULT_GLOBAL_MAX_VID_BITRATE 20000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
-int DEFAULT_FPS_SLEEP_MS = 110; // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
+// #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
+int DEFAULT_FPS_SLEEP_MS = 66; // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
 int default_fps_sleep_corrected;
 
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
@@ -6361,7 +6362,10 @@ void *thread_av(void *data)
 					free(date_time_str);
 				}
 
+
+#ifdef BLINKING_DOT_ON_OUTGOING_VIDEOFRAME
 				blinking_dot_on_frame_xy(10, 30, &global_blink_state);
+#endif
 
 				if (friend_to_send_video_to != -1)
 				{
