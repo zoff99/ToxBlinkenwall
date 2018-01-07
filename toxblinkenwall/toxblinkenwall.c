@@ -6123,13 +6123,13 @@ void *video_record(void *dummy)
 		{
 			//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
 			//			 av_video_frame.h);
-			dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
+			// dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
 		}
 		else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
 		{
 			//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
 			//	i, friend[i].call_state_self, friend[i].call_state_friend);
-			dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+			// dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
 		}
 		else
 		{
@@ -6443,13 +6443,13 @@ void *thread_av(void *data)
 						{
 							//debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
 							//			 av_video_frame.h);
-							dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
+							// dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
 						}
 						else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
 						{
 							//debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
 							//	i, friend[i].call_state_self, friend[i].call_state_friend);
-							dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+							// dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
 						}
 						else
 						{
