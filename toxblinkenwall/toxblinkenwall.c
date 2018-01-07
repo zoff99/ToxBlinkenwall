@@ -585,6 +585,7 @@ const char *global_overlay_timestamp_format = "%Y-%m-%d %H:%M:%S";
 uint64_t global_start_time;
 int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
+int64_t global_disconnect_friend_num = -1;
 
 #ifdef HAVE_FRAMEBUFFER
 struct fb_var_screeninfo var_framebuffer_info;
@@ -4570,7 +4571,17 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
 	if (global_video_active == 1)
 	{
-		dbg(9, "Call already active\n");
+        if (friend_to_send_video_to != friend_number)
+        {
+            TOXAV_ERR_CALL_CONTROL error = 0;
+            toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+            // global_disconnect_friend_num = friend_number;
+            dbg(9, "Somebody else is already in a call, hang up\n");
+        }
+        else
+        {
+            dbg(9, "Call already active\n");
+        }
 	}
 	else
 	{
@@ -4613,8 +4624,21 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
 	if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
 	{
-		// we are in a call with someone else already
-		dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+        if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
+        {
+            // call already finished
+        }
+        else
+        {
+            // we are in a call with someone else already
+            dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+
+            // calling this here crashes!
+            // TOXAV_ERR_CALL_CONTROL error = 0;
+            // toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+            global_disconnect_friend_num = friend_number;
+        }
+
 		return;
 	}
 
@@ -9270,6 +9294,7 @@ int main(int argc, char *argv[])
 	// ------ thread priority ------
 
 
+    global_disconnect_friend_num = -1;
 
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
@@ -9286,6 +9311,13 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
+            if (global_disconnect_friend_num != -1)
+            {
+                TOXAV_ERR_CALL_CONTROL error = 0;
+                toxav_call_control(mytox_av, global_disconnect_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
+                global_disconnect_friend_num = -1;
+            }
+            
 			if ((global_qrcode_was_updated == 1) && (global_is_qrcode_showing_on_screen == 1))
 			{
 				dbg(2, "QR code changed, waiting for update ...\n");
