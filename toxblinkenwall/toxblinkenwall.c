@@ -4994,6 +4994,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 libao_sampling_rate = (int)sampling_rate;
                 // initialize sound output ------------------
                 close_sound_play_device();
+                dbg(9, "incoming audio: ch:%d rate:%d\n", (int)libao_channels, (int)libao_sampling_rate);
                 // zzzzzz
                 yieldcpu(20);
                 init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
