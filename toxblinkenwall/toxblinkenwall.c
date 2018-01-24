@@ -2742,6 +2742,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number,
                                 "=========================\nToxBlinkenwall version:%s\n=========================", global_version_string);
     send_text_message_to_friend(tox, friend_number, " .stats         --> show ToxBlinkenwall status");
+    send_text_message_to_friend(tox, friend_number, " .tcversion     --> show c-toxcore Version");
     send_text_message_to_friend(tox, friend_number, " .friends       --> show ToxBlinkenwall Friends");
     send_text_message_to_friend(tox, friend_number, " .showclients   --> show Clientapp links");
     send_text_message_to_friend(tox, friend_number, " .showqr        --> show ToxID");
@@ -2753,12 +2754,12 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .skpf <num>    --> show only every n-th video frame");
     send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
-    send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
-    send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
-    send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
-    send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
+    // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
+    // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
+    // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
+    // send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
     send_text_message_to_friend(tox, friend_number, " .vpxdec <num>       --> set VPX Decoder");
-    send_text_message_to_friend(tox, friend_number, " .dectime <num>      --> set VPX Decoder Soft Deadline in us");
+    // send_text_message_to_friend(tox, friend_number, " .dectime <num>      --> set VPX Decoder Soft Deadline in us");
     send_text_message_to_friend(tox, friend_number, " .fps <delay ms>     --> set delay in ms between sent frames");
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
@@ -3030,6 +3031,13 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 {
                     cmd_vcm(tox, friend_number);
                 }
+            }
+            else if (strncmp((char *)message, ".tcversion", strlen((char *) ".tcversion")) == 0)
+            {
+                    int v_1 = (int)tox_version_major();
+                    int v_2 = (int)tox_version_minor();
+                    int v_3 = (int)tox_version_patch();
+                    send_text_message_to_friend(tox, friend_number, "c-toxcore version:%d.%d.%d", v_1, v_2, v_3);
             }
             else if (strncmp((char *)message, ".kac", strlen((char *) ".kac")) == 0)
             {
