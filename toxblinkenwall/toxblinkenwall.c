@@ -5741,6 +5741,7 @@ static void *video_play(void *dummy)
 
     dbg(9, "VP-DEBUG:019\n");
 
+/*
     if (u)
     {
         free((void *)u);
@@ -5752,6 +5753,7 @@ static void *video_play(void *dummy)
     {
         free((void *)v);
     }
+*/
 
     dbg(9, "VP-DEBUG:021\n");
 #endif
