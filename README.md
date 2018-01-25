@@ -10,7 +10,7 @@ you can use any HDMI capable device (TV, Computer Monitor) connected to your PI 
 <br><br>
 
 ### Installation [Raspberry Pi or Linux]
-see INSTALL.md
+see [INSTALL.md](https://github.com/zoff99/ToxBlinkenwall/blob/master/INSTALL.md)
 
 <img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/toxblinkenwall_001.png"
       alt="logo"
