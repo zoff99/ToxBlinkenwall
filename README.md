@@ -1,7 +1,7 @@
 # ToxBlinkenwall
 
-A nice little Software to transform your Raspberry Pi into a video conferencing system.
-you can use any HDMI capable device (TV, Computer Monitor) connected to your PI to receive Video and Audio
+<H3>A nice little Software to transform your Huge LED Wall into a video conferencing system.</H3>
+<font size="1">Or you can use any HDMI capable device (TV, Computer Monitor) connected to your PI to receive Video and Audio</font>
 
 ### ToxBlinkenwall [@MetalabVie](https://twitter.com/metalabvie)
 
