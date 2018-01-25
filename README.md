@@ -5,8 +5,8 @@ you can use any HDMI capable device (TV, Computer Monitor) connected to your PI 
 
 
 
-<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_001.png" width="250" />&nbsp;<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_002.png" height="250" /><br>
-<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_003.png" width="250" />
+<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_001.png" height="250" />&nbsp;<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_002.png" height="250" /><br>
+<img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_003.png" height="250" />
 
 
 
