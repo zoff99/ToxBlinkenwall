@@ -89,6 +89,15 @@ over_voltage_sdram_i=4
 over_voltage_sdram_c=4
 # overclock --- in /boot/config.txt ---------
 
+
+
+
+# disable swap on raspian -------------------
+sudo systemctl status dphys-swapfile
+sudo systemctl disable dphys-swapfile
+sudo systemctl status dphys-swapfile
+# disable swap on raspian -------------------
+
 */
 
 #define _GNU_SOURCE
