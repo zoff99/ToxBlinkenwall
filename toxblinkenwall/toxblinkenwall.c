@@ -95,6 +95,9 @@ over_voltage_sdram_c=4
 
 
 
+#include <tox/tox.h>
+#include <tox/toxav.h>
+
 
 /*
  * ------------------------------------------------------------
@@ -165,8 +168,6 @@ static bool toxav_bit_rate_set(ToxAV *av, uint32_t friend_number, int32_t audio_
 #include <linux/sched.h>
 
 #include <sodium/utils.h>
-#include <tox/tox.h>
-#include <tox/toxav.h>
 
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
@@ -174,19 +175,6 @@ static bool toxav_bit_rate_set(ToxAV *av, uint32_t friend_number, int32_t audio_
 
 #include "rb.h"
 
-
-
-
-
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
-void toxav_callback_bit_rate_status(ToxAV *av,
-                                    void *callback, void *user_data)
-{
-    // dummy function
-}
-#else
-// no need to fake the function
-#endif
 
 
 
@@ -419,7 +407,7 @@ struct alsa_audio_play_data_block
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 2500 // kbit/sec
-#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 10000 // kbit/sec
+#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 5000 // kbit/sec
 #define DEFAULT_GLOBAL_AUD_BITRATE 64 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
 #define DEFAULT_GLOBAL_MAX_VID_BITRATE 50000 // kbit/sec
@@ -732,11 +720,11 @@ int count_audio_play_threads_int;
 long debug_alsa_play_001 = 0;
 #define MAX_ALSA_AUDIO_PLAY_THREADS 1
 sem_t audio_play_lock;
-#define ALSA_AUDIO_PLAY_START_THRESHOLD (300)
+#define ALSA_AUDIO_PLAY_START_THRESHOLD (200)
 #define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
 #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
 // #define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
-#define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.2)
+#define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.0)
 #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
@@ -5504,17 +5492,23 @@ static void *video_play(void *dummy)
 
     if (video_play_rb == NULL)
     {
-        video_play_rb = bw_rb_new(5); // store max. 5 video frame pointers
+        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. 5 video frame pointers
     }
 
     if ((y) && (u) && (v))
     {
-        if (bw_rb_size(video_play_rb) > 4)
+        if (bw_rb_size(video_play_rb) >= MAX_VIDEO_PLAY_THREADS)
         {
+            dbg(9, "Video: more than %d frames in ringbuffer, dropping incoming frame!\n",
+            (int)MAX_VIDEO_PLAY_THREADS);
+
             free(y);
         }
         else
         {
+            // dbg(9, "Video: frames in ringbuffer: %d\n",
+            // (int)bw_rb_size(video_play_rb));
+
             uint8_t dummy = 0;
             void *res = bw_rb_write(video_play_rb, y, frame_width_px, frame_height_px);
 
@@ -8568,7 +8562,7 @@ void *thread_opengl(void *data)
             }
             else
             {
-                yieldcpu(10);
+                yieldcpu(3);
             }
 
             // dbg(9, "openGL:cycle-END\n");
