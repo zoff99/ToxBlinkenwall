@@ -4684,6 +4684,13 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
         if (video_play_rb != NULL)
         {
+            void *p;
+            uint32_t dummy1;
+            uint32_t dummy2;
+            while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+            {
+                free(p);
+            }
             bw_rb_kill(video_play_rb);
             video_play_rb = NULL;
         }
@@ -4699,6 +4706,13 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
         if (video_play_rb != NULL)
         {
+            void *p;
+            uint32_t dummy1;
+            uint32_t dummy2;
+            while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+            {
+                free(p);
+            }
             bw_rb_kill(video_play_rb);
             video_play_rb = NULL;
         }
@@ -5150,9 +5164,9 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 debug_alsa_play_001 = 0;
                 //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
                 //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
-                dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
-                    (float)(avail_frames_in_play_buffer * ms_per_frame),
-                    (float)((delay_in_samples / libao_channels) * ms_per_frame));
+                // *// dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
+                // *//     (float)(avail_frames_in_play_buffer * ms_per_frame),
+                // *//     (float)((delay_in_samples / libao_channels) * ms_per_frame));
             }
 
             // dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
@@ -5181,9 +5195,9 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 //}
                 if (err == -EAGAIN)
                 {
-                    dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
+                    // dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
                     // zzzzzz
-                    yieldcpu(5);
+                    yieldcpu(2);
                     err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
                 }
                 else if (err < 0)
@@ -5198,14 +5212,14 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                         //    (float)(avail_frames_in_play_buffer * ms_per_frame),
                         //    (float)((delay_in_samples / libao_channels) * ms_per_frame),
                         //    snd_strerror(err));
-                        dbg(9, "play_device: (2)opened device: %s | state: %s\n",
-                            snd_pcm_name(audio_play_handle),
-                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+                        // *// dbg(9, "play_device: (2)opened device: %s | state: %s\n",
+                        // *//     snd_pcm_name(audio_play_handle),
+                        // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
                         snd_pcm_prepare(audio_play_handle);
                         err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-                        dbg(9, "play_device: (3)opened device: %s | state: %s\n",
-                            snd_pcm_name(audio_play_handle),
-                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+                        // *// dbg(9, "play_device: (3)opened device: %s | state: %s\n",
+                        // *//     snd_pcm_name(audio_play_handle),
+                        // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
                     }
 
                     if (err < 0)
@@ -5501,30 +5515,31 @@ static void *video_play(void *dummy)
 
     if (video_play_rb == NULL)
     {
+        dbg(9, "Video: create video_play_rb ringbuffer\n");
         video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. 5 video frame pointers
     }
 
-    if ((y) && (u) && (v))
+    if (y)
     {
         if (bw_rb_size(video_play_rb) >= MAX_VIDEO_PLAY_THREADS)
         {
             dbg(9, "Video: more than %d frames in ringbuffer, dropping incoming frame!\n",
             (int)MAX_VIDEO_PLAY_THREADS);
 
-            free(y);
+            free((void *)y);
         }
         else
         {
-            // dbg(9, "Video: frames in ringbuffer: %d\n",
-            // (int)bw_rb_size(video_play_rb));
-
-            uint8_t dummy = 0;
+#if 1
             void *res = bw_rb_write(video_play_rb, y, frame_width_px, frame_height_px);
 
             if (res != NULL)
             {
-                free(y);
+                free(res);
             }
+#else
+            free((void *)y);
+#endif
         }
     }
 
@@ -6489,6 +6504,13 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 
     if (video_play_rb != NULL)
     {
+        void *p;
+        uint32_t dummy1;
+        uint32_t dummy2;
+        while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+        {
+            free(p);
+        }
         bw_rb_kill(video_play_rb);
         video_play_rb = NULL;
     }
@@ -8091,6 +8113,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, ww, hh, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, Ytex);
     /* bind the Y texture. */
     free(yy);
+
+
     dbg(9, "openGL: Init\n");
     // fill background with some color
     // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
