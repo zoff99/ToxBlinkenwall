@@ -4645,6 +4645,11 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         fb_fill_black();
         // show funny face
         show_video_calling();
+        // change some settings here -------
+        TOXAV_ERR_OPTION_SET error;
+        toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER, 50 , &error);
+        dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
+        // change some settings here -------
     }
 }
 
@@ -4687,10 +4692,12 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             void *p;
             uint32_t dummy1;
             uint32_t dummy2;
+
             while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
             {
                 free(p);
             }
+
             bw_rb_kill(video_play_rb);
             video_play_rb = NULL;
         }
@@ -4709,10 +4716,12 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             void *p;
             uint32_t dummy1;
             uint32_t dummy2;
+
             while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
             {
                 free(p);
             }
+
             bw_rb_kill(video_play_rb);
             video_play_rb = NULL;
         }
@@ -5524,8 +5533,7 @@ static void *video_play(void *dummy)
         if (bw_rb_size(video_play_rb) >= MAX_VIDEO_PLAY_THREADS)
         {
             dbg(9, "Video: more than %d frames in ringbuffer, dropping incoming frame!\n",
-            (int)MAX_VIDEO_PLAY_THREADS);
-
+                (int)MAX_VIDEO_PLAY_THREADS);
             free((void *)y);
         }
         else
@@ -5537,6 +5545,7 @@ static void *video_play(void *dummy)
             {
                 free(res);
             }
+
 #else
             free((void *)y);
 #endif
@@ -6486,7 +6495,7 @@ void *thread_video_av(void *data)
         toxav_iterate(av);
         // dbg(9, "AV video Thread #%d running ...\n", (int) id);
         // pthread_mutex_unlock(&av_thread_lock);
-        usleep(toxav_iteration_interval(av) * 1000);
+        usleep((toxav_iteration_interval(av) * 1000));
     }
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
@@ -6507,10 +6516,12 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
         void *p;
         uint32_t dummy1;
         uint32_t dummy2;
+
         while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
         {
             free(p);
         }
+
         bw_rb_kill(video_play_rb);
         video_play_rb = NULL;
     }
@@ -8113,8 +8124,6 @@ int Init(ESContext *esContext, int ww, int hh)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, ww, hh, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, Ytex);
     /* bind the Y texture. */
     free(yy);
-
-
     dbg(9, "openGL: Init\n");
     // fill background with some color
     // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
