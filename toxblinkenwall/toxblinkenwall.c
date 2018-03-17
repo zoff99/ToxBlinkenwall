@@ -5213,7 +5213,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     if (err == -EPIPE)
                     {
-                        dbg(0, "play_device:BUFFER UNDERRUN: trying to compensate ... \n");
+                        // *// dbg(0, "play_device:BUFFER UNDERRUN: trying to compensate ... \n");
                         //snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
                         //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
                         //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
@@ -6493,9 +6493,17 @@ void *thread_video_av(void *data)
     {
         // pthread_mutex_lock(&av_thread_lock);
         toxav_iterate(av);
+
         // dbg(9, "AV video Thread #%d running ...\n", (int) id);
         // pthread_mutex_unlock(&av_thread_lock);
-        usleep((toxav_iteration_interval(av) * 1000));
+        if (global_video_active == 1)
+        {
+            usleep((3 * 1000));
+        }
+        else
+        {
+            usleep((toxav_iteration_interval(av) * 1000));
+        }
     }
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
@@ -9098,7 +9106,15 @@ int main(int argc, char *argv[])
     while (tox_loop_running)
     {
         tox_iterate(tox, NULL);
-        usleep(tox_iteration_interval(tox) * 1000);
+
+        if (global_video_active == 1)
+        {
+            usleep(5 * 1000); // 5 ms while in a video/audio call
+        }
+        else
+        {
+            usleep(tox_iteration_interval(tox) * 1000);
+        }
 
         if (global_want_restart == 1)
         {
