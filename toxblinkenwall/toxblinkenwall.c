@@ -3441,6 +3441,7 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
         {
             // only ever 1 incoming filetransfer!
             tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+            dbg(9, "on_file_recv:003:active incoming_filetransfers=%d\n", (int)incoming_filetransfers);
         }
         else
         {
@@ -3456,6 +3457,12 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
             else
             {
                 tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+                incoming_filetransfers--;
+
+                if (incoming_filetransfers < 0)
+                {
+                    incoming_filetransfers = 0;
+                }
             }
         }
     }
@@ -8821,7 +8828,7 @@ int main(int argc, char *argv[])
     dbg(9, "set priority of process with sudo command [no output]:%s\n", cmd_001);
 #endif
     // -- set priority of process with sudo command --
-    pthread_setname_np(pthread_self(), "main thread");
+    pthread_setname_np(pthread_self(), "standard thread");
     int WANTED_MAX_DECODER_FPS = 40;
     global__MAX_DECODE_TIME_US = (1000000 / WANTED_MAX_DECODER_FPS); // to allow x fps
     dbg(9, "global__MAX_DECODE_TIME_US=%d\n",
@@ -9004,7 +9011,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[0], "thread_av");
+        pthread_setname_np(tid[0], "t_av");
         dbg(2, "AV iterate Thread successfully created\n");
     }
 
@@ -9016,7 +9023,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[1], "thread_video_av");
+        pthread_setname_np(tid[1], "t_video_av");
         dbg(2, "AV video Thread successfully created\n");
     }
 
@@ -9102,6 +9109,7 @@ int main(int argc, char *argv[])
     global_disconnect_friend_num = -1;
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
+    pthread_setname_np(pthread_self(), "t_main");
 
     while (tox_loop_running)
     {
