@@ -105,6 +105,7 @@ sudo systemctl status dphys-swapfile
 
 
 #include <tox/tox.h>
+#include <tox/toxutil.h>
 #include <tox/toxav.h>
 
 
@@ -1339,7 +1340,7 @@ Tox *create_tox()
     // ----------------------------------------------
     options.ipv6_enabled = false;
     options.local_discovery_enabled = true;
-    options.hole_punching_enabled = true;
+    options.hole_punching_enabled = false;
     options.tcp_port = tcp_port;
     // ------------------------------------------------------------
     // set our own handler for c-toxcore logging messages!!
@@ -1364,12 +1365,12 @@ Tox *create_tox()
         options.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
         options.savedata_data = savedata;
         options.savedata_length = fsize;
-        tox = tox_new(&options, NULL);
+        tox = tox_utils_new(&options, NULL);
         free((void *)savedata);
     }
     else
     {
-        tox = tox_new(&options, NULL);
+        tox = tox_utils_new(&options, NULL);
     }
 
     bool local_discovery_enabled = tox_options_get_local_discovery_enabled(&options);
@@ -2538,7 +2539,7 @@ void run_cmd_return_output(const char *command, char *output, int lastline)
 void remove_friend(Tox *tox, uint32_t friend_number)
 {
     TOX_ERR_FRIEND_DELETE error;
-    tox_friend_delete(tox, friend_number, &error);
+    tox_utils_friend_delete(tox, friend_number, &error);
 }
 
 void cmd_delfriend(Tox *tox, uint32_t friend_number, const char *message)
@@ -3378,6 +3379,30 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
     }
 }
 
+
+void friend_message_v2(Tox *tox, uint32_t friend_number,
+                       const uint8_t *raw_message, size_t raw_message_len)
+{
+    // now get the real data from msgV2 buffer
+    uint8_t *message_text = calloc(1, raw_message_len);
+
+    if (message_text)
+    {
+        uint32_t ts_sec = tox_messagev2_get_ts_sec(raw_message);
+        uint16_t ts_ms = tox_messagev2_get_ts_ms(raw_message);
+        // dbg(9, "friend_message_v2:%p %d\n", (char *)message_text, (int)message_text[0]);
+        bool res = tox_messagev2_get_message_text(raw_message,
+                   (uint32_t)raw_message_len,
+                   (bool)false, (uint32_t)0,
+                   message_text);
+        // dbg(9, "friend_message_v2:res=%d:%d:%d:len=%d:%s\n", (int)res, (int)ts_sec, (int)ts_ms,
+        //        (int)raw_message_len,
+        //        (char *)raw_message);
+        dbg(9, "friend_message_v2:fn=%d res=%d msg=%s\n", (int)friend_number, (int)res,
+            (char *)message_text);
+        free(message_text);
+    }
+}
 
 
 void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint64_t position,
@@ -5063,8 +5088,11 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     {
         if (friend_to_send_video_to == friend_number)
         {
+            //dbg(0, "AUDIO:333:channels=%d, rate=%d, sample_count=%d\n",
+            //    (int)channels,
+            //    (int)sampling_rate,
+            //    (int)sample_count);
 #ifdef HAVE_ALSA_PLAY
-
             if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
             {
 #if 0
@@ -7868,7 +7896,7 @@ void sigint_handler(int signo)
         kill_all_file_transfers(tox);
         close_cam();
         toxav_kill(mytox_av);
-        tox_kill(tox);
+        tox_utils_kill(tox);
 
         if (logfile)
         {
@@ -8937,14 +8965,24 @@ int main(int argc, char *argv[])
     // init callbacks ----------------------------------
     tox_callback_friend_request(tox, friend_request_cb);
     tox_callback_friend_message(tox, friend_message_cb);
-    tox_callback_friend_connection_status(tox, friendlist_onConnectionChange);
     tox_callback_friend_status(tox, on_tox_friend_status);
-    tox_callback_self_connection_status(tox, self_connection_status_cb);
-    tox_callback_file_chunk_request(tox, on_file_chunk_request);
-    tox_callback_file_recv_control(tox, on_file_control);
-    tox_callback_file_recv(tox, on_file_recv);
-    tox_callback_file_recv_chunk(tox, on_file_recv_chunk);
     // init callbacks ----------------------------------
+    // init toxutil callbacks ----------------------------------
+    tox_utils_callback_self_connection_status(tox, tox_utils_self_connection_status_cb);
+    tox_callback_self_connection_status(tox, self_connection_status_cb);
+    tox_utils_callback_friend_connection_status(tox, friendlist_onConnectionChange);
+    tox_callback_friend_connection_status(tox, tox_utils_friend_connection_status_cb);
+    tox_callback_friend_lossless_packet(tox, tox_utils_friend_lossless_packet_cb);
+    tox_utils_callback_file_recv_control(tox, on_file_control);
+    tox_callback_file_recv_control(tox, tox_utils_file_recv_control_cb);
+    tox_utils_callback_file_chunk_request(tox, on_file_chunk_request);
+    tox_callback_file_chunk_request(tox, tox_utils_file_chunk_request_cb);
+    tox_utils_callback_file_recv(tox, on_file_recv);
+    tox_callback_file_recv(tox, tox_utils_file_recv_cb);
+    tox_utils_callback_file_recv_chunk(tox, on_file_recv_chunk);
+    tox_callback_file_recv_chunk(tox, tox_utils_file_recv_chunk_cb);
+    tox_utils_callback_friend_message_v2(tox, friend_message_v2);
+    // init toxutil callbacks ----------------------------------
     update_savedata_file(tox);
     load_friendlist(tox);
     char path[300];
@@ -9169,7 +9207,7 @@ int main(int argc, char *argv[])
     kill_all_file_transfers(tox);
     close_cam();
     toxav_kill(mytox_av);
-    tox_kill(tox);
+    tox_utils_kill(tox);
 #ifdef HAVE_LIBAO
     sem_destroy(&count_audio_play_threads);
     sem_destroy(&audio_play_lock);
