@@ -3390,11 +3390,12 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
     {
         uint32_t ts_sec = tox_messagev2_get_ts_sec(raw_message);
         uint16_t ts_ms = tox_messagev2_get_ts_ms(raw_message);
+        uint32_t text_length = 0;
         // dbg(9, "friend_message_v2:%p %d\n", (char *)message_text, (int)message_text[0]);
         bool res = tox_messagev2_get_message_text(raw_message,
                    (uint32_t)raw_message_len,
                    (bool)false, (uint32_t)0,
-                   message_text);
+                   message_text, &text_length);
         // dbg(9, "friend_message_v2:res=%d:%d:%d:len=%d:%s\n", (int)res, (int)ts_sec, (int)ts_ms,
         //        (int)raw_message_len,
         //        (char *)raw_message);
@@ -8968,8 +8969,8 @@ int main(int argc, char *argv[])
     tox_callback_friend_status(tox, on_tox_friend_status);
     // init callbacks ----------------------------------
     // init toxutil callbacks ----------------------------------
-    tox_utils_callback_self_connection_status(tox, tox_utils_self_connection_status_cb);
-    tox_callback_self_connection_status(tox, self_connection_status_cb);
+    tox_utils_callback_self_connection_status(tox, self_connection_status_cb);
+    tox_callback_self_connection_status(tox, tox_utils_self_connection_status_cb);
     tox_utils_callback_friend_connection_status(tox, friendlist_onConnectionChange);
     tox_callback_friend_connection_status(tox, tox_utils_friend_connection_status_cb);
     tox_callback_friend_lossless_packet(tox, tox_utils_friend_lossless_packet_cb);
