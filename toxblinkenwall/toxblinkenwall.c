@@ -2243,8 +2243,12 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         save_resumable_fts(m, num);
         // friend went offline -> cancel all filetransfers
         kill_all_file_transfers_friend(m, num);
+
         // friend went offline -> hang up on all calls
-        av_local_disconnect(mytox_av, num);
+        if (friend_to_send_video_to == num)
+        {
+            av_local_disconnect(mytox_av, num);
+        }
     }
 
     dbg(2, "friendlist_onConnectionChange:*READY*:friendnum=%d %d\n", (int)num, (int)connection_status);
