@@ -105,7 +105,9 @@ sudo systemctl status dphys-swapfile
 
 
 #include <tox/tox.h>
+#ifdef TOX_HAVE_TOXUTIL
 #include <tox/toxutil.h>
+#endif
 #include <tox/toxav.h>
 
 
@@ -1365,12 +1367,20 @@ Tox *create_tox()
         options.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
         options.savedata_data = savedata;
         options.savedata_length = fsize;
+#ifdef TOX_HAVE_TOXUTIL
         tox = tox_utils_new(&options, NULL);
+#else
+        tox = tox_new(&options, NULL);
+#endif
         free((void *)savedata);
     }
     else
     {
+#ifdef TOX_HAVE_TOXUTIL
         tox = tox_utils_new(&options, NULL);
+#else
+        tox = tox_new(&options, NULL);
+#endif
     }
 
     bool local_discovery_enabled = tox_options_get_local_discovery_enabled(&options);
@@ -2543,7 +2553,11 @@ void run_cmd_return_output(const char *command, char *output, int lastline)
 void remove_friend(Tox *tox, uint32_t friend_number)
 {
     TOX_ERR_FRIEND_DELETE error;
+#ifdef TOX_HAVE_TOXUTIL
     tox_utils_friend_delete(tox, friend_number, &error);
+#else
+    tox_friend_delete(tox, friend_number, &error);
+#endif
 }
 
 void cmd_delfriend(Tox *tox, uint32_t friend_number, const char *message)
@@ -7901,7 +7915,11 @@ void sigint_handler(int signo)
         kill_all_file_transfers(tox);
         close_cam();
         toxav_kill(mytox_av);
+#ifdef TOX_HAVE_TOXUTIL
         tox_utils_kill(tox);
+#else
+        tox_kill(tox);
+#endif
 
         if (logfile)
         {
@@ -8973,6 +8991,7 @@ int main(int argc, char *argv[])
     tox_callback_friend_status(tox, on_tox_friend_status);
     // init callbacks ----------------------------------
     // init toxutil callbacks ----------------------------------
+#ifdef TOX_HAVE_TOXUTIL
     tox_utils_callback_self_connection_status(tox, self_connection_status_cb);
     tox_callback_self_connection_status(tox, tox_utils_self_connection_status_cb);
     tox_utils_callback_friend_connection_status(tox, friendlist_onConnectionChange);
@@ -8987,6 +9006,14 @@ int main(int argc, char *argv[])
     tox_utils_callback_file_recv_chunk(tox, on_file_recv_chunk);
     tox_callback_file_recv_chunk(tox, tox_utils_file_recv_chunk_cb);
     tox_utils_callback_friend_message_v2(tox, friend_message_v2);
+#else
+    tox_callback_self_connection_status(tox, self_connection_status_cb);
+    tox_callback_friend_connection_status(tox, friendlist_onConnectionChange);
+    tox_callback_file_recv_control(tox, on_file_control);
+    tox_callback_file_chunk_request(tox, on_file_chunk_request);
+    tox_callback_file_recv(tox, on_file_recv);
+    tox_callback_file_recv_chunk(tox, on_file_recv_chunk);
+#endif
     // init toxutil callbacks ----------------------------------
     update_savedata_file(tox);
     load_friendlist(tox);
@@ -9212,7 +9239,11 @@ int main(int argc, char *argv[])
     kill_all_file_transfers(tox);
     close_cam();
     toxav_kill(mytox_av);
+#ifdef TOX_HAVE_TOXUTIL
     tox_utils_kill(tox);
+#else
+    tox_kill(tox);
+#endif
 #ifdef HAVE_LIBAO
     sem_destroy(&count_audio_play_threads);
     sem_destroy(&audio_play_lock);
