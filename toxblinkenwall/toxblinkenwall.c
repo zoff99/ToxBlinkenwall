@@ -3401,6 +3401,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 void friend_message_v2(Tox *tox, uint32_t friend_number,
                        const uint8_t *raw_message, size_t raw_message_len)
 {
+#ifdef TOX_HAVE_TOXUTIL
     // now get the real data from msgV2 buffer
     uint8_t *message_text = calloc(1, raw_message_len);
 
@@ -3421,6 +3422,8 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
             (char *)message_text);
         free(message_text);
     }
+
+#endif
 }
 
 
@@ -4697,9 +4700,11 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         // show funny face
         show_video_calling();
         // change some settings here -------
+#ifdef TOXAV_ERR_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
         toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER, 50 , &error);
         dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
+#endif
         // change some settings here -------
     }
 }
