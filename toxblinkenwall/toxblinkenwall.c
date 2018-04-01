@@ -370,8 +370,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 22
-static const char global_version_string[] = "0.99.22";
+#define VERSION_PATCH 23
+static const char global_version_string[] = "0.99.23";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -803,6 +803,10 @@ size_t ao_play_bytes;
 
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
+
+uint32_t global_av_iterate_ms = 1;
+uint32_t global_iterate_ms = 1;
+int global_opengl_iterate_ms = 1;
 
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
@@ -2834,6 +2838,8 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .skpf <num>    --> show only every n-th video frame");
     send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
+    send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
+    send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
     // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
@@ -3110,6 +3116,30 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 if (accepting_calls == 1)
                 {
                     cmd_vcm(tox, friend_number);
+                }
+            }
+            else if (strncmp((char *)message, ".iter ", strlen((char *)".iter ")) == 0)
+            {
+                if (strlen(message) > 6) // require 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)3);
+
+                    if ((value_new >= 1) && (value_new <= 500))
+                    {
+                        global_iterate_ms = value_new;
+                    }
+                }
+            }
+            else if (strncmp((char *)message, ".aviter ", strlen((char *)".aviter ")) == 0)
+            {
+                if (strlen(message) > 8) // require 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)3);
+
+                    if ((value_new >= 1) && (value_new <= 500))
+                    {
+                        global_av_iterate_ms = value_new;
+                    }
                 }
             }
             else if (strncmp((char *)message, ".tcversion", strlen((char *) ".tcversion")) == 0)
@@ -4700,7 +4730,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         // show funny face
         show_video_calling();
         // change some settings here -------
-#ifdef TOXAV_ERR_OPTION_SET
+#ifdef HAVE_TOXAV_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
         toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER, 50 , &error);
         dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
@@ -6557,7 +6587,7 @@ void *thread_video_av(void *data)
         // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
-            usleep((3 * 1000));
+            usleep((global_av_iterate_ms * 1000));
         }
         else
         {
@@ -8675,7 +8705,7 @@ void *thread_opengl(void *data)
             }
             else
             {
-                yieldcpu(3);
+                usleep(1000 * global_opengl_iterate_ms);
             }
 
             // dbg(9, "openGL:cycle-END\n");
@@ -9192,7 +9222,7 @@ int main(int argc, char *argv[])
 
         if (global_video_active == 1)
         {
-            usleep(5 * 1000); // 5 ms while in a video/audio call
+            usleep(global_iterate_ms * 1000); // 3 ms while in a video/audio call
         }
         else
         {
