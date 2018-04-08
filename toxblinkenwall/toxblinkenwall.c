@@ -2483,7 +2483,13 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
     vsnprintf(msg2, 999, fmt, ap);
     va_end(ap);
     length = (size_t)strlen(msg2);
+#ifdef TOX_HAVE_TOXUTIL
+    uint32_t ts_sec = (uint32_t)get_unix_time();
+    tox_util_friend_send_message_v2(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL,
+                                    ts_sec, (const uint8_t *)msg2, length, NULL);
+#else
     tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, (uint8_t *)msg2, length, NULL);
+#endif
 }
 
 
@@ -3423,7 +3429,8 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
     if (send_back == 1)
     {
-        tox_friend_send_message(tox, friend_number, type, message, length, NULL);
+        // ??? tox_friend_send_message(tox, friend_number, type, message, length, NULL);
+        // ??? send_text_message_to_friend(tox, friend_number, const char *fmt, ...)
     }
 }
 
@@ -3450,6 +3457,9 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
         //        (char *)raw_message);
         dbg(9, "friend_message_v2:fn=%d res=%d msg=%s\n", (int)friend_number, (int)res,
             (char *)message_text);
+        // now just call the old callback function
+        friend_message_cb(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, (const uint8_t *)message_text,
+                          (size_t)text_length, NULL);
         free(message_text);
     }
 
