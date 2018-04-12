@@ -139,8 +139,7 @@ cd $_HOME_
 		$_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
 	else
 		echo "ERROR !!"
-		cat /dev/urandom > /dev/fb0
-		# $_HOME_/fill_fb.sh "1 1 1 1 1"
+		# cat /dev/urandom > /dev/fb0
 	fi
 
 else
