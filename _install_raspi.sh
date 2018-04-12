@@ -2,6 +2,13 @@
 
 sudo apt-get --yes --force-yes install git
 
+
+# totally disable swap ---------------
+sudo service dphys-swapfile stop
+sudo systemctl disable dphys-swapfile
+sudo apt-get --yes --force-yes purge dphys-swapfile
+# totally disable swap ---------------
+
 cd
 rm -Rf ToxBlinkenwall/.git # remove previous install
 rm -Rf tmp/
