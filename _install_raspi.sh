@@ -135,16 +135,10 @@ res2=$?
 
 cd $_HOME_
 
-	if [ $res2 -eq 0 ]; then
-		$_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
-	else
-		echo "ERROR !!"
-		# cat /dev/urandom > /dev/fb0
-	fi
-
+if [ $res2 -eq 0 ]; then
+    $_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
 else
-	echo "ERROR !!"
-	cat /dev/urandom > /dev/fb0
+    echo "ERROR !!"
 fi
 
 
