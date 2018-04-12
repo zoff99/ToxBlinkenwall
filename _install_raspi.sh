@@ -6,7 +6,7 @@ sudo apt-get --yes --force-yes install git
 # totally disable swap ---------------
 sudo service dphys-swapfile stop
 sudo systemctl disable dphys-swapfile
-sudo systemctl disable dphys-swapfile
+sudo apt-get purge dphys-swapfile
 # totally disable swap ---------------
 
 cd
