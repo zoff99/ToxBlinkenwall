@@ -17,6 +17,11 @@ export _HOME_=$(pwd)
 echo $_HOME_
 cd $_HOME_/ToxBlinkenwall/toxblinkenwall/
 
+./initscript.sh stop
+cat /dev/zero > /dev/fb0
+sleep 1
+
+
 # ------------- install packages -------------
 sudo apt-get --yes --force-yes install libjpeg-dev libpng-dev imagemagick htop mc fbset cmake qrencode
 sudo apt-get --yes --force-yes install libqrencode-dev vim nano wget git make
@@ -30,6 +35,12 @@ sudo apt-get --yes --force-yes install imagemagick qrencode
 export _SRC_=$_HOME_/src/
 export _INST_=$_HOME_/inst/
 
+export CF2=" -O3 -g -marm -march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8 \
+ -mfloat-abi=hard -ftree-vectorize "
+export CF3=" -funsafe-math-optimizations "
+export VV1=" VERBOSE=1 V=1 "
+
+
 rm -Rf $_SRC_
 rm -Rf $_INST_
 
@@ -42,14 +53,31 @@ cd $_SRC_
 git clone --depth=1 --branch=1.0.13 https://github.com/jedisct1/libsodium.git
 cd libsodium
 ./autogen.sh
-./configure --prefix=$_INST_ --disable-shared --disable-soname-versions # --enable-minimal
+export CFLAGS=" $CF2 "
+./configure --prefix=$_INST_ --disable-shared --disable-soname-versions
 make -j 4
 make install
 
 cd $_SRC_
-git clone --depth=1 --branch=v1.6.1 https://github.com/webmproject/libvpx.git
+git clone --depth=1 --branch=v1.7.0 https://github.com/webmproject/libvpx.git
 cd libvpx
-./configure --prefix=$_INST_ --disable-examples --disable-unit-tests --enable-shared
+make clean
+export CFLAGS=" $CF2 $CF3 "
+export CXXFLAGS=" $CF2 $CF3 "
+./configure --prefix=$_INST_ --disable-examples \
+  --disable-unit-tests --enable-shared \
+  --size-limit=16384x16384 \
+  --enable-onthefly-bitpacking \
+  --enable-error-concealment \
+  --enable-runtime-cpu-detect \
+  --enable-multi-res-encoding \
+  --enable-postproc \
+  --enable-vp9-postproc \
+  --enable-temporal-denoising \
+  --enable-vp9-temporal-denoising
+
+#  --enable-better-hw-compatibility \
+
 make -j 4
 make install
 
@@ -57,6 +85,8 @@ cd $_SRC_
 git clone --depth=1 --branch=v1.2.1 https://github.com/xiph/opus.git
 cd opus
 ./autogen.sh
+export CFLAGS=" $CF2 $CF3 "
+export CXXFLAGS=" $CF2 $CF3 "
 ./configure --prefix=$_INST_ --disable-shared
 make -j 4
 make install
@@ -66,30 +96,13 @@ cd $_SRC_
 git clone https://github.com/zoff99/c-toxcore
 cd c-toxcore
 
-# v0.1.10 on the fly tweaks     07f32b34a61f982784a87c33068b62dd0a28ddce
-# v0.1.10 tweaks4               adbf2386071801a8f70cba3d165ce1d5b87809fb
-# v0.1.10 more vpx tweaks2      7db5ae4225797a83d35af35ec4e533ac5be47ef1
-# v0.1.10 more vpx tweaks       eab6e81ec9ed5b88aa712093ea53c802ff81d611
-# v0.1.10 more tweaks           b308141c972eb05a18ab27672f5dc0b6152d189c
-# v0.1.10 cfg_dec2              3921fd04ee233a21befa960cf26214410e1b6582
-# v0.1.10 cfg_dec               94bf0a32adac079b7739c6d32cfc0e504993f962
-# v0.1.10 onlyKF                74dc53cf180e32f92ebb3cb5e8542e919cc3b343
-# v0.1.10 tweaks3               25d1fce22ddc87089cf53e9b3c5bcf9d56a57374
-# v0.1.10 mobtweaks             f73b345c21fae0e0e56fae86dc82f63188a00aca
-# v0.1.10                       6295d28a1ec00d1caa03adce8fac6baf456ca7da
-# v0.1.9                        a429ef4a28a5e5e0ad010efffb76d2abc3ada0af
-# v0.1.8                        f6db9333e2d1262e7ba3846563c30f63c98ffa38
-# v0.1.7                        48c86e942d487a8856cbd25797b320bfb1879ddc
-# v0.1.6                        895de7ef26e7617769f2271345e414545c2581f8
-# v0.1.5                        995578f1038842288c1ff552fd796ab2377db6e1
-# v0.1.4                        27a97a8280813ec05a5209811c40ab23203bb292
-
-git checkout 07f32b34a61f982784a87c33068b62dd0a28ddce
+git checkout "zoff99/_0.1.10_2017_video_fix_10p"
 
 ./autogen.sh
-
-export CFLAGS=-I$_INST_/include/
+make clean
+export CFLAGS=" $CF2 -D_GNU_SOURCE -I$_INST_/include/ -O3 -g -fstack-protector-all "
 export LDFLAGS=-L$_INST_/lib
+
 ./configure \
 --prefix=$_INST_ \
 --disable-soname-versions --disable-testing --disable-shared
@@ -99,7 +112,14 @@ make install
 
 cd $_HOME_/ToxBlinkenwall/toxblinkenwall/
 
-gcc -g -O3 -fPIC -export-dynamic -I$_INST_/include -o toxblinkenwall -lm toxblinkenwall.c \
+gcc $CF2 $CF3 \
+-fstack-protector-all \
+-Wno-unused-variable \
+-fPIC -export-dynamic -I$_INST_/include -o toxblinkenwall -lm \
+toxblinkenwall.c openGL/esUtil.c openGL/esShader.c rb.c \
+-I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads \
+-I/opt/vc/include/interface/vmcs_host/linux -lGLESv2 -lEGL \
+-lbcm_host -L/opt/vc/lib \
 -std=gnu99 \
 -L$_INST_/lib \
 $_INST_/lib/libtoxcore.a \
@@ -107,13 +127,25 @@ $_INST_/lib/libtoxav.a \
 -lrt \
 $_INST_/lib/libopus.a \
 $_INST_/lib/libvpx.a \
--lm \
 $_INST_/lib/libsodium.a \
--lasound -lpthread -lv4lconvert
+-lasound \
+-lpthread -lv4lconvert
 
-
-# audio test program
-gcc a.c -lao -ldl -lm -o a
+res2=$?
 
 cd $_HOME_
+
+	if [ $res2 -eq 0 ]; then
+		$_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
+	else
+		echo "ERROR !!"
+		cat /dev/urandom > /dev/fb0
+		# $_HOME_/fill_fb.sh "1 1 1 1 1"
+	fi
+
+else
+	echo "ERROR !!"
+	cat /dev/urandom > /dev/fb0
+fi
+
 
