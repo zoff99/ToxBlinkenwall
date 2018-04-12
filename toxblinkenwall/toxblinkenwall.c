@@ -2486,7 +2486,9 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
 #ifdef TOX_HAVE_TOXUTIL
     uint32_t ts_sec = (uint32_t)get_unix_time();
     tox_util_friend_send_message_v2(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL,
-                                    ts_sec, (const uint8_t *)msg2, length, NULL);
+                                    ts_sec, (const uint8_t *)msg2, length,
+                                    NULL, NULL, NULL,
+                                    NULL);
 #else
     tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, (uint8_t *)msg2, length, NULL);
 #endif
