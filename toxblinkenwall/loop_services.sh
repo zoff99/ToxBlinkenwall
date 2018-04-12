@@ -18,8 +18,10 @@ export LD_LIBRARY_PATH=~/inst/lib/
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
-	# camera module not loaded automatically
+	# camera module is never loaded automatically, why is that?
 	sudo modprobe bcm2835_v4l2
+	# nice now the module suddenly has a new name?
+	sudo modprobe bcm2835-v4l2
 	# stop gfx UI
 	# sudo /etc/init.d/lightdm start
 	# sleep 2
