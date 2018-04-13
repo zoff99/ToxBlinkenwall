@@ -98,6 +98,18 @@ sudo systemctl disable dphys-swapfile
 sudo systemctl status dphys-swapfile
 # disable swap on raspian -------------------
 
+
+
+# connect to any public wifi ----------------
+# add to the end of end of wpa_supplicant.conf
+
+network={
+        key_mgmt=NONE
+        priority=-999
+}
+
+# connect to any public wifi ----------------
+
 */
 
 #define _GNU_SOURCE
