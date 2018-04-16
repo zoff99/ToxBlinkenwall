@@ -51,7 +51,7 @@ xserver-command=X -s 0 dpms
 ```
 
 
-# overclock settings
+#### overclock settings
 
 ```
 arm_freq=1350
