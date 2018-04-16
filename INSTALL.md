@@ -2,87 +2,8 @@
 
 
 ```
-cd
-git clone https://github.com/zoff99/ToxBlinkenwall
-cd
-export _HOME_=$(pwd)
-echo $_HOME_
-cd $_HOME_/ToxBlinkenwall/toxblinkenwall/
-
-# ------------- install packages -------------
-sudo apt-get --yes --force-yes install libjpeg-dev libpng-dev imagemagick htop mc fbset cmake qrencode
-sudo apt-get --yes --force-yes install libqrencode-dev vim nano wget git make
-sudo apt-get --yes --force-yes install autotools-dev libtool bc libv4l-dev libv4lconvert0 v4l-conf v4l-utils
-sudo apt-get --yes --force-yes install libopus-dev libvpx-dev pkg-config libjpeg-dev libpulse-dev libconfig-dev
-sudo apt-get --yes --force-yes install automake checkinstall check yasm
-sudo apt-get --yes --force-yes install libao-dev libasound2-dev
-
-export _SRC_=$_HOME_/src/
-export _INST_=$_HOME_/inst/
-mkdir -p $_SRC_
-mkdir -p $_INST_
-
-export LD_LIBRARY_PATH=$_INST_/lib/
-
-
-cd $_SRC_
-git clone --depth=1 --branch=1.0.13 https://github.com/jedisct1/libsodium.git
-cd libsodium
-./autogen.sh
-./configure --prefix=$_INST_ --disable-shared --disable-soname-versions # --enable-minimal
-make -j 4
-make install
-
-cd $_SRC_
-git clone --depth=1 --branch=v1.6.1 https://github.com/webmproject/libvpx.git
-cd libvpx
-./configure --prefix=$_INST_ --disable-examples --disable-unit-tests --enable-shared
-make -j 4
-make install
-
-cd $_SRC_
-git clone --depth=1 --branch=v1.2.1 https://github.com/xiph/opus.git
-cd opus
-./autogen.sh
-./configure --prefix=$_INST_ --disable-shared
-make -j 4
-make install
-
-cd $_SRC_
-# git clone https://github.com/TokTok/c-toxcore
-git clone https://github.com/zoff99/c-toxcore
-cd c-toxcore
-
-# v0.1.10 on the fly tweaks     07f32b34a61f982784a87c33068b62dd0a28ddce
-git checkout 07f32b34a61f982784a87c33068b62dd0a28ddce
-./autogen.sh
-
-export CFLAGS=-I$_INST_/include/
-export LDFLAGS=-L$_INST_/lib
-./configure \
---prefix=$_INST_ \
---disable-soname-versions --disable-testing --disable-shared
-make -j 4
-make install
-
-
-cd $_HOME_/ToxBlinkenwall/toxblinkenwall/
-
-gcc -g -O3 -fPIC -export-dynamic -I$_INST_/include \
--o toxblinkenwall \
-toxblinkenwall.c \
--std=gnu99 \
--L$_INST_/lib \
-$_INST_/lib/libtoxcore.a \
-$_INST_/lib/libtoxav.a \
-$_INST_/lib/libopus.a \
-$_INST_/lib/libsodium.a \
-$_INST_/lib/libvpx.a \
--lrt \
--lm \
--lasound \
--lpthread \
--lv4lconvert
+# TODO: this needs to be tweaked a bit
+ToxBlinkenwall/toxblinkenwall/_install_linux_X.sh
 
 # echo 'default_driver=alsa
 # verbose=true
@@ -101,9 +22,10 @@ export IS_ON
 
 #### Install on the RaspberryPI
 
-it is the same procedure except the last command should be this:
 
 ```
+ToxBlinkenwall/toxblinkenwall/_install_raspi.sh
+
 echo 'IS_ON=RASPI
 export IS_ON
 ' >> $_HOME_/.profile
@@ -146,3 +68,16 @@ over_voltage_sdram_p=6
 over_voltage_sdram_i=4
 over_voltage_sdram_c=4
 ```
+
+
+#### Install on the Linux with X11 Server
+
+
+```
+ToxBlinkenwall/toxblinkenwall/_install_linux_X.sh
+
+echo 'IS_ON=RASPI
+export IS_ON
+' >> $_HOME_/.profile
+```
+
