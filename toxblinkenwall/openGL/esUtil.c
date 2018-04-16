@@ -196,7 +196,8 @@ GLboolean userInterrupt(ESContext *esContext)
 //
 //      This function initialized the native X11 display and window for EGL
 //
-EGLBoolean WinCreate(ESContext *esContext, const char *title)
+EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width, int display_height, int frame_width, int frame_height)
+//EGLBoolean WinCreate(ESContext *esContext, const char *title, int, int, int, int)
 {
     Window root;
     XSetWindowAttributes swa;
