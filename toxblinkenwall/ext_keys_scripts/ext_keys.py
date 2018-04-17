@@ -13,8 +13,8 @@ GPIO.VERSION
 fifo_path = '../ext_keys.fifo'
 cur_button=-1
 
-ROW    = [4, -1, -1, 17]
-COLUMN = [27, 18, 22]
+ROW    = [16, 20, 21, 5] # these are the GPIO numbers, NOT the real PIN numbers
+COLUMN = [6, 13, 19, 26]
 
 fifo_write = open(fifo_path, 'w')
 
@@ -53,7 +53,7 @@ try:
                 tmpRead = GPIO.input(ROW[i])
                 if tmpRead == 0:
                     rowVal = i
-                    # print "row pressed" + str(rowVal)
+                    # print "row pressed " + str(rowVal)
 
 
         # if rowVal is not 0 thru 3 then no button was pressed and we can exit
@@ -71,18 +71,18 @@ try:
             GPIO.output(ROW[rowVal], GPIO.HIGH)
 
             # Scan columns for still-pushed key/button
-            # A valid key press should set "colVal"  between 0 and 2.
+            # A valid key press should set "colVal"  between 0 and 3.
             colVal = -1
             for j in range(len(COLUMN)):
                 if COLUMN[j] != -1:
                     tmpRead = GPIO.input(COLUMN[j])
                     if tmpRead == 1:
                         colVal=j
-                        # print "col pressed" + str(colVal)
+                        # print "col pressed " + str(colVal)
 
 
-            # if colVal is not 0 thru 2 then no button was pressed and we can exit
-                if colVal <0 or colVal >2:
+            # if colVal is not 0 thru 3 then no button was pressed and we can exit
+                if colVal <0 or colVal >3:
                     # nothing pressed
                     pass
                 else:
@@ -121,15 +121,11 @@ try:
                     else:
                         cur_button=-1
 
-        sleep(0.2)         # wait 0.2 seconds
+        sleep(0.1)         # wait 0.1 seconds
 
 finally:                   # this block will run no matter how the try block exits
 
     fifo_write.close()
 
-    # GPIO.setup(4, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    # GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    # GPIO.setup(27, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    # GPIO.setup(22, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.cleanup()         # clean up after yourself
 
