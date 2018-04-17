@@ -18,13 +18,15 @@
 
 /*
 
-# cat /proc/asound/cards
+# run:
+#   cat /proc/asound/cards
+# or:
+#   aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq
 
-# aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq
+# example usb audio: U0x4b40x309
 
 
 nano -w /usr/share/alsa/alsa.conf
-# example usb audio: U0x4b40x301
 
 add to end of file:
 
@@ -32,7 +34,7 @@ add to end of file:
 pcm.usb
 {
     type hw
-    card U0x4b40x301
+    card U0x4b40x309
 }
 
 pcm.card_bcm {
