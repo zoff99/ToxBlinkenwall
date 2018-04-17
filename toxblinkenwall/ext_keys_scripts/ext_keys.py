@@ -4,6 +4,10 @@ import RPi.GPIO as GPIO
 from time import sleep     # this lets us have a time delay (see line 15)
 GPIO.setmode(GPIO.BCM)     # set up BCM GPIO numbering
 
+import time
+last_button_press = 0
+button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
+
 # What Raspberry Pi revision are we running?
 GPIO.RPI_REVISION    #  0 = Compute Module, 1 = Rev 1, 2 = Rev 2, 3 = Model B+
 
@@ -11,7 +15,7 @@ GPIO.RPI_REVISION    #  0 = Compute Module, 1 = Rev 1, 2 = Rev 2, 3 = Model B+
 GPIO.VERSION
 
 fifo_path = '../ext_keys.fifo'
-cur_button=-1
+cur_button = -1
 
 ROW    = [16, 20, 21, 5] # these are the GPIO numbers, NOT the real PIN numbers
 COLUMN = [6, 13, 19, 26]
@@ -86,42 +90,62 @@ try:
                     # nothing pressed
                     pass
                 else:
-                    # print "row=" + str(rowVal) + " col=" + str(colVal)
+                    # print "B:row=" + str(rowVal) + " col=" + str(colVal) + " cur_button=" + str(cur_button)
 
-                    if rowVal == 0 and colVal == 0 and cur_button != 1:
-                        # button "1" pressed
-                        fifo_write = open(fifo_path, 'w')
-                        fifo_write.write("call:1\n")
-                        fifo_write.flush()
-                        cur_button=1
-                    elif rowVal == 0 and colVal == 1 and cur_button != 2:
-                        # button "2" pressed
-                        fifo_write = open(fifo_path, 'w')
-                        fifo_write.write("call:2\n")
-                        fifo_write.flush()
-                        cur_button=2
-                    elif rowVal == 3 and colVal == 0 and cur_button != 3:
-                        # button "*" pressed
-                        fifo_write = open(fifo_path, 'w')
-                        fifo_write.write("hangup:\n")
-                        fifo_write.flush()
-                        cur_button=3
-                    elif rowVal == 3 and colVal == 1 and cur_button != 4:
-                        # button "0" pressed
-                        fifo_write = open(fifo_path, 'w')
-                        fifo_write.write("toggle_speaker:\n")
-                        fifo_write.flush()
-                        cur_button=4
-                    elif rowVal == 3 and colVal == 2 and cur_button != 5:
-                        # button "#" pressed
-                        fifo_write = open(fifo_path, 'w')
-                        fifo_write.write("toggle_quality:\n")
-                        fifo_write.flush()
-                        cur_button=5
-                    else:
+                    if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
+                        # reset current button
                         cur_button=-1
 
-        sleep(0.1)         # wait 0.1 seconds
+                    if rowVal == 0 and colVal == 0:
+                        # button "1" pressed
+                        if cur_button != 1:
+                            #print "BUTTON:1"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("call:1\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=1
+                    elif rowVal == 0 and colVal == 1:
+                        # button "2" pressed
+                        if cur_button != 2:
+                            #print "BUTTON:2"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("call:2\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=2
+                    elif rowVal == 3 and colVal == 0:
+                        # button "*" pressed
+                        if cur_button != 3:
+                            #print "BUTTON:*"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("hangup:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=3
+                    elif rowVal == 3 and colVal == 1:
+                        # button "0" pressed
+                        if cur_button != 4:
+                            #print "BUTTON:0"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("toggle_speaker:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=4
+                    elif rowVal == 3 and colVal == 2:
+                        # button "#" pressed
+                        if cur_button != 5:
+                            #print "BUTTON:#"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("toggle_quality:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=5
+                    else:
+                        # print "BUTTON:** -1 **"
+                        cur_button=-1
+
+        sleep(0.2)         # wait 0.2 seconds
 
 finally:                   # this block will run no matter how the try block exits
 
