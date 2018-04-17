@@ -7587,7 +7587,7 @@ void *thread_phonebook_invite(void *data)
 
     while (do_phonebook_invite == 1)
     {
-        for (j = 0; j < 10; j++)
+        for (j = 1; j < 10; j++)
         {
             uint8_t *entry_bin_toxid = NULL;
             read_pubkey_from_file(&entry_bin_toxid, j);
