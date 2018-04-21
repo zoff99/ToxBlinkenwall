@@ -8594,7 +8594,7 @@ void Draw(ESContext *esContext)
 
 
 //
-void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height, int w_factor, int h_factor)
+void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
 {
     openGL_UserData *userData = esContext->userData;
     incoming_video_width_prev = 0;
@@ -8649,6 +8649,9 @@ void *thread_opengl(void *data)
         var_framebuffer_info.bits_per_pixel);
     int fb_screen_width = (int)var_framebuffer_info.xres;
     int fb_screen_height = (int)var_framebuffer_info.yres;
+    // HINT: openGL display size on the raspberry Pi is fixed (when not using X)
+    fb_screen_width = 1920;
+    fb_screen_height = 1080;
 
     // Get fixed screen information
     if (ioctl(global_framebuffer_device_fd, FBIOGET_FSCREENINFO, &var_framebuffer_fix_info))
@@ -8668,8 +8671,6 @@ void *thread_opengl(void *data)
 
     ESContext esContext;
     openGL_UserData userData;
-    float w_factor = 1.5;
-    float h_factor = 1.5f;
     int opengl_active = 0;
     struct timeval t1, t2;
     struct timezone tz;
@@ -8688,8 +8689,8 @@ void *thread_opengl(void *data)
                 esContext.userData = &userData;
                 esCreateWindow(&esContext,
                                "ToxBlinkenwall",
-                               (int)(fb_screen_width * w_factor),
-                               (int)(fb_screen_height * h_factor),
+                               (int)(fb_screen_width),
+                               (int)(fb_screen_height),
                                fb_screen_width,
                                fb_screen_height,
                                ES_WINDOW_ALPHA); // ES_WINDOW_RGB
@@ -8754,7 +8755,7 @@ void *thread_opengl(void *data)
             if (opengl_active == 1)
             {
                 opengl_active = 0;
-                ShutDown(&esContext, fb_screen_width, fb_screen_height, w_factor, h_factor);
+                ShutDown(&esContext, fb_screen_width, fb_screen_height);
             }
 
             totaltime = 0.0f;
@@ -8768,7 +8769,7 @@ void *thread_opengl(void *data)
     if (opengl_active == 1)
     {
         opengl_active = 0;
-        ShutDown(&esContext, fb_screen_width, fb_screen_height, w_factor, h_factor);
+        ShutDown(&esContext, fb_screen_width, fb_screen_height);
     }
 }
 
