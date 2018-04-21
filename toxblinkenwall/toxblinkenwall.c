@@ -7614,6 +7614,7 @@ void *thread_phonebook_invite(void *data)
 void *thread_ext_keys(void *data)
 {
     char buf[MAX_READ_FIFO_BUF];
+    CLEAR(buf);
     do_read_ext_keys = 1;
     int res = 0;
     Tox *tox = (Tox *)data;
@@ -7623,6 +7624,7 @@ void *thread_ext_keys(void *data)
     while (do_read_ext_keys == 1)
     {
         res = read(ext_keys_fd, buf, MAX_READ_FIFO_BUF);
+        dbg(9, "fifo read res=%d\n", (int)res);
 
         if (res == 0)
         {
@@ -7661,6 +7663,8 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: TOGGLE SPEAKER:\n");
                 toggle_speaker();
             }
+
+            CLEAR(buf);
         }
     }
 

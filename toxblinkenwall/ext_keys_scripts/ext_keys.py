@@ -5,6 +5,7 @@ from time import sleep     # this lets us have a time delay (see line 15)
 GPIO.setmode(GPIO.BCM)     # set up BCM GPIO numbering
 
 import time
+import os
 last_button_press = 0
 button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
 
@@ -20,8 +21,6 @@ cur_button = -1
 ROW    = [16, 20, 21, 5] # these are the GPIO numbers, NOT the real PIN numbers
 COLUMN = [6, 13, 19, 26]
 
-fifo_write = open(fifo_path, 'w')
-
 # Set all columns as output low
 for j in range(len(COLUMN)):
     if COLUMN[j] != -1:
@@ -33,6 +32,11 @@ for i in range(len(ROW)):
     if ROW[i] != -1:
         GPIO.setup(ROW[i], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+
+try:
+    os.mkfifo(fifo_path)
+except Exception:
+    pass
 
 try:
     while True:
@@ -126,7 +130,7 @@ try:
                     elif rowVal == 3 and colVal == 1:
                         # button "0" pressed
                         if cur_button != 4:
-                            #print "BUTTON:0"
+                            # print "BUTTON:0"
                             fifo_write = open(fifo_path, 'w')
                             fifo_write.write("toggle_speaker:\n")
                             fifo_write.flush()
