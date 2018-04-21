@@ -7624,7 +7624,7 @@ void *thread_ext_keys(void *data)
     while (do_read_ext_keys == 1)
     {
         res = read(ext_keys_fd, buf, MAX_READ_FIFO_BUF);
-        dbg(9, "fifo read res=%d\n", (int)res);
+        // dbg(9, "fifo read res=%d\n", (int)res);
 
         if (res == 0)
         {
