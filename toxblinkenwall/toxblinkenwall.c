@@ -8454,9 +8454,18 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // print FPS in texture
-    char fps_str[12];
+    char fps_str[14];
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)fps);
+
+    if (speaker_out_num == 0)
+    {
+        snprintf(fps_str, sizeof(fps_str), "fps: %d %s", (int)fps, speaker_out_name_0);
+    }
+    else
+    {
+        snprintf(fps_str, sizeof(fps_str), "fps: %d %s", (int)fps, speaker_out_name_1);
+    }
+
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
     snprintf(fps_str, sizeof(fps_str), "%d x %d", (int)incoming_video_width, (int)incoming_video_height);
