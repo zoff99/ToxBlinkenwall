@@ -431,12 +431,15 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
-uint32_t DEFAULT_GLOBAL_VID_BITRATE = 2500; // kbit/sec
-#define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 2500 // kbit/sec
-#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 5000 // kbit/sec
+#define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 2400 // kbit/sec // need these 2 values to be different!!
+#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 500 // kbit/sec // need these 2 values to be different!!
+uint32_t DEFAULT_GLOBAL_VID_BITRATE = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY; // kbit/sec
+#define DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY 50
+#define DEFAULT_GLOBAL_VID_MAX_Q_HIGHER_QUALITY 30
+uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 #define DEFAULT_GLOBAL_AUD_BITRATE 64 // kbit/sec
-#define DEFAULT_GLOBAL_MIN_VID_BITRATE 300 // kbit/sec
-#define DEFAULT_GLOBAL_MAX_VID_BITRATE 50000 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_VID_BITRATE 100 // kbit/sec
+#define DEFAULT_GLOBAL_MAX_VID_BITRATE 15000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 int DEFAULT_FPS_SLEEP_MS =
@@ -668,6 +671,7 @@ const char *shell_cmd__get_my_number_of_open_files = "cat /proc/sys/fs/file-nr 2
 const char *shell_cmd__create_qrcode = "./scripts/create_qrcode.sh 2> /dev/null";
 const char *shell_cmd__show_qrcode = "./scripts/show_qrcode.sh 2> /dev/null";
 const char *shell_cmd__show_clients = "./scripts/show_clients.sh 2> /dev/null";
+const char *shell_cmd__show_help = "./scripts/show_help.sh 2> /dev/null";
 const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endless_in_bg.sh 2> /dev/null";
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
@@ -857,7 +861,7 @@ int speaker_out_num = 0;
 int do_phonebook_invite = 0;
 int global_video_in_w = 0;
 int global_video_in_h = 0;
-
+int global_update_opengl_status_text = 0;
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -1936,6 +1940,16 @@ void show_tox_client_application_download_links()
     if (system(cmd_str));
 }
 
+void show_help_image()
+{
+    show_text_as_image_stop();
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_help);
+
+    if (system(cmd_str));
+}
+
 
 int is_friend_online(Tox *tox, uint32_t num)
 {
@@ -2831,6 +2845,15 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
                         dbg(0, "toxav_call (1):*unknown error*\n");
                         break;
                 }
+            }
+            else
+            {
+#ifdef HAVE_TOXAV_OPTION_SET
+                TOXAV_ERR_OPTION_SET error;
+                bool res = toxav_option_set(mytox_av, friend_number,
+                    (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                    (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+#endif
             }
         }
         else
@@ -4758,7 +4781,9 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         // change some settings here -------
 #ifdef HAVE_TOXAV_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
-        toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER, 50 , &error);
+        toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
+            DEFAULT_GLOBAL_VID_MAX_Q,
+            &error);
         dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
 #endif
         // change some settings here -------
@@ -5571,6 +5596,8 @@ void update_status_line_on_fb()
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
                           10, var_framebuffer_info.yres - 30, status_line_2_str);
+#else
+    global_update_opengl_status_text = 1;
 #endif
 }
 
@@ -7536,7 +7563,7 @@ void toggle_speaker()
     if (system(cmd_001));
 
     // -- toggle alsa config with sudo command --
-    yieldcpu(1000); // wait 1 second !!
+    yieldcpu(40); // wait a bit !!
     init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
     sem_post(&audio_play_lock);
     update_status_line_2_text();
@@ -7547,32 +7574,45 @@ void toggle_speaker()
 void toggle_quality()
 {
     int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
+    int max_q_new = DEFAULT_GLOBAL_VID_MAX_Q;
+
+    dbg(2, "toggle_quality: 1:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
 
     if (global_video_bit_rate == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
     {
         vbr_new = DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY;
+        max_q_new = DEFAULT_GLOBAL_VID_MAX_Q_HIGHER_QUALITY;
         dbg(2, "toggle_quality: HIGH\n");
-        global__VP8E_SET_CPUUSED_VALUE = 10;
-        global__VPX_END_USAGE = 3;
     }
     else
     {
         vbr_new = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY;
+        max_q_new = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
         dbg(2, "toggle_quality: normal\n");
-        global__VP8E_SET_CPUUSED_VALUE = 16;
-        global__VPX_END_USAGE = 2;
     }
 
-    DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
+    DEFAULT_GLOBAL_VID_BITRATE = (uint32_t)vbr_new;
+    DEFAULT_GLOBAL_VID_MAX_Q = (uint32_t)max_q_new;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     update_status_line_1_text();
+
+    dbg(2, "toggle_quality: 2:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
+
     update_status_line_on_fb();
 
     if (mytox_av != NULL)
     {
         if (friend_to_send_video_to > -1)
         {
-            toxav_bit_rate_set(mytox_av, friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+            toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                global_audio_bit_rate, global_video_bit_rate, NULL);
+
+#ifdef HAVE_TOXAV_OPTION_SET
+            TOXAV_ERR_OPTION_SET error;
+            bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+#endif
         }
     }
 }
@@ -7608,6 +7648,34 @@ void *thread_phonebook_invite(void *data)
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
 }
+
+
+void button_a()
+{
+    if (global_video_active == 0)
+    {
+        show_tox_id_qrcode();
+    }
+}
+
+void button_b()
+{
+    if (global_video_active == 0)
+    {
+        global_is_qrcode_showing_on_screen = 0;
+        show_tox_client_application_download_links();
+    }
+}
+
+void button_c()
+{
+    if (global_video_active == 0)
+    {
+        global_is_qrcode_showing_on_screen = 0;
+        show_help_image();
+    }
+}
+
 
 #ifdef HAVE_EXTERNAL_KEYS
 
@@ -7663,6 +7731,23 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: TOGGLE SPEAKER:\n");
                 toggle_speaker();
             }
+            else if (strncmp((char *)buf, "BT-A:", strlen((char *)"BT-A:")) == 0)
+            {
+                dbg(2, "ExtKeys: Button A:\n");
+                button_a();
+            }
+            else if (strncmp((char *)buf, "BT-B:", strlen((char *)"BT-B:")) == 0)
+            {
+                dbg(2, "ExtKeys: Button B:\n");
+                button_b();
+            }
+            else if (strncmp((char *)buf, "BT-C:", strlen((char *)"BT-C:")) == 0)
+            {
+                dbg(2, "ExtKeys: Button C:\n");
+                button_c();
+            }
+
+
 
             CLEAR(buf);
         }
@@ -8260,7 +8345,7 @@ int Init(ESContext *esContext, int ww, int hh)
     // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-#define OVERLAY_TEXTURE_WIDTH  (110)
+#define OVERLAY_TEXTURE_WIDTH  (130)
 #define OVERLAY_TEXTURE_HEIGHT (22)
     // prepare overlay texture
     userData->ol_ww = OVERLAY_TEXTURE_WIDTH;
@@ -8454,16 +8539,30 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // print FPS in texture
-    char fps_str[14];
+    char fps_str[17];
     CLEAR(fps_str);
 
     if (speaker_out_num == 0)
     {
-        snprintf(fps_str, sizeof(fps_str), "fps: %d %s", (int)fps, speaker_out_name_0);
+        if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
+        {
+            snprintf(fps_str, sizeof(fps_str), "fps: %d %s n", (int)fps, speaker_out_name_0);
+        }
+        else
+        {
+            snprintf(fps_str, sizeof(fps_str), "fps: %d %s H", (int)fps, speaker_out_name_0);
+        }
     }
     else
     {
-        snprintf(fps_str, sizeof(fps_str), "fps: %d %s", (int)fps, speaker_out_name_1);
+        if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
+        {
+            snprintf(fps_str, sizeof(fps_str), "fps: %d %s n", (int)fps, speaker_out_name_1);
+        }
+        else
+        {
+            snprintf(fps_str, sizeof(fps_str), "fps: %d %s H", (int)fps, speaker_out_name_1);
+        }
     }
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
@@ -8734,8 +8833,9 @@ void *thread_opengl(void *data)
                 // timspan_in_ms = __utimer_stop(&tm_01, "opengl_draw_cycle:", 0);
                 frames++;
 
-                if (totaltime > (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS)
+                if ((totaltime > (float)OPENGL_DISPLAY_FPS_AFTER_SECONDS) || (global_update_opengl_status_text == 1))
                 {
+                    global_update_opengl_status_text = 0;
                     userData.fps = (float)frames / (float)totaltime;
                     // dbg(9, "%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, (float)(userData.fps));
                     totaltime = 0;

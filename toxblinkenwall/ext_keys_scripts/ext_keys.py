@@ -145,6 +145,33 @@ try:
                             fifo_write.flush()
                             last_button_press = int(round(time.time() * 1000))
                         cur_button=5
+                    elif rowVal == 0 and colVal == 3:
+                        # button "A" pressed
+                        if cur_button != 6:
+                            #print "BUTTON:A"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("BT-A:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=6
+                    elif rowVal == 1 and colVal == 3:
+                        # button "B" pressed
+                        if cur_button != 7:
+                            #print "BUTTON:B"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("BT-B:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=7
+                    elif rowVal == 2 and colVal == 3:
+                        # button "C" pressed
+                        if cur_button != 8:
+                            #print "BUTTON:C"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("BT-C:\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=8
                     else:
                         # print "BUTTON:** -1 **"
                         cur_button=-1

@@ -16,6 +16,8 @@ function clean_up
 cd $(dirname "$0")
 export LD_LIBRARY_PATH=~/inst/lib/
 
+HD_FROM_CAM="" # set to "-f" for 720p video
+
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
 	# camera module is never loaded automatically, why is that?
@@ -69,7 +71,7 @@ while [ 1 == 1 ]; do
     # ---- only for RASPI ----
 
 	setterm -cursor off
-	./toxblinkenwall -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
+	./toxblinkenwall $HD_FROM_CAM -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
 	sleep 2
 
     # ---- only for RASPI ----

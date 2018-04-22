@@ -32,3 +32,5 @@ convert_img "video_calling_003"
 convert_img "video_calling_004"
 
 convert_img "tox_bw_clients"
+convert_img "tox_help"
+
