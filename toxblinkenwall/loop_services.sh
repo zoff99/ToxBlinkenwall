@@ -17,6 +17,7 @@ cd $(dirname "$0")
 export LD_LIBRARY_PATH=~/inst/lib/
 
 HD_FROM_CAM="" # set to "-f" for 720p video
+# you can switch it also later when Tox is running
 
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then

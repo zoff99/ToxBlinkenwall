@@ -384,8 +384,8 @@ static struct v4lconvert_data *v4lconvert_data;
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 23
-static const char global_version_string[] = "0.99.23";
+#define VERSION_PATCH 24
+static const char global_version_string[] = "0.99.24";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -1268,6 +1268,48 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 }
 
 
+
+
+
+void button_a()
+{
+    if (global_video_active == 0)
+    {
+        show_tox_id_qrcode();
+    }
+}
+
+void button_b()
+{
+    if (global_video_active == 0)
+    {
+        global_is_qrcode_showing_on_screen = 0;
+        show_tox_client_application_download_links();
+    }
+}
+
+void button_c()
+{
+    if (global_video_active == 0)
+    {
+        global_is_qrcode_showing_on_screen = 0;
+        show_help_image();
+    }
+}
+
+void button_d()
+{
+    if (global_video_active == 0)
+    {
+        fully_stop_cam();
+        usleep(1000 * 10); // sleep 10ms
+        video_high = 1 - video_high; // toggle between 1 and 0
+        global_update_opengl_status_text = 1;
+        init_and_start_cam(0);
+    }
+}
+
+
 #ifdef HAVE_PORTAUDIO
 
 /* This routine will be called by the PortAudio engine when audio is needed */
@@ -1955,6 +1997,11 @@ int is_friend_online(Tox *tox, uint32_t num)
 {
     int j = find_friend_in_friendlist(num);
 
+    if (j == -1)
+    {
+        return 0;
+    }
+
     switch (Friends.list[j].connection_status)
     {
         case TOX_CONNECTION_NONE:
@@ -1993,6 +2040,12 @@ static int find_friend_in_friendlist(uint32_t friendnum)
 static void update_friend_last_online(uint32_t num, time_t timestamp)
 {
     int friendlistnum = find_friend_in_friendlist(num);
+
+    if (friendlistnum == -1)
+    {
+        return;
+    }
+
     Friends.list[friendlistnum].last_online.last_on = timestamp;
     Friends.list[friendlistnum].last_online.tm = *localtime((const time_t *)&timestamp);
     /* if the format changes make sure TIME_STR_SIZE is the correct size !! */
@@ -2242,6 +2295,11 @@ int have_resumed_fts_friend(uint32_t friendnum)
 {
     int j = find_friend_in_friendlist(friendnum);
 
+    if (j == -1)
+    {
+        return 0;
+    }
+
     if (Friends.list[j].have_resumed_fts == 1)
     {
         return 1;
@@ -2264,9 +2322,13 @@ void on_tox_friend_status(Tox *tox, uint32_t friend_number, TOX_USER_STATUS stat
 void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connection_status, void *user_data)
 {
     int friendlistnum = find_friend_in_friendlist(num);
-    dbg(2, "friendlist_onConnectionChange:*ENTER*:friendnum=%d %d\n", (int)num, (int)connection_status);
-    Friends.list[friendlistnum].connection_status = connection_status;
-    update_friend_last_online(num, get_unix_time());
+
+    if (friendlistnum > -1)
+    {
+        dbg(2, "friendlist_onConnectionChange:*ENTER*:friendnum=%d %d\n", (int)num, (int)connection_status);
+        Friends.list[friendlistnum].connection_status = connection_status;
+        update_friend_last_online(num, get_unix_time());
+    }
 
     if (is_friend_online(m, num) == 1)
     {
@@ -2337,6 +2399,34 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
     if (loerr != TOX_ERR_FRIEND_GET_LAST_ONLINE_OK)
     {
         t = 0;
+    }
+
+    TOX_ERR_FRIEND_QUERY error3;
+    Friends.list[Friends.max_idx].namelength =
+        tox_friend_get_name_size(m, num, &error3);
+
+    if (error3 == 0)
+    {
+        uint8_t *f_name = calloc(1, Friends.list[Friends.max_idx].namelength);
+
+        if (f_name)
+        {
+            bool res = tox_friend_get_name(m, num, f_name, &error3);
+
+            if (res == true)
+            {
+                CLEAR(Friends.list[Friends.max_idx].name);
+                memcpy(Friends.list[Friends.max_idx].name,
+                       f_name,
+                       Friends.list[Friends.max_idx].namelength);
+            }
+            else
+            {
+                CLEAR(Friends.list[Friends.max_idx].name);
+            }
+
+            free(f_name);
+        }
     }
 
     update_friend_last_online(num, t);
@@ -2744,7 +2834,6 @@ void cmd_snap(Tox *tox, uint32_t friend_number)
 void cmd_friends(Tox *tox, uint32_t friend_number)
 {
     size_t i;
-    // TODO
     size_t numfriends = tox_self_get_friend_list_size(tox);
     int j = -1;
 
@@ -2754,7 +2843,7 @@ void cmd_friends(Tox *tox, uint32_t friend_number)
 
         if (j > -1)
         {
-            send_text_message_to_friend(tox, friend_number, "%d:friend", j);
+            send_text_message_to_friend(tox, friend_number, "%d name:%s", j, (const char *)Friends.list[j].name);
             send_text_message_to_friend(tox, friend_number, "%d tox:%s", j, (const char *)Friends.list[j].pubkey_string);
             send_text_message_to_friend(tox, friend_number, "%d:last online (in client local time):%s", j,
                                         (const char *)Friends.list[j].last_online.hour_min_str);
@@ -2886,11 +2975,12 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
+    send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
     // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
     // send_text_message_to_friend(tox, friend_number, " .vpxu <end usage>   --> set VPX END_USAGE");
-    send_text_message_to_friend(tox, friend_number, " .vpxdec <num>       --> set VPX Decoder");
+    // send_text_message_to_friend(tox, friend_number, " .vpxdec <num>       --> set VPX Decoder");
     // send_text_message_to_friend(tox, friend_number, " .dectime <num>      --> set VPX Decoder Soft Deadline in us");
     send_text_message_to_friend(tox, friend_number, " .fps <delay ms>     --> set delay in ms between sent frames");
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
@@ -3095,6 +3185,31 @@ void update_status_line_2_text()
     {
         snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_1,
                  (int)global_audio_bit_rate, (int)global_video_in_w, (int)global_video_in_h);
+    }
+}
+
+void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_t length, void *user_data)
+{
+    int j = find_friend_in_friendlist(friend_number);
+
+    if (j == -1)
+    {
+        return;
+    }
+
+    TOX_ERR_FRIEND_QUERY error3;
+    Friends.list[j].namelength = length;
+
+    if (name)
+    {
+        CLEAR(Friends.list[j].name);
+        memcpy(Friends.list[j].name,
+               name,
+               Friends.list[j].namelength);
+    }
+    else
+    {
+        CLEAR(Friends.list[j].name);
     }
 }
 
@@ -3325,6 +3440,8 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
+
+#if 0
             else if (strncmp((char *)message, ".vpxdec ", strlen((char *)".vpxdec ")) == 0)
             {
                 if (strlen(message) > 8)
@@ -3354,6 +3471,8 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
+
+#endif
             else if (strncmp((char *)message, ".vpxu ", strlen((char *)".vpxu ")) == 0) // set vpx end usage
             {
                 if (strlen(message) > 6)
@@ -3623,6 +3742,11 @@ void save_resumable_fts(Tox *m, uint32_t friendnum)
 {
     size_t i;
     int friendlistnum = find_friend_in_friendlist(friendnum);
+
+    if (friendlistnum == -1)
+    {
+        return;
+    }
 
     for (i = 0; i < MAX_FILES; ++i)
     {
@@ -4258,7 +4382,7 @@ static int xioctl(int fh, unsigned long request, void *arg)
 
 
 
-int init_cam()
+int init_cam(int sleep_flag)
 {
     int video_dev_open_error = 0;
     int fd;
@@ -4271,7 +4395,10 @@ int init_cam()
 
     if (video_dev_open_error == 1)
     {
-        sleep(20); // sleep 20 seconds
+        if (sleep_flag == 1)
+        {
+            sleep(6); // sleep 6 seconds
+        }
 
         if ((fd = open(v4l2_device, O_RDWR)) < 0)
         {
@@ -6256,10 +6383,9 @@ int first_outgoing_video_frame = 1;
 // ---- DEBUG ----
 
 
-void init_and_start_cam()
+void init_and_start_cam(int sleep_flag)
 {
-    global_cam_device_fd = init_cam();
-    dbg(2, "AV Thread #%d: init cam\n", (int) id);
+    global_cam_device_fd = init_cam(sleep_flag);
     set_av_video_frame();
     // start streaming
     v4l_startread();
@@ -6418,7 +6544,9 @@ void *thread_av(void *data)
 #endif
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
-        init_and_start_cam();
+        pthread_t id = pthread_self();
+        dbg(2, "AV Thread #%d: init cam\n", (int) id);
+        init_and_start_cam(1);
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
     }
@@ -7700,42 +7828,6 @@ void *thread_phonebook_invite(void *data)
 }
 
 
-void button_a()
-{
-    if (global_video_active == 0)
-    {
-        show_tox_id_qrcode();
-    }
-}
-
-void button_b()
-{
-    if (global_video_active == 0)
-    {
-        global_is_qrcode_showing_on_screen = 0;
-        show_tox_client_application_download_links();
-    }
-}
-
-void button_c()
-{
-    if (global_video_active == 0)
-    {
-        global_is_qrcode_showing_on_screen = 0;
-        show_help_image();
-    }
-}
-
-void button_d()
-{
-    if (global_video_active == 0)
-    {
-        fully_stop_cam();
-        usleep(1000 * 10); // sleep 10ms
-        init_and_start_cam();
-    }
-}
-
 #ifdef HAVE_EXTERNAL_KEYS
 
 void *thread_ext_keys(void *data)
@@ -8407,8 +8499,8 @@ int Init(ESContext *esContext, int ww, int hh)
     // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-#define OVERLAY_TEXTURE_WIDTH  (130)
-#define OVERLAY_TEXTURE_HEIGHT (22)
+#define OVERLAY_TEXTURE_WIDTH  (170)
+#define OVERLAY_TEXTURE_HEIGHT (33)
     // prepare overlay texture
     userData->ol_ww = OVERLAY_TEXTURE_WIDTH;
     userData->ol_hh = OVERLAY_TEXTURE_HEIGHT;
@@ -8608,37 +8700,42 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "fps: %d %s n", (int)fps, speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "%s n", speaker_out_name_0);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "fps: %d %s H", (int)fps, speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "%s H", speaker_out_name_0);
         }
     }
     else
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "fps: %d %s n", (int)fps, speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "%s n", speaker_out_name_1);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "fps: %d %s H", (int)fps, speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "%s H", speaker_out_name_1);
         }
     }
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "%d x %d", (int)incoming_video_width, (int)incoming_video_height);
+    snprintf(fps_str, sizeof(fps_str), "O:%dx%d fps:%d", (int)video_width, (int)video_height,
+             (int)global_video_out_fps);
     text_on_yuf_frame_xy_ptr(0, 11, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "I:%dx%d fps:%d", (int)incoming_video_width,
+             (int)incoming_video_height, (int)fps);
+    text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
 
 void DrawOverlay(ESContext *esContext)
 {
     openGL_UserData *userData = esContext->userData;
 #define OVERLAY_LEFT_COORD   (-1.0f)
-#define OVERLAY_RIGHT_COORD  (-0.85f) // width 15% of framebuffer
-#define OVERLAY_TOP_COORD    (-0.95f) // height 5% of framebuffer
+#define OVERLAY_RIGHT_COORD  (-0.79f) // width  21% of framebuffer
+#define OVERLAY_TOP_COORD    (-0.91f) // height 9% of framebuffer
 #define OVERLAY_BOTTOM_COORD (-1.0f)
     GLfloat vVertices[] = { OVERLAY_LEFT_COORD, OVERLAY_TOP_COORD, 0.0f,  // left top postion
                             0.0f,  0.0f,        // TexCoord 0
@@ -9226,6 +9323,7 @@ int main(int argc, char *argv[])
     tox_callback_friend_request(tox, friend_request_cb);
     tox_callback_friend_message(tox, friend_message_cb);
     tox_callback_friend_status(tox, on_tox_friend_status);
+    tox_callback_friend_name(tox, friend_name_cb);
     // init callbacks ----------------------------------
     // init toxutil callbacks ----------------------------------
 #ifdef TOX_HAVE_TOXUTIL
