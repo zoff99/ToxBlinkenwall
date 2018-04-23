@@ -8693,7 +8693,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // print FPS in texture
-    char fps_str[17];
+    char fps_str[19];
     CLEAR(fps_str);
 
     if (speaker_out_num == 0)
