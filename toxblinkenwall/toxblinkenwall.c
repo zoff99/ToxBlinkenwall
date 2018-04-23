@@ -2851,8 +2851,8 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
 #ifdef HAVE_TOXAV_OPTION_SET
                 TOXAV_ERR_OPTION_SET error;
                 bool res = toxav_option_set(mytox_av, friend_number,
-                    (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                    (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+                                            (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                                            (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
 #endif
             }
         }
@@ -2885,6 +2885,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
+    send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
     // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
@@ -3161,6 +3162,30 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 if (accepting_calls == 1)
                 {
                     cmd_vcm(tox, friend_number);
+                }
+            }
+            else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
+            {
+                if (accepting_calls == 1)
+                {
+                    button_d();
+                }
+            }
+            else if (strncmp((char *)message, ".xqt ", strlen((char *)".xqt ")) == 0)
+            {
+                if (strlen(message) > 5) // require min. 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)DEFAULT_GLOBAL_VID_MAX_Q);
+
+                    if ((value_new >= 8) && (value_new <= 60))
+                    {
+#ifdef HAVE_TOXAV_OPTION_SET
+                        TOXAV_ERR_OPTION_SET error;
+                        bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                                                    (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                                                    (int32_t)value_new, &error);
+#endif
+                    }
                 }
             }
             else if (strncmp((char *)message, ".iter ", strlen((char *)".iter ")) == 0)
@@ -4782,8 +4807,8 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 #ifdef HAVE_TOXAV_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
         toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
-            DEFAULT_GLOBAL_VID_MAX_Q,
-            &error);
+                         DEFAULT_GLOBAL_VID_MAX_Q,
+                         &error);
         dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
 #endif
         // change some settings here -------
@@ -6231,6 +6256,39 @@ int first_outgoing_video_frame = 1;
 // ---- DEBUG ----
 
 
+void init_and_start_cam()
+{
+    global_cam_device_fd = init_cam();
+    dbg(2, "AV Thread #%d: init cam\n", (int) id);
+    set_av_video_frame();
+    // start streaming
+    v4l_startread();
+}
+
+void fully_stop_cam()
+{
+    if (video_call_enabled == 1)
+    {
+        // end streaming
+        v4l_endread();
+    }
+
+#ifdef V4LCONVERT
+    v4lconvert_destroy(v4lconvert_data);
+#endif
+    size_t i;
+
+    for (i = 0; i < n_buffers; ++i)
+    {
+        if (-1 == munmap(buffers[i].start, buffers[i].length))
+        {
+            dbg(9, "munmap error\n");
+        }
+    }
+
+    close(global_cam_device_fd);
+}
+
 void *thread_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -6360,11 +6418,7 @@ void *thread_av(void *data)
 #endif
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
-        global_cam_device_fd = init_cam();
-        dbg(2, "AV Thread #%d: init cam\n", (int) id);
-        set_av_video_frame();
-        // start streaming
-        v4l_startread();
+        init_and_start_cam();
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
     }
@@ -7575,7 +7629,6 @@ void toggle_quality()
 {
     int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
     int max_q_new = DEFAULT_GLOBAL_VID_MAX_Q;
-
     dbg(2, "toggle_quality: 1:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
 
     if (global_video_bit_rate == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
@@ -7595,9 +7648,7 @@ void toggle_quality()
     DEFAULT_GLOBAL_VID_MAX_Q = (uint32_t)max_q_new;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     update_status_line_1_text();
-
     dbg(2, "toggle_quality: 2:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
-
     update_status_line_on_fb();
 
     if (mytox_av != NULL)
@@ -7605,13 +7656,12 @@ void toggle_quality()
         if (friend_to_send_video_to > -1)
         {
             toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                global_audio_bit_rate, global_video_bit_rate, NULL);
-
+                               global_audio_bit_rate, global_video_bit_rate, NULL);
 #ifdef HAVE_TOXAV_OPTION_SET
             TOXAV_ERR_OPTION_SET error;
             bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+                                        (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                                        (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
 #endif
         }
     }
@@ -7676,6 +7726,15 @@ void button_c()
     }
 }
 
+void button_d()
+{
+    if (global_video_active == 0)
+    {
+        fully_stop_cam();
+        usleep(1000 * 10); // sleep 10ms
+        init_and_start_cam();
+    }
+}
 
 #ifdef HAVE_EXTERNAL_KEYS
 
@@ -7746,8 +7805,11 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: Button C:\n");
                 button_c();
             }
-
-
+            else if (strncmp((char *)buf, "BT-D:", strlen((char *)"BT-D:")) == 0)
+            {
+                dbg(2, "ExtKeys: Button D:\n");
+                button_d();
+            }
 
             CLEAR(buf);
         }
