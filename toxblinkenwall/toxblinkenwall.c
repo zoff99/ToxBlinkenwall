@@ -631,8 +631,13 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
 void fb_copy_frame_to_fb(void *videoframe);
 void fb_fill_black();
 void fb_fill_xxx();
-void show_video_calling();
+void show_video_calling(uint32_t fnum, bool with_delay);
 void show_text_as_image_stop();
+void show_tox_id_qrcode();
+void show_tox_client_application_download_links();
+void show_help_image();
+void fully_stop_cam();
+void init_and_start_cam(int sleep_flag);
 static int get_policy(char p, int *policy);
 static void display_thread_sched_attr(char *msg);
 static void display_sched_attr(char *msg, int policy, struct sched_param *param);
@@ -696,7 +701,6 @@ int64_t global_disconnect_friend_num = -1;
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
 #endif
-
 #ifdef HAVE_OUTPUT_OPENGL
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
@@ -1770,15 +1774,63 @@ void print_tox_id(Tox *tox)
     // write ToxID to toxid text file -----------
 }
 
-void show_video_calling()
+void show_video_calling(uint32_t fnum, bool with_delay)
 {
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
 
+    // show random caller "head" image
     if (system(cmd_str));
 
-    yieldcpu(600);
+    int j = find_friend_in_friendlist(fnum);
+
+    if (j > -1)
+    {
+        if (Friends.list[j].namelength > 0)
+        {
+            char *temp_caller_name = calloc(1, Friends.list[j].namelength + 1);
+
+            if (temp_caller_name)
+            {
+                memcpy(temp_caller_name, Friends.list[j].name, Friends.list[j].namelength);
+                // replace every char except '0-9A-Za-z-_.<SPACE>' with '?'
+                int i;
+
+                for (i = 0; i < strlen(temp_caller_name); i++)
+                {
+                    if ((temp_caller_name[i] >= 65) && (temp_caller_name[i] <= 90) ||
+                            (temp_caller_name[i] >= 48) && (temp_caller_name[i] <= 57) ||
+                            (temp_caller_name[i] == 20) ||
+                            (temp_caller_name[i] == '-') ||
+                            (temp_caller_name[i] == '_') ||
+                            (temp_caller_name[i] == '.') ||
+                            (temp_caller_name[i] >= 97) && (temp_caller_name[i] <= 122))
+                    {
+                    }
+                    else
+                    {
+                        temp_caller_name[i] = '?';
+                    }
+                }
+
+                dbg(9, "caller name=%s\n", temp_caller_name);
+                char text_line[150];
+                CLEAR(text_line);
+                snprintf(text_line, sizeof(text_line), "Calling: %s", temp_caller_name);
+                unsigned char *bf_out_real_fb = framebuffer_mappedmem;
+                text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                      var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                      10, var_framebuffer_info.yres - 30, text_line);
+                free(temp_caller_name);
+            }
+        }
+    }
+
+    if (with_delay == true)
+    {
+        yieldcpu(600);
+    }
 }
 
 void show_text_as_image(const char *display_text)
@@ -4804,7 +4856,6 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 
 void close_cam()
 {
-#ifdef HAVE_FRAMEBUFFER
     // close framebuffer device
     dbg(2, "munmaping Framebuffer\n");
 
@@ -4828,7 +4879,6 @@ void close_cam()
 //      free(bf_out_data);
 //      bf_out_data = NULL;
 //  }
-#endif
 #ifdef HAVE_LIBAO
 
     if (_ao_device != NULL)
@@ -4929,7 +4979,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         stop_endless_image();
         fb_fill_black();
         // show funny face
-        show_video_calling();
+        show_video_calling(friend_number, true);
         // change some settings here -------
 #ifdef HAVE_TOXAV_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
@@ -4993,6 +5043,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
         dbg(9, "Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
         friend_to_send_video_to = -1;
+        fb_fill_black();
         show_tox_id_qrcode();
         return;
     }
@@ -5017,6 +5068,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
         dbg(9, "Call with friend %d errored, global_video_active=%d\n", friend_number, global_video_active);
         friend_to_send_video_to = -1;
+        fb_fill_black();
         show_tox_id_qrcode();
         return;
     }
@@ -5065,7 +5117,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             stop_endless_image();
             fb_fill_black();
             // show funny face
-            show_video_calling();
+            show_video_calling(friend_number, true);
             dbg(9, "t_toxav_call_state_cb:004xx\n");
             global_video_active = 1;
             global_send_first_frame = 2;
@@ -6454,7 +6506,6 @@ void *thread_av(void *data)
     if (video_call_enabled == 1)
     {
         global_framebuffer_device_fd = 0;
-#ifdef HAVE_FRAMEBUFFER
 
         if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
         {
@@ -6499,7 +6550,6 @@ void *thread_av(void *data)
             dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
         }
 
-#endif
 #ifdef HAVE_LIBAO
         libao_channels = 1;
         libao_sampling_rate = 48000;
@@ -6868,6 +6918,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 
     if (really_in_call == 1)
     {
+        fb_fill_black();
         show_tox_id_qrcode();
     }
 }
@@ -9553,9 +9604,9 @@ int main(int argc, char *argv[])
                     global_qrcode_was_updated = 0;
                     delete_qrcode_generate_touchfile();
 
-                    // fb_fill_black();
                     if (global_video_active == 0)
                     {
+                        fb_fill_black();
                         show_tox_id_qrcode();
                     }
                 }
