@@ -4,7 +4,7 @@ function background
 {
 
 $(dirname "$0")/stop_image_endless.sh
-sleep 3
+sleep 1.5
 
 gfx_dir=~/ToxBlinkenwall/toxblinkenwall/tmp/
 touchfile=~/ToxBlinkenwall/toxblinkenwall/_endless_image_stop.txt

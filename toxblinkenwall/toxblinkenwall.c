@@ -114,6 +114,17 @@ network={
 
 */
 
+
+/*
+ * imagemagick allow to read from textfile
+ * run: identify -list policy
+ * edit: /etc/ImageMagick-6/policy.xml
+ *
+ * comment out this line (as root):
+ * <policy domain="path" rights="none" pattern="@*"/>
+ *
+ */
+
 #define _GNU_SOURCE
 
 
