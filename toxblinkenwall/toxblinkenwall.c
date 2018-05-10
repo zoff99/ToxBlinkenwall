@@ -837,8 +837,8 @@ size_t ao_play_bytes;
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
 
-uint32_t global_av_iterate_ms = 1;
-uint32_t global_iterate_ms = 1;
+uint32_t global_av_iterate_ms = 2;
+uint32_t global_iterate_ms = 2;
 int global_opengl_iterate_ms = 1;
 
 int incoming_filetransfers = 0;
@@ -865,6 +865,7 @@ char status_line_2_str[200];
 uint32_t global_video_in_fps;
 unsigned long long global_timespan_video_in;
 uint32_t global_video_out_fps;
+unsigned long long global_timespan_video_out;
 char *global_upscaling_str = "";
 char *global_decoder_string = "";
 int update_fps_every = 20;
@@ -4615,6 +4616,27 @@ int init_cam(int sleep_flag)
         if (fmt.fmt.pix.sizeimage < min)
             fmt.fmt.pix.sizeimage = min;
     */
+    // HINT: set camera device fps -----------------------
+    struct v4l2_streamparm *setfps;
+    setfps = (struct v4l2_streamparm *)calloc(1, sizeof(struct v4l2_streamparm));
+
+    if (setfps)
+    {
+        memset(setfps, 0, sizeof(struct v4l2_streamparm));
+        setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        setfps->parm.capture.timeperframe.numerator = 1;
+        setfps->parm.capture.timeperframe.denominator = 30;
+
+        if (-1 == xioctl(fd, VIDIOC_S_PARM, setfps))
+        {
+            dbg(0, "VIDIOC_S_PARM Error\n");
+        }
+
+        free(setfps);
+        setfps = NULL;
+    }
+
+    // HINT: set camera device fps -----------------------
     struct v4l2_requestbuffers bufrequest;
     CLEAR(bufrequest);
     bufrequest.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -6620,6 +6642,7 @@ void *thread_av(void *data)
     // only now start accepting calls
     accepting_calls = 1;
     dbg(2, "--- accepting calls NOW ---\n");
+    global_timespan_video_out = 0;
 
     while (toxav_iterate_thread_stop != 1)
     {
@@ -6666,6 +6689,7 @@ void *thread_av(void *data)
                     if (first_outgoing_video_frame == 0)
                     {
                         timspan_in_ms = __utimer_stop(&tm_outgoing_video_frames, "sending video frame every:", 1);
+                        global_timespan_video_out = global_timespan_video_out + timspan_in_ms;
 
                         if (timspan_in_ms > DEFAULT_FPS_SLEEP_MS)
                         {
@@ -6686,18 +6710,31 @@ void *thread_av(void *data)
                     else
                     {
                         first_outgoing_video_frame = 0;
+                        global_timespan_video_in = 0;
+                        global_video_out_fps = 0;
                     }
 
                     __utimer_start(&tm_outgoing_video_frames);
                     // ---- DEBUG ----
+                    update_out_fps_counter++;
+
+                    if (update_out_fps_counter > update_fps_every)
+                    {
+                        global_video_out_fps = (int)((1000 * update_out_fps_counter)
+                                                     / global_timespan_video_out);
+                        // dbg(9, "global_video_out_fps=%d %d %d\n", global_video_out_fps,
+                        //        update_out_fps_counter, global_timespan_video_out);
+                    }
 
                     if (global_show_fps_on_video == 1)
                     {
-                        if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
+                        // dbg(9, "global_video_out_fps()=%d %d %d\n", global_video_out_fps,
+                        //        update_out_fps_counter, global_timespan_video_out);
+                        if (global_video_out_fps > 0)
                         {
                             char fps_str[1000];
                             CLEAR(fps_str);
-                            snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(1000 / timspan_in_ms));
+                            snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(global_video_out_fps));
                             text_on_yuf_frame_xy(50, 30, fps_str);
                         }
                         else
@@ -6706,20 +6743,10 @@ void *thread_av(void *data)
                         }
                     }
 
-                    if ((timspan_in_ms > 0) && (timspan_in_ms < 99999))
-                    {
-                        global_video_out_fps = (int)(1000 / timspan_in_ms);
-                    }
-                    else
-                    {
-                        global_video_out_fps = 0;
-                    }
-
-                    update_out_fps_counter++;
-
                     if (update_out_fps_counter > update_fps_every)
                     {
                         update_out_fps_counter = 0;
+                        global_timespan_video_out = 0;
                         update_status_line_1_text();
                     }
 
