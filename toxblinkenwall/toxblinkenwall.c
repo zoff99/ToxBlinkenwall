@@ -248,6 +248,9 @@ static bool toxav_bit_rate_set(ToxAV *av, uint32_t friend_number, int32_t audio_
 #define HAVE_EXTERNAL_KEYS 1
 // --------- external keys ---------
 
+// --------- automatically pickup incoming calls ---------
+// #define AV_AUTO_PICKUP_CALL 1
+// --------- automatically pickup incoming calls ---------
 
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -394,6 +397,7 @@ BWRingBuffer *video_play_rb = NULL;
 #define STBIR_ASSERT(x) #x
 #include "stb_image_resize.h"
 
+#define UTF8_EXTENDED_OFFSET 64
 
 
 #ifdef V4LCONVERT
@@ -668,6 +672,9 @@ void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t 
 void update_status_line_1_text();
 void update_status_line_1_text_arg(int vbr_);
 int get_number_in_string(const char *str, int default_value);
+void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled);
+void reset_toxav_call_waiting();
+
 
 
 const char *savedata_filename = "savedata.tox";
@@ -1815,6 +1822,7 @@ void show_video_calling(uint32_t fnum, bool with_delay)
                 memcpy(temp_caller_name, Friends.list[j].name, Friends.list[j].namelength);
                 // replace every char except '0-9A-Za-z-_.<SPACE>' with '?'
                 int i;
+#if 0
 
                 for (i = 0; i < strlen(temp_caller_name); i++)
                 {
@@ -1833,7 +1841,8 @@ void show_video_calling(uint32_t fnum, bool with_delay)
                     }
                 }
 
-                dbg(9, "caller name=%s\n", temp_caller_name);
+#endif
+                // dbg(9, "caller name=%s\n", temp_caller_name);
                 char text_line[150];
                 CLEAR(text_line);
                 snprintf(text_line, sizeof(text_line), "Calling: %s", temp_caller_name);
@@ -5080,7 +5089,9 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         fb_fill_black();
         // show funny face
         show_video_calling(friend_number, true);
-        // pick_up_call();
+#ifdef AV_AUTO_PICKUP_CALL
+        pick_up_call();
+#endif
     }
 }
 
@@ -7046,23 +7057,14 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 
 
 /**
+ *
  * 8x8 monochrome bitmap fonts for rendering
  * Author: Daniel Hepper <daniel@hepper.net>
  *
+ * https://github.com/dhepper/font8x8
+ *
  * License: Public Domain
  *
- * Based on:
- * // Summary: font8x8.h
- * // 8x8 monochrome bitmap fonts for rendering
- * //
- * // Author:
- * //     Marcel Sondaar
- * //     International Business Machines (public domain VGA fonts)
- * //
- * // License:
- * //     Public Domain
- *
- * Fetched from: http://dimensionalrift.homelinux.net/combuster/mos3/?p=viewsource&file=/modules/gfx/font8_8.asm
  **/
 
 // Constant: font8x8_basic
@@ -7199,12 +7201,132 @@ char font8x8_basic[128][8] =
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
 };
 
-
+// Constant: font8x8_00A0
+// Contains an 8x8 font map for unicode points U+00A0 - U+00FF (extended latin)
+char font8x8_ext_latin[96][8] =
+{
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+00A0 (no break space)
+    { 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x18, 0x00},   // U+00A1 (inverted !)
+    { 0x18, 0x18, 0x7E, 0x03, 0x03, 0x7E, 0x18, 0x18},   // U+00A2 (dollarcents)
+    { 0x1C, 0x36, 0x26, 0x0F, 0x06, 0x67, 0x3F, 0x00},   // U+00A3 (pound sterling)
+    { 0x00, 0x00, 0x63, 0x3E, 0x36, 0x3E, 0x63, 0x00},   // U+00A4 (currency mark)
+    { 0x33, 0x33, 0x1E, 0x3F, 0x0C, 0x3F, 0x0C, 0x0C},   // U+00A5 (yen)
+    { 0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00},   // U+00A6 (broken pipe)
+    { 0x7C, 0xC6, 0x1C, 0x36, 0x36, 0x1C, 0x33, 0x1E},   // U+00A7 (paragraph)
+    { 0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+00A8 (diaeresis)
+    { 0x3C, 0x42, 0x99, 0x85, 0x85, 0x99, 0x42, 0x3C},   // U+00A9 (copyright symbol)
+    { 0x3C, 0x36, 0x36, 0x7C, 0x00, 0x00, 0x00, 0x00},   // U+00AA (superscript a)
+    { 0x00, 0xCC, 0x66, 0x33, 0x66, 0xCC, 0x00, 0x00},   // U+00AB (<<)
+    { 0x00, 0x00, 0x00, 0x3F, 0x30, 0x30, 0x00, 0x00},   // U+00AC (gun pointing left)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+00AD (soft hyphen)
+    { 0x3C, 0x42, 0x9D, 0xA5, 0x9D, 0xA5, 0x42, 0x3C},   // U+00AE (registered symbol)
+    { 0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+00AF (macron)
+    { 0x1C, 0x36, 0x36, 0x1C, 0x00, 0x00, 0x00, 0x00},   // U+00B0 (degree)
+    { 0x18, 0x18, 0x7E, 0x18, 0x18, 0x00, 0x7E, 0x00},   // U+00B1 (plusminus)
+    { 0x1C, 0x30, 0x18, 0x0C, 0x3C, 0x00, 0x00, 0x00},   // U+00B2 (superscript 2)
+    { 0x1C, 0x30, 0x18, 0x30, 0x1C, 0x00, 0x00, 0x00},   // U+00B2 (superscript 3)
+    { 0x18, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+00B2 (aigu)
+    { 0x00, 0x00, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x03},   // U+00B5 (mu)
+    { 0xFE, 0xDB, 0xDB, 0xDE, 0xD8, 0xD8, 0xD8, 0x00},   // U+00B6 (pilcrow)
+    { 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x00},   // U+00B7 (central dot)
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x30, 0x1E},   // U+00B8 (cedille)
+    { 0x08, 0x0C, 0x08, 0x1C, 0x00, 0x00, 0x00, 0x00},   // U+00B9 (superscript 1)
+    { 0x1C, 0x36, 0x36, 0x1C, 0x00, 0x00, 0x00, 0x00},   // U+00BA (superscript 0)
+    { 0x00, 0x33, 0x66, 0xCC, 0x66, 0x33, 0x00, 0x00},   // U+00BB (>>)
+    { 0xC3, 0x63, 0x33, 0xBD, 0xEC, 0xF6, 0xF3, 0x03},   // U+00BC (1/4)
+    { 0xC3, 0x63, 0x33, 0x7B, 0xCC, 0x66, 0x33, 0xF0},   // U+00BD (1/2)
+    { 0x03, 0xC4, 0x63, 0xB4, 0xDB, 0xAC, 0xE6, 0x80},   // U+00BE (3/4)
+    { 0x0C, 0x00, 0x0C, 0x06, 0x03, 0x33, 0x1E, 0x00},   // U+00BF (inverted ?)
+    { 0x07, 0x00, 0x1C, 0x36, 0x63, 0x7F, 0x63, 0x00},   // U+00C0 (A grave)
+    { 0x70, 0x00, 0x1C, 0x36, 0x63, 0x7F, 0x63, 0x00},   // U+00C1 (A aigu)
+    { 0x1C, 0x36, 0x00, 0x3E, 0x63, 0x7F, 0x63, 0x00},   // U+00C2 (A circumflex)
+    { 0x6E, 0x3B, 0x00, 0x3E, 0x63, 0x7F, 0x63, 0x00},   // U+00C3 (A ~)
+    { 0x63, 0x1C, 0x36, 0x63, 0x7F, 0x63, 0x63, 0x00},   // U+00C4 (A umlaut)
+    { 0x0C, 0x0C, 0x00, 0x1E, 0x33, 0x3F, 0x33, 0x00},   // U+00C5 (A ring)
+    { 0x7C, 0x36, 0x33, 0x7F, 0x33, 0x33, 0x73, 0x00},   // U+00C6 (AE)
+    { 0x1E, 0x33, 0x03, 0x33, 0x1E, 0x18, 0x30, 0x1E},   // U+00C7 (C cedille)
+    { 0x07, 0x00, 0x3F, 0x06, 0x1E, 0x06, 0x3F, 0x00},   // U+00C8 (E grave)
+    { 0x38, 0x00, 0x3F, 0x06, 0x1E, 0x06, 0x3F, 0x00},   // U+00C9 (E aigu)
+    { 0x0C, 0x12, 0x3F, 0x06, 0x1E, 0x06, 0x3F, 0x00},   // U+00CA (E circumflex)
+    { 0x36, 0x00, 0x3F, 0x06, 0x1E, 0x06, 0x3F, 0x00},   // U+00CB (E umlaut)
+    { 0x07, 0x00, 0x1E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00CC (I grave)
+    { 0x38, 0x00, 0x1E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00CD (I aigu)
+    { 0x0C, 0x12, 0x00, 0x1E, 0x0C, 0x0C, 0x1E, 0x00},   // U+00CE (I circumflex)
+    { 0x33, 0x00, 0x1E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00CF (I umlaut)
+    { 0x3F, 0x66, 0x6F, 0x6F, 0x66, 0x66, 0x3F, 0x00},   // U+00D0 (Eth)
+    { 0x3F, 0x00, 0x33, 0x37, 0x3F, 0x3B, 0x33, 0x00},   // U+00D1 (N ~)
+    { 0x0E, 0x00, 0x18, 0x3C, 0x66, 0x3C, 0x18, 0x00},   // U+00D2 (O grave)
+    { 0x70, 0x00, 0x18, 0x3C, 0x66, 0x3C, 0x18, 0x00},   // U+00D3 (O aigu)
+    { 0x3C, 0x66, 0x18, 0x3C, 0x66, 0x3C, 0x18, 0x00},   // U+00D4 (O circumflex)
+    { 0x6E, 0x3B, 0x00, 0x3E, 0x63, 0x63, 0x3E, 0x00},   // U+00D5 (O ~)
+    { 0xC3, 0x18, 0x3C, 0x66, 0x66, 0x3C, 0x18, 0x00},   // U+00D6 (O umlaut)
+    { 0x00, 0x36, 0x1C, 0x08, 0x1C, 0x36, 0x00, 0x00},   // U+00D7 (multiplicative x)
+    { 0x5C, 0x36, 0x73, 0x7B, 0x6F, 0x36, 0x1D, 0x00},   // U+00D8 (O stroke)
+    { 0x0E, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00},   // U+00D9 (U grave)
+    { 0x70, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00},   // U+00DA (U aigu)
+    { 0x3C, 0x66, 0x00, 0x66, 0x66, 0x66, 0x3C, 0x00},   // U+00DB (U circumflex)
+    { 0x33, 0x00, 0x33, 0x33, 0x33, 0x33, 0x1E, 0x00},   // U+00DC (U umlaut)
+    { 0x70, 0x00, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x00},   // U+00DD (Y aigu)
+    { 0x0F, 0x06, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x0F},   // U+00DE (Thorn)
+    { 0x00, 0x1E, 0x33, 0x1F, 0x33, 0x1F, 0x03, 0x03},   // U+00DF (beta)
+    { 0x07, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x7E, 0x00},   // U+00E0 (a grave)
+    { 0x38, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x7E, 0x00},   // U+00E1 (a aigu)
+    { 0x7E, 0xC3, 0x3C, 0x60, 0x7C, 0x66, 0xFC, 0x00},   // U+00E2 (a circumflex)
+    { 0x6E, 0x3B, 0x1E, 0x30, 0x3E, 0x33, 0x7E, 0x00},   // U+00E3 (a ~)
+    { 0x33, 0x00, 0x1E, 0x30, 0x3E, 0x33, 0x7E, 0x00},   // U+00E4 (a umlaut)
+    { 0x0C, 0x0C, 0x1E, 0x30, 0x3E, 0x33, 0x7E, 0x00},   // U+00E5 (a ring)
+    { 0x00, 0x00, 0xFE, 0x30, 0xFE, 0x33, 0xFE, 0x00},   // U+00E6 (ae)
+    { 0x00, 0x00, 0x1E, 0x03, 0x03, 0x1E, 0x30, 0x1C},   // U+00E7 (c cedille)
+    { 0x07, 0x00, 0x1E, 0x33, 0x3F, 0x03, 0x1E, 0x00},   // U+00E8 (e grave)
+    { 0x38, 0x00, 0x1E, 0x33, 0x3F, 0x03, 0x1E, 0x00},   // U+00E9 (e aigu)
+    { 0x7E, 0xC3, 0x3C, 0x66, 0x7E, 0x06, 0x3C, 0x00},   // U+00EA (e circumflex)
+    { 0x33, 0x00, 0x1E, 0x33, 0x3F, 0x03, 0x1E, 0x00},   // U+00EB (e umlaut)
+    { 0x07, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00EC (i grave)
+    { 0x1C, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00ED (i augu)
+    { 0x3E, 0x63, 0x1C, 0x18, 0x18, 0x18, 0x3C, 0x00},   // U+00EE (i circumflex)
+    { 0x33, 0x00, 0x0E, 0x0C, 0x0C, 0x0C, 0x1E, 0x00},   // U+00EF (i umlaut)
+    { 0x1B, 0x0E, 0x1B, 0x30, 0x3E, 0x33, 0x1E, 0x00},   // U+00F0 (eth)
+    { 0x00, 0x1F, 0x00, 0x1F, 0x33, 0x33, 0x33, 0x00},   // U+00F1 (n ~)
+    { 0x00, 0x07, 0x00, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+00F2 (o grave)
+    { 0x00, 0x38, 0x00, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+00F3 (o aigu)
+    { 0x1E, 0x33, 0x00, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+00F4 (o circumflex)
+    { 0x6E, 0x3B, 0x00, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+00F5 (o ~)
+    { 0x00, 0x33, 0x00, 0x1E, 0x33, 0x33, 0x1E, 0x00},   // U+00F6 (o umlaut)
+    { 0x18, 0x18, 0x00, 0x7E, 0x00, 0x18, 0x18, 0x00},   // U+00F7 (division)
+    { 0x00, 0x60, 0x3C, 0x76, 0x7E, 0x6E, 0x3C, 0x06},   // U+00F8 (o stroke)
+    { 0x00, 0x07, 0x00, 0x33, 0x33, 0x33, 0x7E, 0x00},   // U+00F9 (u grave)
+    { 0x00, 0x38, 0x00, 0x33, 0x33, 0x33, 0x7E, 0x00},   // U+00FA (u aigu)
+    { 0x1E, 0x33, 0x00, 0x33, 0x33, 0x33, 0x7E, 0x00},   // U+00FB (u circumflex)
+    { 0x00, 0x33, 0x00, 0x33, 0x33, 0x33, 0x7E, 0x00},   // U+00FC (u umlaut)
+    { 0x00, 0x38, 0x00, 0x33, 0x33, 0x3E, 0x30, 0x1F},   // U+00FD (y aigu)
+    { 0x00, 0x00, 0x06, 0x3E, 0x66, 0x3E, 0x06, 0x00},   // U+00FE (thorn)
+    { 0x00, 0x33, 0x00, 0x33, 0x33, 0x3E, 0x30, 0x1F}    // U+00FF (y umlaut)
+};
 
 // "0" -> [48]
 // "9" -> [57]
 // ":" -> [58]
 
+
+char *get_bitmap_from_font(int font_char_num)
+{
+    char *ret_bitmap = font8x8_basic[0x3F]; // fallback: "?"
+
+    if ((font_char_num >= 0) && (font_char_num <= 0x7F))
+    {
+        ret_bitmap = font8x8_basic[font_char_num];
+    }
+
+#if 1
+    else if ((font_char_num >= 0xA0) && (font_char_num <= 0xFF))
+    {
+        dbg(9, "UTF8 ext:%d:%d\n", (int)font_char_num, (int)(font_char_num - 0xA0));
+        ret_bitmap = font8x8_ext_latin[font_char_num - 0xA0];
+    }
+
+#endif
+    return ret_bitmap;
+}
 
 void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
                          uint8_t col_value, uint8_t *yy, int w)
@@ -7213,7 +7335,7 @@ void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
     int font_h = 8;
     uint8_t *y_plane = yy;
     // uint8_t col_value = 0; // black
-    char *bitmap = font8x8_basic[font_char_num];
+    char *bitmap = get_bitmap_from_font(font_char_num);
     int k;
     int j;
     int offset = 0;
@@ -7245,7 +7367,7 @@ void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_
     int font_h = 8;
     uint8_t *y_plane = av_video_frame.y;
     // uint8_t col_value = 0; // black
-    char *bitmap = font8x8_basic[font_char_num];
+    char *bitmap = get_bitmap_from_font(font_char_num);
     int k;
     int j;
     int offset = 0;
@@ -7377,7 +7499,7 @@ void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *
     int font_w = 8;
     int font_h = 8;
     uint8_t *plane = fb_buf;
-    char *bitmap = font8x8_basic[font_char_num];
+    char *bitmap = get_bitmap_from_font(font_char_num);
     int k;
     int j;
     int offset = 0;
@@ -7422,21 +7544,45 @@ void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t 
     left_top_bar_into_bgra_frame(fb_xres, fb_yres, fb_line_bytes, fb_buf, start_x_pix, start_y_pix, block_needed_width, 12,
                                  255, 255, 255);
     int looper;
+    bool lat_ext = false;
 
     for (looper = 0; (int)looper < (int)strlen(text); looper++)
     {
         uint8_t c = text[looper];
 
-        if ((c > 0) && (c < 127))
+        if (((c > 0) && (c < 127)) || (lat_ext == true))
         {
-            print_font_char_rgba(fb_xres, fb_yres, fb_line_bytes, fb_buf,
-                                 (2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
-                                 2 + start_y_pix,
-                                 c, 0, 0, 0);
+            if (lat_ext == true)
+            {
+                print_font_char_rgba(fb_xres, fb_yres, fb_line_bytes, fb_buf,
+                                     (2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+                                     2 + start_y_pix,
+                                     c + UTF8_EXTENDED_OFFSET, 0, 0, 0);
+            }
+            else
+            {
+                print_font_char_rgba(fb_xres, fb_yres, fb_line_bytes, fb_buf,
+                                     (2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+                                     2 + start_y_pix,
+                                     c, 0, 0, 0);
+            }
+
+            lat_ext = false;
         }
         else
         {
             // leave a blank
+            if (c == 0xC3)
+            {
+                // UTF-8 latin extended
+                lat_ext = true;
+            }
+            else
+            {
+                lat_ext = false;
+            }
+
+            carriage--;
         }
 
         carriage++;
@@ -7454,19 +7600,41 @@ void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text
     const int letter_spacing = 1;
     int block_needed_width = 2 + 2 + (strlen(text) * (letter_width + letter_spacing));
     int looper;
+    bool lat_ext = false;
 
     for (looper = 0; (int)looper < (int)strlen(text); looper++)
     {
         uint8_t c = text[looper];
 
-        if ((c > 0) && (c < 127))
+        if (((c > 0) && (c < 127)) || (lat_ext == true))
         {
-            print_font_char_ptr((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
-                                2 + start_y_pix, c, 0, yy, w);
+            if (lat_ext == true)
+            {
+                print_font_char_ptr((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+                                    2 + start_y_pix, c + UTF8_EXTENDED_OFFSET, 0, yy, w);
+            }
+            else
+            {
+                print_font_char_ptr((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)),
+                                    2 + start_y_pix, c, 0, yy, w);
+            }
+
+            lat_ext = false;
         }
         else
         {
             // leave a blank
+            if (c == 0xC3)
+            {
+                // UTF-8 latin extended
+                lat_ext = true;
+            }
+            else
+            {
+                lat_ext = false;
+            }
+
+            carriage--;
         }
 
         carriage++;
@@ -7482,18 +7650,40 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
     int block_needed_width = 2 + 2 + (strlen(text) * (letter_width + letter_spacing));
     left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, block_needed_width, 12, 255, 255, 255);
     int looper;
+    bool lat_ext = false;
 
     for (looper = 0; (int)looper < (int)strlen(text); looper++)
     {
         uint8_t c = text[looper];
 
-        if ((c > 0) && (c < 127))
+        if (((c > 0) && (c < 127)) || (lat_ext == true))
         {
-            print_font_char((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)), 2 + start_y_pix, c, 0);
+            if (lat_ext == true)
+            {
+                print_font_char((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)), 2 + start_y_pix,
+                                c + UTF8_EXTENDED_OFFSET, 0);
+            }
+            else
+            {
+                print_font_char((2 + start_x_pix + ((letter_width + letter_spacing) * carriage)), 2 + start_y_pix, c, 0);
+            }
+
+            lat_ext = false;
         }
         else
         {
             // leave a blank
+            if (c == 0xC3)
+            {
+                // UTF-8 latin extended
+                lat_ext = true;
+            }
+            else
+            {
+                lat_ext = false;
+            }
+
+            carriage--;
         }
 
         carriage++;
