@@ -136,6 +136,16 @@ network={
 #include <tox/toxav.h>
 
 
+// ----------- version -----------
+// ----------- version -----------
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 99
+#define VERSION_PATCH 25
+static const char global_version_string[] = "0.99.25";
+// ----------- version -----------
+// ----------- version -----------
+
+
 /*
  * ------------------------------------------------------------
  * TOXCORE compatibility layer --------------------------------
@@ -391,14 +401,6 @@ static struct v4lconvert_data *v4lconvert_data;
 #endif
 
 
-// ----------- version -----------
-// ----------- version -----------
-#define VERSION_MAJOR 0
-#define VERSION_MINOR 99
-#define VERSION_PATCH 24
-static const char global_version_string[] = "0.99.24";
-// ----------- version -----------
-// ----------- version -----------
 
 typedef struct DHT_node
 {
@@ -680,6 +682,7 @@ const char *image_createqr_touchfile = "./toxid_ready.txt";
 char *v4l2_device; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
 
+const char *shell_cmd__osupdatefull = "./scripts/osupdatefull.sh 2> /dev/null";
 const char *shell_cmd__single_shot = "./scripts/single_shot.sh 2> /dev/null";
 const char *shell_cmd__get_cpu_temp = "./scripts/get_cpu_temp.sh 2> /dev/null";
 const char *shell_cmd__get_gpu_temp = "./scripts/get_gpu_temp.sh 2> /dev/null";
@@ -853,6 +856,10 @@ int SHOW_EVERY_X_TH_VIDEO_FRAME = 1;
 // -- hardcoded --
 // -- hardcoded --
 int32_t friend_to_send_video_to = -1;
+int8_t call_waiting_for_answer = 0;
+int32_t call_waiting_friend_num = -1;
+bool call_waiting_audio_enabled = true;
+bool call_waiting_video_enabled = true;
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
@@ -2940,13 +2947,40 @@ void cmd_restart(Tox *tox, uint32_t friend_number)
     global_want_restart = 1;
 }
 
+void cmd_osupdatefull(Tox *tox, uint32_t friend_number)
+{
+    // HINT: this should be protected by password or ToxID or something
+    dbg(9, "OS FULL UPDATE (1)-----\n");
+    char output_str[1000];
+    run_cmd_return_output(shell_cmd__osupdatefull, output_str, 1);
+    dbg(9, "OS FULL UPDATE (2)-----\n");
+}
+
+void pick_up_call()
+{
+    // pickup on the Call ----------
+    if (call_waiting_for_answer == 1)
+    {
+        if ((mytox_av != NULL) && (call_waiting_friend_num != -1))
+        {
+            answer_incoming_av_call(mytox_av, call_waiting_friend_num, call_waiting_audio_enabled, call_waiting_video_enabled);
+        }
+    }
+
+    // pickup on the Call ----------
+}
+
+void cmd_pickup(Tox *tox, uint32_t friend_number)
+{
+    pick_up_call();
+}
 
 void cmd_vcm(Tox *tox, uint32_t friend_number)
 {
     // send_text_message_to_friend(tox, friend_number, "video-call-me not yet implemented!");
     dbg(9, "cmd_vcm:001\n");
 
-    if (global_video_active == 1)
+    if ((global_video_active == 1) || (call_waiting_for_answer == 1))
     {
         send_text_message_to_friend(tox, friend_number, "there is already a video session active");
     }
@@ -3342,6 +3376,17 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 {
                     cmd_vcm(tox, friend_number);
                 }
+            }
+            else if (strncmp((char *)message, ".pickup", strlen((char *)".pickup")) == 0) // pickup call
+            {
+                if (call_waiting_for_answer == 1)
+                {
+                    cmd_pickup(tox, friend_number);
+                }
+            }
+            else if (strncmp((char *)message, ".osupdatefull", strlen((char *)".osupdatefull")) == 0) // OS update
+            {
+                cmd_osupdatefull(tox, friend_number);
             }
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
@@ -4966,9 +5011,38 @@ void close_cam()
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
 
+void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
+{
+    TOXAV_ERR_ANSWER err;
+    global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+    update_status_line_1_text();
+    int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
+    int video_bitrate = global_video_bit_rate;
+    friend_to_send_video_to = friend_number;
+    global_video_active = 1;
+    global_send_first_frame = 2;
+    dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d global_video_active=%d\n",
+        (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
+    show_text_as_image_stop();
+    toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+    // clear screen on CALL ANSWER
+    stop_endless_image();
+    fb_fill_black();
+    // change some settings here -------
+#ifdef HAVE_TOXAV_OPTION_SET
+    TOXAV_ERR_OPTION_SET error;
+    toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                     DEFAULT_GLOBAL_VID_MAX_Q,
+                     &error);
+    dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
+#endif
+    // change some settings here -------
+    reset_toxav_call_waiting();
+}
+
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
-    if (accepting_calls != 1)
+    if ((accepting_calls != 1) || (call_waiting_for_answer == 1))
     {
         dbg(2, "Not accepting calls yet\n");
         TOXAV_ERR_CALL_CONTROL error = 0;
@@ -4993,35 +5067,20 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
     }
     else
     {
-        dbg(9, "Handling CALL callback friendnum=%d audio_enabled=%d video_enabled=%d\n", (int)friend_number,
-            (int)audio_enabled, (int)video_enabled);
         ((CallControl *)user_data)->incoming = true;
-        TOXAV_ERR_ANSWER err;
         global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         update_status_line_1_text();
-        int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
-        int video_bitrate = global_video_bit_rate;
-        friend_to_send_video_to = friend_number;
-        global_video_active = 1;
-        global_send_first_frame = 2;
-        dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d global_video_active=%d\n",
-            (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
+        call_waiting_for_answer = 1;
+        call_waiting_friend_num = friend_number;
+        call_waiting_audio_enabled = audio_enabled;
+        call_waiting_video_enabled = video_enabled;
         show_text_as_image_stop();
-        toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
         // clear screen on CALL ANSWER
         stop_endless_image();
         fb_fill_black();
         // show funny face
         show_video_calling(friend_number, true);
-        // change some settings here -------
-#ifdef HAVE_TOXAV_OPTION_SET
-        TOXAV_ERR_OPTION_SET error;
-        toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                         DEFAULT_GLOBAL_VID_MAX_Q,
-                         &error);
-        dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
-#endif
-        // change some settings here -------
+        // pick_up_call();
     }
 }
 
@@ -5057,6 +5116,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
+        reset_toxav_call_waiting();
         global_video_active = 0;
 
         if (video_play_rb != NULL)
@@ -5082,6 +5142,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
+        reset_toxav_call_waiting();
         global_video_active = 0;
 
         if (video_play_rb != NULL)
@@ -6921,10 +6982,19 @@ void *thread_video_av(void *data)
     dbg(2, "ToxVideo:Clean video thread exit!\n");
 }
 
+void reset_toxav_call_waiting()
+{
+    if (call_waiting_for_answer == 1)
+    {
+        call_waiting_for_answer = 0;
+        call_waiting_friend_num = -1;
+    }
+}
 
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
     int really_in_call = 0;
+    reset_toxav_call_waiting();
 
     if (global_video_active != 0)
     {
@@ -7959,7 +8029,15 @@ void *thread_ext_keys(void *data)
             else if (strncmp((char *)buf, "hangup:", strlen((char *)"hangup:")) == 0)
             {
                 dbg(2, "ExtKeys: HANGUP:\n");
-                disconnect_all_calls(tox);
+
+                if (call_waiting_for_answer == 1)
+                {
+                    pick_up_call();
+                }
+                else
+                {
+                    disconnect_all_calls(tox);
+                }
             }
             else if (strncmp((char *)buf, "toggle_quality:", strlen((char *)"toggle_quality:")) == 0)
             {
@@ -9627,6 +9705,7 @@ int main(int argc, char *argv[])
         {
             if (global_disconnect_friend_num != -1)
             {
+                reset_toxav_call_waiting();
                 TOXAV_ERR_CALL_CONTROL error = 0;
                 toxav_call_control(mytox_av, global_disconnect_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
                 global_disconnect_friend_num = -1;

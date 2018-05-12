@@ -7,6 +7,18 @@
 #
 # https://github.com/zoff99/ToxBlinkenwall
 #
+# in this file: /lib/systemd/system/systemd-udevd.service
+# comment out these lines, or the script will fail mostly:
+#
+# KillMode=mixed
+# WatchdogSec=3min
+# TasksMax=infinity
+# MountFlags=slave
+# MemoryDenyWriteExecute=yes
+# RestrictRealtime=yes
+# RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+#
+#
 #*********************************
 
 ####################################
@@ -19,4 +31,6 @@
 #
 ###################################
 
-$(dirname "$0")/udev2.sh "$1"
+$(dirname "$0")/udev2.sh "$1" &
+
+
