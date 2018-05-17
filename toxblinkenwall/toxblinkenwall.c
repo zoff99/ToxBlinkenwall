@@ -249,13 +249,15 @@ static bool toxav_bit_rate_set(ToxAV *av, uint32_t friend_number, int32_t audio_
 // --------- external keys ---------
 
 // --------- automatically pickup incoming calls ---------
-// #define AV_AUTO_PICKUP_CALL 1
+#define AV_AUTO_PICKUP_CALL 1
 // --------- automatically pickup incoming calls ---------
 
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 #if 0
+
+// #define WANT_OS_UPDATE_FULL 1
 
 extern int global__ON_THE_FLY_CHANGES;
 extern int global__VPX_RESIZE_ALLOWED;
@@ -3393,10 +3395,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     cmd_pickup(tox, friend_number);
                 }
             }
+
+#ifdef WANT_OS_UPDATE_FULL
             else if (strncmp((char *)message, ".osupdatefull", strlen((char *)".osupdatefull")) == 0) // OS update
             {
                 cmd_osupdatefull(tox, friend_number);
             }
+
+#endif
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
                 if (accepting_calls == 1)
