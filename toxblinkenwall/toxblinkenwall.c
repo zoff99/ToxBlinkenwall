@@ -3635,7 +3635,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             }
             else if (strncmp((char *)message, ".vbr ", strlen((char *)".vbr ")) == 0) // set v bitrate
             {
-                if (strlen(message) > 6) // require 2 digits
+                if (strlen(message) > 5) // require 1 digits
                 {
                     int vbr_new = get_number_in_string(message, (int)global_video_bit_rate);
 
@@ -3648,6 +3648,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                         if (mytox_av != NULL)
                         {
                             toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            dbg(9, "setting vbr to:%d\n", (int)global_video_bit_rate);
                         }
                     }
                 }
