@@ -457,8 +457,8 @@ uint32_t DEFAULT_GLOBAL_VID_BITRATE = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY;
 #define DEFAULT_GLOBAL_VID_MAX_Q_HIGHER_QUALITY 30
 uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 #define DEFAULT_GLOBAL_AUD_BITRATE 64 // kbit/sec
-#define DEFAULT_GLOBAL_MIN_VID_BITRATE 100 // kbit/sec
-#define DEFAULT_GLOBAL_MAX_VID_BITRATE 15000 // kbit/sec
+#define DEFAULT_GLOBAL_MIN_VID_BITRATE 50 // kbit/sec
+#define DEFAULT_GLOBAL_MAX_VID_BITRATE 50000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 int DEFAULT_FPS_SLEEP_MS =
@@ -3635,7 +3635,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             }
             else if (strncmp((char *)message, ".vbr ", strlen((char *)".vbr ")) == 0) // set v bitrate
             {
-                if (strlen(message) > 7) // require 3 digits
+                if (strlen(message) > 6) // require 2 digits
                 {
                     int vbr_new = get_number_in_string(message, (int)global_video_bit_rate);
 
