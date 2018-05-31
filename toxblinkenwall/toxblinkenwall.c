@@ -140,8 +140,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 25
-static const char global_version_string[] = "0.99.25";
+#define VERSION_PATCH 26
+static const char global_version_string[] = "0.99.26";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -450,19 +450,22 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
-#define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 2400 // kbit/sec // need these 2 values to be different!!
-#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 500 // kbit/sec // need these 2 values to be different!!
+#define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
+#define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY; // kbit/sec
 #define DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY 50
 #define DEFAULT_GLOBAL_VID_MAX_Q_HIGHER_QUALITY 30
 uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
-#define DEFAULT_GLOBAL_AUD_BITRATE 64 // kbit/sec
+#define DEFAULT_GLOBAL_AUD_BITRATE 32 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_VID_BITRATE 10 // kbit/sec
 #define DEFAULT_GLOBAL_MAX_VID_BITRATE 50000 // kbit/sec
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
-int DEFAULT_FPS_SLEEP_MS =
-    66; // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
+
+// 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
+int DEFAULT_FPS_SLEEP_MS = 35; // about 21 fps in reality on the Pi3 with 480p encoding
+#define PROXY_PORT_TOR_DEFAULT 9050
+
 int default_fps_sleep_corrected;
 
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
@@ -744,6 +747,7 @@ int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
 int video_high = 0;
 int switch_tcponly = 0;
+int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
 int full_height = 480; // gets set later, this is just as last resort
 int vid_width = 192; // ------- blinkenwall resolution -------
@@ -1440,6 +1444,25 @@ Tox *create_tox()
     options.local_discovery_enabled = true;
     options.hole_punching_enabled = false;
     options.tcp_port = tcp_port;
+
+    if (use_tor == 1)
+    {
+        dbg(0, "setting Tor Relay mode\n");
+        options.udp_enabled = false; // TCP mode
+        dbg(0, "setting TCP mode\n");
+        const char *proxy_host = "127.0.0.1";
+        dbg(0, "setting proxy_host %s\n", proxy_host);
+        uint16_t proxy_port = PROXY_PORT_TOR_DEFAULT;
+        dbg(0, "setting proxy_port %d\n", (int)proxy_port);
+        options.proxy_type = TOX_PROXY_TYPE_SOCKS5;
+        options.proxy_host = proxy_host;
+        options.proxy_port = proxy_port;
+    }
+    else
+    {
+        options.proxy_type = TOX_PROXY_TYPE_NONE;
+    }
+
     // ------------------------------------------------------------
     // set our own handler for c-toxcore logging messages!!
     options.log_callback = tox_log_cb__custom;
@@ -1595,12 +1618,43 @@ size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
     return strlen(namebuf);
 }
 
+void shuffle(int *array, size_t n)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int usec = tv.tv_usec;
+    srand48(usec);
+
+    if (n > 1)
+    {
+        size_t i;
+
+        for (i = n - 1; i > 0; i--)
+        {
+            size_t j = (unsigned int)(drand48() * (i + 1));
+            int t = array[j];
+            array[j] = array[i];
+            array[i] = t;
+        }
+    }
+}
+
 void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_tcp_relay)
 {
     bool res = 0;
+    size_t i = 0;
+    int random_order_nodenums[number_of_nodes];
 
-    for (size_t i = 0; (int)i < (int)number_of_nodes; i ++)
+    for (size_t j = 0; (int)j < (int)number_of_nodes; j++)
     {
+        random_order_nodenums[j] = (int)j;
+    }
+
+    shuffle(random_order_nodenums, number_of_nodes);
+
+    for (size_t j = 0; (int)j < (int)number_of_nodes; j++)
+    {
+        i = (size_t)random_order_nodenums[j];
         res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                              nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
         // dbg(9, "sodium_hex2bin:res=%d\n", res);
@@ -1631,7 +1685,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
             // dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
         }
 
-        if (add_as_tcp_relay == 1)
+        if ((add_as_tcp_relay == 1) || (switch_tcponly == 1))
         {
             res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
 
@@ -3420,9 +3474,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
 #ifdef HAVE_TOXAV_OPTION_SET
                         TOXAV_ERR_OPTION_SET error;
-                        bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                                                    (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                                                    (int32_t)value_new, &error);
+
+                        if (friend_to_send_video_to > -1)
+                        {
+                            bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                                                        (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                                                        (int32_t)value_new, &error);
+                        }
+
 #endif
                     }
                 }
@@ -3590,7 +3649,10 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                         if (mytox_av != NULL)
                         {
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            }
                         }
                     }
                 }
@@ -3628,7 +3690,10 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                         if (mytox_av != NULL)
                         {
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            }
                         }
                     }
                 }
@@ -3647,8 +3712,12 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                         if (mytox_av != NULL)
                         {
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
-                            dbg(9, "setting vbr to:%d\n", (int)global_video_bit_rate);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                TOXAV_ERR_BIT_RATE_SET error2;
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, &error2);
+                                dbg(9, "setting vbr to:%d res=%d\n", (int)global_video_bit_rate, (int)error2);
+                            }
                         }
                     }
                 }
@@ -3663,8 +3732,11 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         if (mytox_av != NULL)
                         {
-                            global__VP8E_SET_CPUUSED_VALUE = (int)vbr_new;
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                global__VP8E_SET_CPUUSED_VALUE = (int)vbr_new;
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            }
                         }
                     }
                 }
@@ -3679,8 +3751,11 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         if (mytox_av != NULL)
                         {
-                            global__VPX_KF_MAX_DIST = (int)vbr_new;
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                global__VPX_KF_MAX_DIST = (int)vbr_new;
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            }
                         }
                     }
                 }
@@ -3695,8 +3770,11 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         if (mytox_av != NULL)
                         {
-                            global__VPX_G_LAG_IN_FRAMES = (int)vbr_new;
-                            toxav_bit_rate_set(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            if (friend_to_send_video_to > -1)
+                            {
+                                global__VPX_G_LAG_IN_FRAMES = (int)vbr_new;
+                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
+                            }
                         }
                     }
                 }
@@ -4686,7 +4764,7 @@ int init_cam(int sleep_flag)
         memset(setfps, 0, sizeof(struct v4l2_streamparm));
         setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps->parm.capture.timeperframe.numerator = 1;
-        setfps->parm.capture.timeperframe.denominator = 30;
+        setfps->parm.capture.timeperframe.denominator = 30; // try to set ~33fps
 
         if (-1 == xioctl(fd, VIDIOC_S_PARM, setfps))
         {
@@ -6505,8 +6583,13 @@ void *video_record(void *dummy)
 {
     TOXAV_ERR_SEND_FRAME error = 0;
     toxcam_av_video_frame *av_video_frame_copy = (toxcam_av_video_frame *)dummy;
-    toxav_video_send_frame(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
-                           av_video_frame_copy->y, av_video_frame_copy->u, av_video_frame_copy->v, &error);
+
+    if (friend_to_send_video_to > -1)
+    {
+        toxav_video_send_frame(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
+                               av_video_frame_copy->y, av_video_frame_copy->u, av_video_frame_copy->v, &error);
+    }
+
     free(av_video_frame_copy->y);
     // free(av_video_frame_copy->u); // --> all in one buffer!!
     // free(av_video_frame_copy->v); // --> all in one buffer!!
@@ -6831,8 +6914,12 @@ void *thread_av(void *data)
 
 #if 1
                     TOXAV_ERR_SEND_FRAME error = 0;
-                    toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
-                                           av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
+
+                    if (friend_to_send_video_to > -1)
+                    {
+                        toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
+                                               av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
+                    }
 
                     if (error)
                     {
@@ -9430,7 +9517,7 @@ int main(int argc, char *argv[])
     char *cvalue = NULL;
     int index;
     int opt;
-    const char     *short_opt = "hvd:t23b:fu:j:k:";
+    const char     *short_opt = "hvd:tT23b:fu:j:k:";
     struct option   long_opt[] =
     {
         {"help",          no_argument,       NULL, 'h'},
@@ -9461,6 +9548,10 @@ int main(int argc, char *argv[])
 
             case 't':
                 switch_tcponly = 1;
+                break;
+
+            case 'T':
+                use_tor = 1;
                 break;
 
             case 'f':
@@ -9514,6 +9605,7 @@ int main(int argc, char *argv[])
                 printf("  -k pixels                            wall y pixels\n");
                 printf("  -f                                   use 720p video mode\n");
                 printf("  -t,                                  tcp only mode\n");
+                printf("  -T,                                  use TOR as Relay\n");
                 printf("  -2,                                  use alternate bootnode list\n");
                 printf("  -3,                                  use only nodes.tox.chat as bootnode\n");
                 printf("  -v, --version                        show version\n");
