@@ -130,7 +130,7 @@ try:
                     elif rowVal == 3 and colVal == 1:
                         # button "0" pressed
                         if cur_button != 4:
-                            # print "BUTTON:0"
+                            #print "BUTTON:0"
                             fifo_write = open(fifo_path, 'w')
                             fifo_write.write("toggle_speaker:\n")
                             fifo_write.flush()
