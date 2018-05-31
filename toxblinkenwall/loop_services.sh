@@ -72,7 +72,7 @@ while [ 1 == 1 ]; do
     # ---- only for RASPI ----
 
 	setterm -cursor off
-	./toxblinkenwall $HD_FROM_CAM -d "$video_device" -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT"
+	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device"
 	sleep 2
 
     # ---- only for RASPI ----
