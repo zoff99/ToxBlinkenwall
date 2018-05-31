@@ -125,8 +125,14 @@ network={
  *
  */
 
-#define _GNU_SOURCE
+/*
+ * nice bandwidth display tool (non root):
+ *
+ * speedometer -l -r wlan0 -t wlan0 -m $(( 1024 * 1024 * 3 / 2 ))
+ *
+ */
 
+#define _GNU_SOURCE
 
 
 #include <tox/tox.h>
