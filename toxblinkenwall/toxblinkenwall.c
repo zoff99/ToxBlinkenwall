@@ -6072,10 +6072,10 @@ static void *video_play(void *dummy)
 
     if (y)
     {
-        if (bw_rb_size(video_play_rb) >= MAX_VIDEO_PLAY_THREADS)
+        if ((bw_rb_size(video_play_rb) + 1) >= MAX_VIDEO_PLAY_THREADS)
         {
-            dbg(9, "Video: more than %d frames in ringbuffer, dropping incoming frame!\n",
-                (int)MAX_VIDEO_PLAY_THREADS);
+            // dbg(9, "Video GL: more than %d frames in ringbuffer, dropping incoming frame!\n",
+            //    (int)MAX_VIDEO_PLAY_THREADS);
             free((void *)y);
         }
         else
