@@ -377,6 +377,12 @@ int global_did_draw_frame = 0;
 #endif
 
 
+#define OVERLAY_WIDTH_PERCENT_OF_FB   0.28f
+#define OVERLAY_HEIGHT_PERCENT_OF_FB   0.06f
+#define OVERLAY_WIDTH_PX (30*(8+3)) // 30*(8+3) // max. chars * char width
+#define OVERLAY_HEIGHT_PX (3*(8+3)) // 3*(8+3) // lines * line height
+
+
 BWRingBuffer *video_play_rb = NULL;
 
 
@@ -894,6 +900,7 @@ uint32_t global_video_out_fps;
 unsigned long long global_timespan_video_out;
 char *global_upscaling_str = "";
 char *global_decoder_string = "";
+char *global_encoder_string = "";
 int update_fps_every = 20;
 int update_fps_counter = 0;
 int update_out_fps_counter = 0;
@@ -904,6 +911,8 @@ int do_phonebook_invite = 0;
 int global_video_in_w = 0;
 int global_video_in_h = 0;
 int global_update_opengl_status_text = 0;
+uint32_t global_decoder_video_bitrate = 0;
+uint32_t global_encoder_video_bitrate = 0;
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -1765,8 +1774,7 @@ void bootstrap(Tox *tox)
         {"104.233.104.126", 33445, "EDEE8F2E839A57820DE3DA4156D88350E53D4161447068A3457EE8F59F362414", {0}},
         {"51.254.84.212", 33445, "AEC204B9A4501412D5F0BB67D9C81B5DB3EE6ADA64122D32A3E9B093D544327D", {0}},
         {"88.99.133.52", 33445, "2D320F971EF2CA18004416C2AAE7BA52BF7949DB34EA8E2E21AF67BD367BE211", {0}},
-        {"185.58.206.164", 33445, "24156472041E5F220D1FA11D9DF32F7AD697D59845701CDD7BE7D1785EB9DB39", {0}},
-        {"92.54.84.70", 33445, "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802", {0}},
+        {"185.58.206.164", 33445, "24156472041E5F220D1FA11D9DF32F7AD697D59845701CDD7BE7D1785EB9DB39", {0}},        {"92.54.84.70", 33445, "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802", {0}},
         {"195.93.190.6", 33445, "FB4CE0DDEFEED45F26917053E5D24BDDA0FA0A3D83A672A9DA2375928B37023D", {0}},
         {"tox.uplinklabs.net", 33445, "1A56EA3EDF5DF4C0AEABBF3C2E4E603890F87E983CAC8A0D532A335F2C6E3E1F", {0}},
         {"toxnode.nek0.net", 33445, "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639", {0}},
@@ -3629,42 +3637,6 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
-
-#if 0
-            else if (strncmp((char *)message, ".vpxdec ", strlen((char *)".vpxdec ")) == 0)
-            {
-                if (strlen(message) > 8)
-                {
-                    int num_new = get_number_in_string(message, (int)global__VPX_DECODER_USED);
-
-                    if ((num_new >= 0) && (num_new <= 1))
-                    {
-                        global__VPX_DECODER_USED = num_new;
-                        dbg(9, "setting vpx Decoder to: %d\n", global__VPX_DECODER_USED);
-
-                        if (global__VPX_DECODER_USED == 0)
-                        {
-                            global_decoder_string = " VP8";
-                        }
-                        else
-                        {
-                            global_decoder_string = " VP9";
-                        }
-
-                        update_status_line_1_text();
-
-                        if (mytox_av != NULL)
-                        {
-                            if (friend_to_send_video_to > -1)
-                            {
-                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
-                            }
-                        }
-                    }
-                }
-            }
-
-#endif
             else if (strncmp((char *)message, ".vpxu ", strlen((char *)".vpxu ")) == 0) // set vpx end usage
             {
                 if (strlen(message) > 6)
@@ -4215,11 +4187,10 @@ void on_file_control(Tox *m, uint32_t friendnumber, uint32_t filenumber, TOX_FIL
 
 void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position, size_t length)
 {
-    dbg(9, "on_avatar_chunk_request:001\n");
-
+    // dbg(9, "on_avatar_chunk_request:001\n");
     if (ft->state != FILE_TRANSFER_STARTED)
     {
-        dbg(0, "on_avatar_chunk_request:001a:!FILE_TRANSFER_STARTED\n");
+        // dbg(0, "on_avatar_chunk_request:001a:!FILE_TRANSFER_STARTED\n");
         return;
     }
 
@@ -4260,7 +4231,7 @@ void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position,
 
     if (err != TOX_ERR_FILE_SEND_CHUNK_OK)
     {
-        dbg(0, "tox_file_send_chunk failed in avatar callback (error %d)\n", err);
+        // dbg(0, "tox_file_send_chunk failed in avatar callback (error %d)\n", err);
     }
 
     ft->position += send_length;
@@ -5183,6 +5154,36 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 #ifdef AV_AUTO_PICKUP_CALL
         pick_up_call();
 #endif
+    }
+}
+
+static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_COMM_INFO comm_value,
+                                 int64_t comm_number, void *user_data)
+{
+    // dbg(9, "t_toxav_call_comm_cb:value=%d\n", (int)comm_value);
+    if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_VP8)
+    {
+        global_decoder_string = " VP8 ";
+    }
+    else if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_H264)
+    {
+        global_decoder_string = " H264";
+    }
+    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8)
+    {
+        global_encoder_string = " VP8 ";
+    }
+    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
+    {
+        global_encoder_string = " H264";
+    }
+    else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
+    {
+        global_decoder_video_bitrate = comm_number;
+    }
+    else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
+    {
+        global_encoder_video_bitrate = comm_number;
     }
 }
 
@@ -6435,15 +6436,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         // dbg(9, "fps counter=%d\n", (int)update_fps_counter);
         if (update_fps_counter > update_fps_every)
         {
-            if (global__VPX_DECODER_USED == 0)
-            {
-                global_decoder_string = " VP8";
-            }
-            else
-            {
-                global_decoder_string = " VP9";
-            }
-
             if (global_timespan_video_in > 0)
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
@@ -8833,6 +8825,8 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 
 // Initialize the shader and program object
 //
+// params: ww -> screen width, hh -> screen height
+//
 int Init(ESContext *esContext, int ww, int hh)
 {
     esContext->userData = malloc(sizeof(openGL_UserData));
@@ -8956,11 +8950,11 @@ int Init(ESContext *esContext, int ww, int hh)
     // glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-#define OVERLAY_TEXTURE_WIDTH  (170)
-#define OVERLAY_TEXTURE_HEIGHT (33)
     // prepare overlay texture
-    userData->ol_ww = OVERLAY_TEXTURE_WIDTH;
-    userData->ol_hh = OVERLAY_TEXTURE_HEIGHT;
+    userData->ol_ww = OVERLAY_WIDTH_PX;
+    userData->ol_hh = OVERLAY_HEIGHT_PX;
+    // (int)((float)hh * OVERLAY_HEIGHT_PERCENT_OF_FB * 0.5);
+    dbg(9, "WWWW:%d:%d\n", (int)userData->ol_ww, (int)userData->ol_hh);
     userData->ol_yy = calloc(1, (size_t)((userData->ol_ww * userData->ol_hh) * 1.5));
     userData->ol_uu = userData->ol_yy + (userData->ol_ww * userData->ol_hh);
     userData->ol_vv = userData->ol_uu + ((userData->ol_ww / 2) * (userData->ol_hh / 2));
@@ -9150,8 +9144,11 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // memset(userData->ol_uu, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // memset(userData->ol_vv, 128, (size_t)((userData->ol_ww/2) * (userData->ol_hh/2)));
     // print FPS in texture
-    char fps_str[19];
+    // -------------------------
+    // HINT: calc max letters for the overlay text lines
+    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000")];
     CLEAR(fps_str);
+    // -------------------------
 
     if (speaker_out_num == 0)
     {
@@ -9178,12 +9175,14 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "O:%dx%d fps:%d", (int)video_width, (int)video_height,
-             (int)global_video_out_fps);
+    snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d", (int)video_width, (int)video_height,
+             (int)global_video_out_fps, global_encoder_string,
+             (int)global_encoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 11, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "I:%dx%d fps:%d", (int)incoming_video_width,
-             (int)incoming_video_height, (int)fps);
+    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d", (int)incoming_video_width,
+             (int)incoming_video_height, (int)fps, global_decoder_string,
+             (int)global_decoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
 
@@ -9191,8 +9190,8 @@ void DrawOverlay(ESContext *esContext)
 {
     openGL_UserData *userData = esContext->userData;
 #define OVERLAY_LEFT_COORD   (-1.0f)
-#define OVERLAY_RIGHT_COORD  (-0.79f) // width  21% of framebuffer
-#define OVERLAY_TOP_COORD    (-0.91f) // height 9% of framebuffer
+#define OVERLAY_RIGHT_COORD  (-1.0f + OVERLAY_WIDTH_PERCENT_OF_FB)
+#define OVERLAY_TOP_COORD    (-1.0f + OVERLAY_HEIGHT_PERCENT_OF_FB)
 #define OVERLAY_BOTTOM_COORD (-1.0f)
     GLfloat vVertices[] = { OVERLAY_LEFT_COORD, OVERLAY_TOP_COORD, 0.0f,  // left top postion
                             0.0f,  0.0f,        // TexCoord 0
@@ -9409,7 +9408,7 @@ void *thread_opengl(void *data)
                                fb_screen_width,
                                fb_screen_height,
                                ES_WINDOW_ALPHA); // ES_WINDOW_RGB
-                Init(&esContext, 64, 64);
+                Init(&esContext, (int)(fb_screen_width), (int)(fb_screen_height));
                 esRegisterDrawFunc(&esContext, Draw);
                 opengl_active = 1;
                 deltatime = 0.0f;
@@ -9659,6 +9658,7 @@ int main(int argc, char *argv[])
     global_timespan_video_in = 0;
     global_upscaling_str = "";
     global_decoder_string = " VP8";
+    global_encoder_string = " VP8";
     // snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d", 0, 0, (int)global_video_bit_rate);
     // snprintf(status_line_2_str, sizeof(status_line_2_str), "A:     OB %d", (int)global_audio_bit_rate);
     update_status_line_1_text();
@@ -9864,6 +9864,9 @@ int main(int argc, char *argv[])
     toxav_callback_bit_rate_status(mytox_av, t_toxav_bit_rate_status_cb, &mytox_CC);
     toxav_callback_video_receive_frame(mytox_av, t_toxav_receive_video_frame_cb, &mytox_CC);
     toxav_callback_audio_receive_frame(mytox_av, t_toxav_receive_audio_frame_cb, &mytox_CC);
+#ifdef TOX_HAVE_TOXAV_CALLBACKS_002
+    toxav_callback_call_comm(mytox_av, t_toxav_call_comm_cb, &mytox_CC);
+#endif
     // init AV callbacks -------------------------------
     // start toxav thread ------------------------------
     pthread_t tid[6]; // 0 -> toxav_iterate thread, 1 -> video send thread
