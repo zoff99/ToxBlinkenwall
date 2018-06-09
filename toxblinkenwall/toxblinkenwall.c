@@ -146,8 +146,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 26
-static const char global_version_string[] = "0.99.26";
+#define VERSION_PATCH 27
+static const char global_version_string[] = "0.99.27";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -379,7 +379,7 @@ int global_did_draw_frame = 0;
 
 #define OVERLAY_WIDTH_PERCENT_OF_FB   0.28f
 #define OVERLAY_HEIGHT_PERCENT_OF_FB   0.06f
-#define OVERLAY_WIDTH_PX (30*(8+3)) // 30*(8+3) // max. chars * char width
+#define OVERLAY_WIDTH_PX (32*(8+3)) // 32*(8+3) // max. chars * char width
 #define OVERLAY_HEIGHT_PX (3*(8+3)) // 3*(8+3) // lines * line height
 
 
@@ -5160,7 +5160,6 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_COMM_INFO comm_value,
                                  int64_t comm_number, void *user_data)
 {
-    // dbg(9, "t_toxav_call_comm_cb:value=%d\n", (int)comm_value);
     if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_VP8)
     {
         global_decoder_string = " VP8 ";
@@ -5179,11 +5178,12 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
     {
-        global_decoder_video_bitrate = comm_number;
+        global_decoder_video_bitrate = (uint32_t)comm_number;
+        // dbg(9, "t_toxav_call_comm_cb:global_decoder_video_bitrate:value=%d\n", (int)global_decoder_video_bitrate);
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
-        global_encoder_video_bitrate = comm_number;
+        global_encoder_video_bitrate = (uint32_t)comm_number;
     }
 }
 
@@ -9146,7 +9146,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // print FPS in texture
     // -------------------------
     // HINT: calc max letters for the overlay text lines
-    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000")];
+    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000  ")];
     CLEAR(fps_str);
     // -------------------------
 
@@ -9154,22 +9154,22 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "%s n", speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s n", global_version_string, speaker_out_name_0);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "%s H", speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s H", global_version_string, speaker_out_name_0);
         }
     }
     else
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "%s n", speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s n", global_version_string, speaker_out_name_1);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "%s H", speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s H", global_version_string, speaker_out_name_1);
         }
     }
 
