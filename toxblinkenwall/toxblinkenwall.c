@@ -5157,6 +5157,8 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
     }
 }
 
+#ifdef TOX_HAVE_TOXAV_CALLBACKS_002
+
 static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_COMM_INFO comm_value,
                                  int64_t comm_number, void *user_data)
 {
@@ -5186,6 +5188,8 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
         global_encoder_video_bitrate = (uint32_t)comm_number;
     }
 }
+
+#endif
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
