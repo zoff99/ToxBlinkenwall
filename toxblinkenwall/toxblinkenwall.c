@@ -475,7 +475,7 @@ uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 
 // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
-int DEFAULT_FPS_SLEEP_MS = 35; // about 21 fps in reality on the Pi3 with 480p encoding
+int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p encoding
 #define PROXY_PORT_TOR_DEFAULT 9050
 
 int default_fps_sleep_corrected;
@@ -757,7 +757,7 @@ vpx_image_t input;
 int global_video_active = 0;
 int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
-int video_high = 0;
+int video_high = 1;
 int switch_tcponly = 0;
 int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
@@ -4741,7 +4741,7 @@ int init_cam(int sleep_flag)
         memset(setfps, 0, sizeof(struct v4l2_streamparm));
         setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps->parm.capture.timeperframe.numerator = 1;
-        setfps->parm.capture.timeperframe.denominator = 30; // try to set ~33fps
+        setfps->parm.capture.timeperframe.denominator = 25; // try to set ~33fps
 
         if (-1 == xioctl(fd, VIDIOC_S_PARM, setfps))
         {
@@ -5177,6 +5177,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
     {
         global_encoder_string = " H264";
+    }
+    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
+    {
+        global_encoder_string = " H264.P";
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
     {
@@ -9513,7 +9517,7 @@ int main(int argc, char *argv[])
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
-    video_high = 0;
+    video_high = 1;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
     v4l2_device = malloc(400);
