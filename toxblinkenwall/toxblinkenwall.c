@@ -16,6 +16,7 @@
  *
  */
 
+// LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
 /*
 
 # run:
@@ -757,7 +758,7 @@ vpx_image_t input;
 int global_video_active = 0;
 int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
-int video_high = 1;
+int video_high = 0;
 int switch_tcponly = 0;
 int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
@@ -8316,6 +8317,11 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: CALL:2\n");
                 call_entry_num(tox, 2);
             }
+            else if (strncmp((char *)buf, "call:3", strlen((char *)"call:3")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:3\n");
+                call_entry_num(tox, 3);
+            }
             else if (strncmp((char *)buf, "hangup:", strlen((char *)"hangup:")) == 0)
             {
                 dbg(2, "ExtKeys: HANGUP:\n");
@@ -9517,7 +9523,7 @@ int main(int argc, char *argv[])
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
-    video_high = 1;
+    video_high = 0;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
     v4l2_device = malloc(400);

@@ -58,8 +58,8 @@ while [ 1 == 1 ]; do
 
 	pkill -f ext_keys.py
 
-	v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
-        v4l2-ctl -d "$video_device" -p 25
+    v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
+    v4l2-ctl -d "$video_device" -p 25
 
 	cd ext_keys_scripts
 	./ext_keys.py &

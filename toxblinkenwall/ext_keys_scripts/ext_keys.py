@@ -181,6 +181,15 @@ try:
                             fifo_write.flush()
                             last_button_press = int(round(time.time() * 1000))
                         cur_button=9
+                    elif rowVal == 0 and colVal == 2:
+                        # button "3" pressed
+                        if cur_button != 10:
+                            #print "BUTTON:3"
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("call:3\n")
+                            fifo_write.flush()
+                            last_button_press = int(round(time.time() * 1000))
+                        cur_button=10
                     else:
                         # print "BUTTON:** -1 **"
                         cur_button=-1
