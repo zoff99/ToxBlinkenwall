@@ -914,6 +914,7 @@ int global_video_in_h = 0;
 int global_update_opengl_status_text = 0;
 uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
+uint32_t global_network_round_trip_ms = 0;
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -5188,6 +5189,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
         global_decoder_video_bitrate = (uint32_t)comm_number;
         // dbg(9, "t_toxav_call_comm_cb:global_decoder_video_bitrate:value=%d\n", (int)global_decoder_video_bitrate);
     }
+    else if (comm_value == TOXAV_CALL_COMM_NETWORK_ROUND_TRIP_MS)
+    {
+        global_network_round_trip_ms = (uint32_t)comm_number;
+    }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
         global_encoder_video_bitrate = (uint32_t)comm_number;
@@ -9168,22 +9173,26 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s n", global_version_string, speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s n nw:%d", global_version_string, speaker_out_name_0,
+                     global_network_round_trip_ms);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s H", global_version_string, speaker_out_name_0);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s H nw:%d", global_version_string, speaker_out_name_0,
+                     global_network_round_trip_ms);
         }
     }
     else
     {
         if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
         {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s n", global_version_string, speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s n nw:%d", global_version_string, speaker_out_name_1,
+                     global_network_round_trip_ms);
         }
         else
         {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s H", global_version_string, speaker_out_name_1);
+            snprintf(fps_str, sizeof(fps_str), "v%s %s H nw:%d", global_version_string, speaker_out_name_1,
+                     global_network_round_trip_ms);
         }
     }
 
