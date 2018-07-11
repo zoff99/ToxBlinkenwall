@@ -915,6 +915,9 @@ int global_update_opengl_status_text = 0;
 uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
 uint32_t global_network_round_trip_ms = 0;
+int32_t global_play_delay_ms = 0;
+uint32_t global_video_play_buffer_entries = 0;
+
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -5193,6 +5196,14 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_network_round_trip_ms = (uint32_t)comm_number;
     }
+    else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
+    {
+        global_play_delay_ms = (int32_t)comm_number;
+    }
+    else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
+    {
+        global_video_play_buffer_entries = (uint32_t)comm_number;
+    }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
         global_encoder_video_bitrate = (uint32_t)comm_number;
@@ -9171,29 +9182,17 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
 
     if (speaker_out_num == 0)
     {
-        if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
-        {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s n nw:%d", global_version_string, speaker_out_name_0,
-                     global_network_round_trip_ms);
-        }
-        else
-        {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s H nw:%d", global_version_string, speaker_out_name_0,
-                     global_network_round_trip_ms);
-        }
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_0,
+                 global_network_round_trip_ms,
+                 (int)global_play_delay_ms,
+                 (int)global_video_play_buffer_entries);
     }
     else
     {
-        if (DEFAULT_GLOBAL_VID_BITRATE == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
-        {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s n nw:%d", global_version_string, speaker_out_name_1,
-                     global_network_round_trip_ms);
-        }
-        else
-        {
-            snprintf(fps_str, sizeof(fps_str), "v%s %s H nw:%d", global_version_string, speaker_out_name_1,
-                     global_network_round_trip_ms);
-        }
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_1,
+                 global_network_round_trip_ms,
+                 (int)global_play_delay_ms,
+                 (int)global_video_play_buffer_entries);
     }
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
