@@ -153,49 +153,6 @@ static const char global_version_string[] = "0.99.27";
 // ----------- version -----------
 
 
-/*
- * ------------------------------------------------------------
- * TOXCORE compatibility layer --------------------------------
- * ------------------------------------------------------------
- */
-#ifndef TOXCOMPAT_H_
-#define TOXCOMPAT_H_
-
-#if TOX_VERSION_IS_API_COMPATIBLE(0, 2, 0)
-static void toxav_callback_bit_rate_status(ToxAV *av,
-        void *callback, void *user_data)
-{
-    // dummy function
-}
-
-#define TOXAV_ERR_BIT_RATE_SET_INVALID_AUDIO_BIT_RATE (TOXAV_ERR_BIT_RATE_SET_INVALID_BIT_RATE)
-#define TOXAV_ERR_BIT_RATE_SET_INVALID_VIDEO_BIT_RATE (TOXAV_ERR_BIT_RATE_SET_INVALID_BIT_RATE)
-
-static bool toxav_bit_rate_set(ToxAV *av, uint32_t friend_number, int32_t audio_bit_rate,
-                               int32_t video_bit_rate, TOXAV_ERR_BIT_RATE_SET *error)
-{
-    bool res = toxav_video_set_bit_rate(av, friend_number, video_bit_rate, error);
-
-    if (*error == TOXAV_ERR_BIT_RATE_SET_INVALID_BIT_RATE)
-    {
-        *error = TOXAV_ERR_BIT_RATE_SET_INVALID_VIDEO_BIT_RATE;
-    }
-
-    return res;
-}
-#else
-// no need to fake the function
-#endif
-
-#endif
-/*
- * ------------------------------------------------------------
- * TOXCORE compatibility layer --------------------------------
- * ------------------------------------------------------------
- */
-
-
-
 
 #include <ctype.h>
 #include <stdio.h>
@@ -866,9 +823,9 @@ size_t ao_play_bytes;
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
 
-uint32_t global_av_iterate_ms = 2;
-uint32_t global_iterate_ms = 2;
-int global_opengl_iterate_ms = 1;
+uint32_t global_av_iterate_ms = 4;
+uint32_t global_iterate_ms = 4;
+int global_opengl_iterate_ms = 2;
 
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
