@@ -762,7 +762,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 10
+#define MAX_VIDEO_PLAY_THREADS 4
 sem_t video_play_lock;
 
 uint16_t video__width;
