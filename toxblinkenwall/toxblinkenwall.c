@@ -762,7 +762,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 4
+#define MAX_VIDEO_PLAY_THREADS 10
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -5156,6 +5156,7 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
     {
         global_play_delay_ms = (int32_t)comm_number;
+        // dbg(9, "vplay_delay=%d\n", (int)global_play_delay_ms);
     }
     else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
     {
@@ -6050,7 +6051,7 @@ static void *video_play(void *dummy)
     if (video_play_rb == NULL)
     {
         dbg(9, "Video: create video_play_rb ringbuffer\n");
-        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. 5 video frame pointers
+        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. 10 video frame pointers
     }
 
     if (y)
@@ -6391,6 +6392,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
 
+    // struct timeval tm_022;
+    // __utimer_start(&tm_022);
+
     // ---- DEBUG ----
     if (first_incoming_video_frame == 0)
     {
@@ -6402,17 +6406,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             global_timespan_video_in = global_timespan_video_in + timspan_in_ms;
         }
 
-        /*
-                if ((timspan_in_ms > 1) && (timspan_in_ms < 99999))
-                {
-                    global_video_in_fps = (int)(1000 / timspan_in_ms);
-                    dbg(9, "timspan_in_ms=%d global_video_in_fps=%d\n", (int)timspan_in_ms, (int)global_video_in_fps);
-                }
-                else
-                {
-                    global_video_in_fps = 0;
-                }
-        */
         update_fps_counter++;
 
         // dbg(9, "fps counter=%d\n", (int)update_fps_counter);
@@ -6518,6 +6511,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     else
     {
     }
+
+    //long long timspan_in_ms;
+    //timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
+    // if (timspan_in_ms > 0)
+    //{
+    //    dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
+    //}
 }
 
 void set_av_video_frame()
@@ -7050,7 +7050,15 @@ void *thread_video_av(void *data)
     while (toxav_video_thread_stop != 1)
     {
         // pthread_mutex_lock(&av_thread_lock);
+        // struct timeval tm_01;
+        // __utimer_start(&tm_01);
         toxav_iterate(av);
+        // long long timspan_in_ms;
+        // timspan_in_ms = __utimer_stop(&tm_01, "toxav_iterate:", 1);
+        // if (timspan_in_ms > 0)
+        // {
+        //     dbg(9, "toxav_iterate: %llu ms\n", timspan_in_ms);
+        // }
 
         // dbg(9, "AV video Thread #%d running ...\n", (int) id);
         // pthread_mutex_unlock(&av_thread_lock);
@@ -10050,7 +10058,8 @@ int main(int argc, char *argv[])
         logfile = NULL;
     }
 
-    return 0;
+    // HINT: for gprof you need an "exit()" call
+    exit(0);
 }
 
 
