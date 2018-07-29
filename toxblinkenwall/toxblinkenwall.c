@@ -282,6 +282,11 @@ int global__SEND_VIDEO_RAW_YUV;
 #include <linux/fb.h>
 #include "openGL/esUtil.h"
 
+#define OPENGL_TEXT_FILTER_ GL_LINEAR
+// #define OPENGL_TEXT_FILTER_ GL_NEAREST
+#define global_opengl_show_grayscale_only 0
+
+
 typedef struct
 {
     // Handle to a program object
@@ -331,6 +336,7 @@ uint8_t *incoming_video_frame_v = NULL;
 #define OPENGL_DISPLAY_FPS_AFTER_SECONDS (2)
 
 int global_did_draw_frame = 0;
+int global_gl_osd_changed = 0;
 
 #endif
 
@@ -8931,8 +8937,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glBindTexture(GL_TEXTURE_2D, uplaneTexId);
     //glUniform1i ( userData->uplaneLoc, 1 );
     userData->uplaneTexId = uplaneTexId;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     //glEnable(GL_TEXTURE_2D);
@@ -8945,8 +8951,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glBindTexture(GL_TEXTURE_2D, vplaneTexId);
     //glUniform1i ( userData->vplaneLoc, 2 );
     userData->vplaneTexId = vplaneTexId;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     //glEnable(GL_TEXTURE_2D);
@@ -8959,8 +8965,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glBindTexture(GL_TEXTURE_2D, yplaneTexId);
     //glUniform1i ( userData->yplaneLoc, 0 );
     userData->yplaneTexId = yplaneTexId;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     //glEnable(GL_TEXTURE_2D);
@@ -8992,8 +8998,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glGenTextures(1, &(userData->ol_uplaneTexId));
     glActiveTexture(GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_2D, userData->ol_uplaneTexId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, (userData->ol_ww / 2), (userData->ol_hh / 2),
@@ -9003,8 +9009,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glGenTextures(1, &(userData->ol_vplaneTexId));
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, userData->ol_vplaneTexId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, (userData->ol_ww / 2), (userData->ol_hh / 2),
@@ -9014,8 +9020,8 @@ int Init(ESContext *esContext, int ww, int hh)
     glGenTextures(1, &(userData->ol_yplaneTexId));
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, userData->ol_yplaneTexId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, userData->ol_ww, userData->ol_hh,
@@ -9066,36 +9072,46 @@ void Update(ESContext *esContext, float deltatime)
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, userData->uplaneTexId);
                 glUniform1i(userData->uplaneLoc, 1);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
-                             (ww / 2), (hh / 2),
-                             0, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-                             (GLubyte *)(p + (ww * hh)));
+
+                if (global_opengl_show_grayscale_only == 0)
+                {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
+                                 (ww / 2), (hh / 2),
+                                 0, GL_LUMINANCE, GL_UNSIGNED_BYTE,
+                                 (GLubyte *)(p + (ww * hh)));
+                }
+
                 /* bind the U texture. */
                 /* bind the V texture. */
                 glGenTextures(1, &userData->vplaneTexId);
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, userData->vplaneTexId);
                 glUniform1i(userData->vplaneLoc, 2);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
-                             (ww / 2), (hh / 2),
-                             0, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-                             (GLubyte *)(p + (ww * hh) + ((ww / 2) * (hh / 2))));
+
+                if (global_opengl_show_grayscale_only == 0)
+                {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
+                                 (ww / 2), (hh / 2),
+                                 0, GL_LUMINANCE, GL_UNSIGNED_BYTE,
+                                 (GLubyte *)(p + (ww * hh) + ((ww / 2) * (hh / 2))));
+                }
+
                 /* bind the V texture. */
                 /* bind the Y texture. */
                 glGenTextures(1, &userData->yplaneTexId);
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, userData->yplaneTexId);
                 glUniform1i(userData->yplaneLoc, 0);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, OPENGL_TEXT_FILTER_);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, OPENGL_TEXT_FILTER_);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
@@ -9112,29 +9128,44 @@ void Update(ESContext *esContext, float deltatime)
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, userData->uplaneTexId);
                 glUniform1i(userData->uplaneLoc, 1);
+
                 //glEnable(GL_TEXTURE_2D);
-                glTexSubImage2D(GL_TEXTURE_2D,
-                                0, 0, 0,
-                                (ww / 2),
-                                (hh / 2),
-                                GL_LUMINANCE,
-                                GL_UNSIGNED_BYTE,
-                                (GLubyte *)(p + (ww * hh)));
+                if (global_opengl_show_grayscale_only == 0)
+                {
+                    //__tt1();
+                    glTexSubImage2D(GL_TEXTURE_2D,
+                                    0, 0, 0,
+                                    (ww / 2),
+                                    (hh / 2),
+                                    GL_LUMINANCE,
+                                    GL_UNSIGNED_BYTE,
+                                    (GLubyte *)(p + (ww * hh)));
+                    //__tt2(199);
+                }
+
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, userData->vplaneTexId);
                 glUniform1i(userData->vplaneLoc, 2);
+
                 //glEnable(GL_TEXTURE_2D);
-                glTexSubImage2D(GL_TEXTURE_2D,
-                                0, 0, 0,
-                                (ww / 2),
-                                (hh / 2),
-                                GL_LUMINANCE,
-                                GL_UNSIGNED_BYTE,
-                                (GLubyte *)(p + (ww * hh) + ((ww / 2) * (hh / 2))));
+                if (global_opengl_show_grayscale_only == 0)
+                {
+                    //__tt1();
+                    glTexSubImage2D(GL_TEXTURE_2D,
+                                    0, 0, 0,
+                                    (ww / 2),
+                                    (hh / 2),
+                                    GL_LUMINANCE,
+                                    GL_UNSIGNED_BYTE,
+                                    (GLubyte *)(p + (ww * hh) + ((ww / 2) * (hh / 2))));
+                    //__tt2(299);
+                }
+
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, userData->yplaneTexId);
                 glUniform1i(userData->yplaneLoc, 0);
                 //glEnable(GL_TEXTURE_2D);
+                //__tt1();
                 glTexSubImage2D(GL_TEXTURE_2D,
                                 0, 0, 0,
                                 (ww),
@@ -9142,6 +9173,7 @@ void Update(ESContext *esContext, float deltatime)
                                 GL_LUMINANCE,
                                 GL_UNSIGNED_BYTE,
                                 (GLubyte *)p);
+                //__tt2(399);
             }
 
             global_bw_video_play_delay = (uint32_t)(bw_current_time_actual() - fd->timestamp);
@@ -9206,7 +9238,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
 
-void DrawOverlay(ESContext *esContext)
+void DrawOverlay(ESContext *esContext, int changed)
 {
     openGL_UserData *userData = esContext->userData;
 #define OVERLAY_LEFT_COORD   (-1.0f)
@@ -9238,40 +9270,71 @@ void DrawOverlay(ESContext *esContext)
     glActiveTexture(GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_2D, userData->ol_uplaneTexId);
     glUniform1i(userData->uplaneLoc, 4);
+
     //glEnable(GL_TEXTURE_2D);
-    glTexSubImage2D(GL_TEXTURE_2D,
-                    0, 0, 0,
-                    (userData->ol_ww / 2),
-                    (userData->ol_hh / 2),
-                    GL_LUMINANCE,
-                    GL_UNSIGNED_BYTE,
-                    (GLubyte *)userData->ol_uu);
+    if (changed == 1)
+    {
+        glTexSubImage2D(GL_TEXTURE_2D,
+                        0, 0, 0,
+                        (userData->ol_ww / 2),
+                        (userData->ol_hh / 2),
+                        GL_LUMINANCE,
+                        GL_UNSIGNED_BYTE,
+                        (GLubyte *)userData->ol_uu);
+    }
+
     /*  V */
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, userData->ol_vplaneTexId);
     glUniform1i(userData->vplaneLoc, 5);
+
     //glEnable(GL_TEXTURE_2D);
-    glTexSubImage2D(GL_TEXTURE_2D,
-                    0, 0, 0,
-                    (userData->ol_ww / 2),
-                    (userData->ol_hh / 2),
-                    GL_LUMINANCE,
-                    GL_UNSIGNED_BYTE,
-                    (GLubyte *)userData->ol_vv);
+    if (changed == 1)
+    {
+        glTexSubImage2D(GL_TEXTURE_2D,
+                        0, 0, 0,
+                        (userData->ol_ww / 2),
+                        (userData->ol_hh / 2),
+                        GL_LUMINANCE,
+                        GL_UNSIGNED_BYTE,
+                        (GLubyte *)userData->ol_vv);
+    }
+
     /*  Y */
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, userData->ol_yplaneTexId);
     glUniform1i(userData->yplaneLoc, 3);
+
     //glEnable(GL_TEXTURE_2D);
-    glTexSubImage2D(GL_TEXTURE_2D,
-                    0, 0, 0,
-                    (userData->ol_ww),
-                    (userData->ol_hh),
-                    GL_LUMINANCE,
-                    GL_UNSIGNED_BYTE,
-                    (GLubyte *)userData->ol_yy);
+    if (changed == 1)
+    {
+        glTexSubImage2D(GL_TEXTURE_2D,
+                        0, 0, 0,
+                        (userData->ol_ww),
+                        (userData->ol_hh),
+                        GL_LUMINANCE,
+                        GL_UNSIGNED_BYTE,
+                        (GLubyte *)userData->ol_yy);
+    }
+
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
+
+/* debugging timing functions */
+/* debugging timing functions */
+uint64_t global_global_tt1 = 0;
+void __tt1()
+{
+    global_global_tt1 = bw_current_time_actual();
+}
+
+void __tt2(int i)
+{
+    uint64_t tt2 = bw_current_time_actual();
+    dbg(9, "openGL:%d:%d us\n", i, (int)(tt2 - global_global_tt1));
+}
+/* debugging timing functions */
+/* debugging timing functions */
 
 void Draw(ESContext *esContext)
 {
@@ -9321,9 +9384,23 @@ void Draw(ESContext *esContext)
                           GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3]);
     glEnableVertexAttribArray(userData->positionLoc);
     glEnableVertexAttribArray(userData->texCoordLoc);
+    // --------------
+    // really Slow !!
     Update(esContext, 0);
+    // really Slow !!
+    // --------------
+    // --------------
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
-    DrawOverlay(esContext);
+    // Slow !!
+    DrawOverlay(esContext, global_gl_osd_changed);
+
+    if (global_gl_osd_changed == 1)
+    {
+        global_gl_osd_changed = 0;
+    }
+
+    // Slow !!
+    // --------------
 }
 
 
@@ -9419,6 +9496,7 @@ void *thread_opengl(void *data)
         {
             if (opengl_active == 0)
             {
+                global_gl_osd_changed = 1;
                 esInitContext(&esContext);
                 esContext.userData = &userData;
                 esCreateWindow(&esContext,
@@ -9452,10 +9530,10 @@ void *thread_opengl(void *data)
 
             if (esContext.drawFunc != NULL)
             {
-                uint64_t tt1 = bw_current_time_actual();
+                // uint64_t tt1 = bw_current_time_actual();
                 esContext.drawFunc(&esContext);
-                uint64_t tt2 = bw_current_time_actual();
-                dbg(9, "openGL:esContext.drawFunc:%d us\n", (int)(tt2 - tt1));
+                // uint64_t tt2 = bw_current_time_actual();
+                // dbg(9, "openGL:esContext.drawFunc:%d us\n", (int)(tt2 - tt1));
                 did_draw_frame2 = global_did_draw_frame;
             }
 
@@ -9465,10 +9543,7 @@ void *thread_opengl(void *data)
 
             if (did_draw_frame2 == 1)
             {
-                uint64_t tt1 = bw_current_time_actual();
                 eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
-                uint64_t tt2 = bw_current_time_actual();
-                dbg(9, "openGL:eglSwapBuffers:%d us\n", (int)(tt2 - tt1));
                 // long long timspan_in_ms = 99999;
                 // timspan_in_ms = __utimer_stop(&tm_01, "opengl_draw_cycle:", 0);
                 frames++;
@@ -9481,6 +9556,7 @@ void *thread_opengl(void *data)
                     totaltime = 0;
                     frames = 0;
                     draw_fps_to_overlay(&esContext, userData.fps);
+                    global_gl_osd_changed = 1;
                 }
             }
             else
