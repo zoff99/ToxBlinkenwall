@@ -147,8 +147,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 27
-static const char global_version_string[] = "0.99.27";
+#define VERSION_PATCH 28
+static const char global_version_string[] = "0.99.28";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -700,6 +700,12 @@ struct fb_fix_screeninfo var_framebuffer_fix_info;
 #ifdef HAVE_OUTPUT_OPENGL
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
+
+struct opengl_video_frame_data
+{
+    void *p;
+    uint64_t timestamp;
+};
 #endif
 
 size_t framebuffer_screensize = 0;
@@ -873,6 +879,7 @@ uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
 uint32_t global_network_round_trip_ms = 0;
 int32_t global_play_delay_ms = 0;
+uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 
 
@@ -992,6 +999,16 @@ static inline unsigned long long __utimer_stop(struct timeval *tm1, const char *
     }
 
     return t;
+}
+
+/* return current UNIX time in microseconds (us). */
+static uint64_t bw_current_time_actual(void)
+{
+    uint64_t time;
+    struct timeval a;
+    gettimeofday(&a, NULL);
+    time = 1000000ULL * a.tv_sec + a.tv_usec;
+    return time;
 }
 
 uint32_t generate_random_uint32()
@@ -5208,12 +5225,14 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         if (video_play_rb != NULL)
         {
             void *p;
+            struct opengl_video_frame_data *fd;
             uint32_t dummy1;
             uint32_t dummy2;
 
-            while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+            while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
             {
-                free(p);
+                free(fd->p);
+                free(fd);
             }
 
             bw_rb_kill(video_play_rb);
@@ -5234,12 +5253,14 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         if (video_play_rb != NULL)
         {
             void *p;
+            struct opengl_video_frame_data *fd;
             uint32_t dummy1;
             uint32_t dummy2;
 
-            while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+            while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
             {
-                free(p);
+                free(fd->p);
+                free(fd);
             }
 
             bw_rb_kill(video_play_rb);
@@ -6065,7 +6086,10 @@ static void *video_play(void *dummy)
         else
         {
 #if 1
-            void *res = bw_rb_write(video_play_rb, y, frame_width_px, frame_height_px);
+            struct opengl_video_frame_data *fdata = calloc(1, sizeof(struct opengl_video_frame_data));
+            fdata->p = y;
+            fdata->timestamp = bw_current_time_actual();
+            void *res = bw_rb_write(video_play_rb, fdata, frame_width_px, frame_height_px);
 
             if (res != NULL)
             {
@@ -7097,12 +7121,14 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     if (video_play_rb != NULL)
     {
         void *p;
+        struct opengl_video_frame_data *fd;
         uint32_t dummy1;
         uint32_t dummy2;
 
-        while (bw_rb_read(video_play_rb, &p, &dummy1, &dummy2))
+        while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
         {
-            free(p);
+            free(fd->p);
+            free(fd);
         }
 
         bw_rb_kill(video_play_rb);
@@ -9016,9 +9042,11 @@ void Update(ESContext *esContext, float deltatime)
         uint32_t ww;
         uint32_t hh;
         uint8_t *p;
+        struct opengl_video_frame_data *fd;
 
-        if (bw_rb_read(video_play_rb, (void **)&p, &ww, &hh))
+        if (bw_rb_read(video_play_rb, (void **)&fd, &ww, &hh))
         {
+            p = fd->p;
             incoming_video_width = ww;
             incoming_video_height = hh;
 
@@ -9115,8 +9143,10 @@ void Update(ESContext *esContext, float deltatime)
                                 (GLubyte *)p);
             }
 
+            global_bw_video_play_delay = (uint32_t)(bw_current_time_actual() - fd->timestamp);
             res = 1;
             free(p);
+            free(fd);
         }
     }
     else
@@ -9149,14 +9179,14 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     {
         snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_0,
                  global_network_round_trip_ms,
-                 (int)global_play_delay_ms,
+                 (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries);
     }
     else
     {
         snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_1,
                  global_network_round_trip_ms,
-                 (int)global_play_delay_ms,
+                 (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries);
     }
 
