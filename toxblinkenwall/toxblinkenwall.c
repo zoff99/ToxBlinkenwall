@@ -768,7 +768,7 @@ sem_t audio_play_lock;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 4
+#define MAX_VIDEO_PLAY_THREADS 3
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -831,7 +831,7 @@ int toxav_iterate_thread_stop = 0;
 
 uint32_t global_av_iterate_ms = 4;
 uint32_t global_iterate_ms = 4;
-int global_opengl_iterate_ms = 2;
+int global_opengl_iterate_ms = 1;
 
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
@@ -6072,7 +6072,7 @@ static void *video_play(void *dummy)
     if (video_play_rb == NULL)
     {
         dbg(9, "Video: create video_play_rb ringbuffer\n");
-        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. 10 video frame pointers
+        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. n video frame pointers
     }
 
     if (y)
@@ -6093,6 +6093,7 @@ static void *video_play(void *dummy)
 
             if (res != NULL)
             {
+                free(((struct opengl_video_frame_data *)res)->p);
                 free(res);
             }
 
@@ -6438,7 +6439,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             if (global_timespan_video_in > 0)
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
-                // dbg(9, "fps counter 2 =%d global_timespan_video_in=%d\n", (int)update_fps_counter, (int)global_timespan_video_in);
+                // dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
             }
             else
             {
@@ -9171,23 +9172,25 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     // print FPS in texture
     // -------------------------
     // HINT: calc max letters for the overlay text lines
-    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000  ")];
+    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000        ")];
     CLEAR(fps_str);
     // -------------------------
 
     if (speaker_out_num == 0)
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_0,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d %d", global_version_string, speaker_out_name_0,
                  global_network_round_trip_ms,
                  (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
-                 (int)global_video_play_buffer_entries);
+                 (int)global_video_play_buffer_entries,
+                 (int)global_video_in_fps);
     }
     else
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d", global_version_string, speaker_out_name_1,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d %d", global_version_string, speaker_out_name_1,
                  global_network_round_trip_ms,
                  (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
-                 (int)global_video_play_buffer_entries);
+                 (int)global_video_play_buffer_entries,
+                 (int)global_video_in_fps);
     }
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
@@ -9449,8 +9452,10 @@ void *thread_opengl(void *data)
 
             if (esContext.drawFunc != NULL)
             {
+                uint64_t tt1 = bw_current_time_actual();
                 esContext.drawFunc(&esContext);
-                // dbg(9, "global_did_draw_frame:002:%d\n", (int)global_did_draw_frame);
+                uint64_t tt2 = bw_current_time_actual();
+                dbg(9, "openGL:esContext.drawFunc:%d us\n", (int)(tt2 - tt1));
                 did_draw_frame2 = global_did_draw_frame;
             }
 
@@ -9460,7 +9465,10 @@ void *thread_opengl(void *data)
 
             if (did_draw_frame2 == 1)
             {
+                uint64_t tt1 = bw_current_time_actual();
                 eglSwapBuffers(esContext.eglDisplay, esContext.eglSurface);
+                uint64_t tt2 = bw_current_time_actual();
+                dbg(9, "openGL:eglSwapBuffers:%d us\n", (int)(tt2 - tt1));
                 // long long timspan_in_ms = 99999;
                 // timspan_in_ms = __utimer_stop(&tm_01, "opengl_draw_cycle:", 0);
                 frames++;
