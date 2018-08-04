@@ -16,6 +16,8 @@
  *
  */
 
+// network.c:498:sendpacket:attempted to send message with network family 10 (probably IPv6) on IPv4 socket
+
 // LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
 /*
 
@@ -887,6 +889,7 @@ uint32_t global_network_round_trip_ms = 0;
 int32_t global_play_delay_ms = 0;
 uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
+uint32_t global_tox_video_incoming_fps = 0;
 
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
@@ -5189,6 +5192,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_encoder_video_bitrate = (uint32_t)comm_number;
     }
+    else if (comm_value == TOXAV_CALL_COMM_INCOMING_FPS)
+    {
+        global_tox_video_incoming_fps = (uint32_t)comm_number;
+    }
 }
 
 #endif
@@ -9210,30 +9217,40 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
 
     if (speaker_out_num == 0)
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d %d", global_version_string, speaker_out_name_0,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d/%d %d %d/%d", global_version_string, speaker_out_name_0,
                  global_network_round_trip_ms,
-                 (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
     }
     else
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d %d %d", global_version_string, speaker_out_name_1,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d/%d %d %d/%d", global_version_string, speaker_out_name_1,
                  global_network_round_trip_ms,
-                 (int)global_play_delay_ms + (int)(global_bw_video_play_delay / 1000),
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
     }
 
     text_on_yuf_frame_xy_ptr(0, 0, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d", (int)video_width, (int)video_height,
-             (int)global_video_out_fps, global_encoder_string,
+    snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d",
+             (int)video_width,
+             (int)video_height,
+             (int)global_video_out_fps,
+             global_encoder_string,
              (int)global_encoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 11, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d", (int)incoming_video_width,
-             (int)incoming_video_height, (int)fps, global_decoder_string,
+    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d",
+             (int)incoming_video_width,
+             (int)incoming_video_height,
+             (int)fps,
+             global_decoder_string,
              (int)global_decoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
