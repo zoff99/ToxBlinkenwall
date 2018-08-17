@@ -825,6 +825,7 @@ int count_audio_record_threads_int;
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
+int32_t global_video_dbuf_ms = 250;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
@@ -887,6 +888,7 @@ uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
 uint32_t global_network_round_trip_ms = 0;
 int32_t global_play_delay_ms = 0;
+int32_t global_remote_record_delay = 0;
 uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_tox_video_incoming_fps = 0;
@@ -3134,6 +3136,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .vcm           --> videocall me");
     send_text_message_to_friend(tox, friend_number, " .kac           --> Kill all calls");
     send_text_message_to_friend(tox, friend_number, " .vbr <v rate>  --> set video bitrate to <v rate> kbits/s");
+    send_text_message_to_friend(tox, friend_number, " .dbuf <ms>     --> set video decoder buffer to ms");
     send_text_message_to_friend(tox, friend_number, " .skpf <num>    --> show only every n-th video frame");
     send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
@@ -3684,6 +3687,29 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                                 toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, &error2);
                                 dbg(9, "setting vbr to:%d res=%d\n", (int)global_video_bit_rate, (int)error2);
                             }
+                        }
+                    }
+                }
+            }
+            else if (strncmp((char *)message, ".dbuf ", strlen((char *)".dbuf ")) == 0) // set video decoder buffer in ms
+            {
+                if (strlen(message) > 6) // require 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)global_video_dbuf_ms);
+
+                    if (mytox_av != NULL)
+                    {
+                        if (friend_to_send_video_to > -1)
+                        {
+                            global_video_dbuf_ms = value_new;
+#ifdef HAVE_TOXAV_OPTION_SET
+                            TOXAV_ERR_OPTION_SET error;
+                            toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                                             TOXAV_DECODER_VIDEO_BUFFER_MS,
+                                             global_video_dbuf_ms,
+                                             &error);
+                            dbg(9, "setting dbuf to:%d res=%d\n", (int)value_new, (int)error);
+#endif
                         }
                     }
                 }
@@ -5195,6 +5221,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_INCOMING_FPS)
     {
         global_tox_video_incoming_fps = (uint32_t)comm_number;
+    }
+    else if (comm_value == TOXAV_CALL_COMM_REMOTE_RECORD_DELAY)
+    {
+        global_remote_record_delay = (uint32_t)comm_number;
     }
 }
 
@@ -9217,8 +9247,11 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
 
     if (speaker_out_num == 0)
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d/%d %d %d/%d", global_version_string, speaker_out_name_0,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_0,
                  global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
                  (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries,
@@ -9227,8 +9260,11 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
     }
     else
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s nw:%d %d/%d %d %d/%d", global_version_string, speaker_out_name_1,
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_1,
                  global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
                  (int)(global_bw_video_play_delay / 1000),
                  (int)global_video_play_buffer_entries,
