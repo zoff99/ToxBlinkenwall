@@ -293,6 +293,8 @@ typedef struct
 {
     // Handle to a program object
     GLuint programObject;
+    GLuint programObject2;
+    bool programObject2_loaded;
 
     // Attribute locations
     GLint  positionLoc;
@@ -331,6 +333,9 @@ int incoming_video_height = 0;
 int incoming_video_width_prev = 0;
 int incoming_video_height_prev = 0;
 int incoming_video_have_new_frame = 0;
+int incoming_video_width_prev_stride = 0;
+int incoming_video_width_stride = 0;
+int incoming_video_width_for_stride = 0;
 uint8_t *incoming_video_frame_y = NULL;
 uint8_t *incoming_video_frame_u = NULL;
 uint8_t *incoming_video_frame_v = NULL;
@@ -713,6 +718,8 @@ struct opengl_video_frame_data
 {
     void *p;
     uint64_t timestamp;
+    int y_stride;
+    int video_width;
 };
 #endif
 
@@ -6132,6 +6139,8 @@ static void *video_play(void *dummy)
             struct opengl_video_frame_data *fdata = calloc(1, sizeof(struct opengl_video_frame_data));
             fdata->p = y;
             fdata->timestamp = bw_current_time_actual();
+            fdata->y_stride = ystride_;
+            fdata->video_width = frame_width_px1;
             void *res = bw_rb_write(video_play_rb, fdata, frame_width_px, frame_height_px);
 
             if (res != NULL)
@@ -6530,7 +6539,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 sem_wait(&video_play_lock);
-                // dbg(9, "VP-DEBUG:F:002:video__y=%p\n", y);
+                // dbg(9, "VP-DEBUG:F:002:w=%d s=%d\n", (int)video__width, (int)video__ystride);
                 video__width = width;
                 video__height = height;
                 video__y = y;
@@ -8943,6 +8952,7 @@ int Init(ESContext *esContext, int ww, int hh)
 #endif
     userData->fps = 0;
     userData->programObject = esLoadProgram(vShaderStr, fShaderStr);
+    userData->programObject2_loaded = false;
     uint8_t *yy;
     uint8_t *uu;
     uint8_t *vv;
@@ -9093,6 +9103,8 @@ void Update(ESContext *esContext, float deltatime)
             p = fd->p;
             incoming_video_width = ww;
             incoming_video_height = hh;
+            incoming_video_width_stride = fd->y_stride;
+            incoming_video_width_for_stride = fd->video_width;
 
             if (
                 (ww != incoming_video_width_prev)
@@ -9389,6 +9401,73 @@ void __tt2(int i)
 /* debugging timing functions */
 /* debugging timing functions */
 
+
+void DrawBlackRect(ESContext *esContext)
+{
+    openGL_UserData *userData = esContext->userData;
+    float aspect = get_aspect_ratio(esContext->width, esContext->height,
+                                    (int)incoming_video_width, (int)incoming_video_height);
+    float right = get_opengl_w_factor(aspect);
+    float right2 = ((float)(incoming_video_width_stride - incoming_video_width_for_stride)
+                    / (float)incoming_video_width_for_stride);
+    float width_scale_factor = (float)(esContext->width) / (incoming_video_width_stride / right);
+    right2 = 1.0f - (right2 * width_scale_factor);
+    // scale and add 8 pixels (on 1920 wide viewport) to width for calculation errors
+    float right_final = (right * right2) - (8.0f / (float)(esContext->width));
+    // dbg(9, "rf=%f r2=%f r=%f %d %d\n", (float)right_final, (float)right2, (float)right, (int)incoming_video_width_stride,
+    //    (int)incoming_video_width_for_stride);
+    GLfloat vVertices[] = { right_final,  1.0, 0.0f,  // left top postion
+                            0.0f,  0.0f,              // TexCoord 0
+                            right_final, -1.0, 0.0f,  // left bottom postion
+                            0.0f,  1.0f,              // TexCoord 1
+                            1.0, -1.0, 0.0f,          // right bottom postion
+                            1.0f,  1.0f,              // TexCoord 2
+                            1.0,  1.0, 0.0f,          // right top postion
+                            1.0f,  0.0f,              // TexCoord 3
+                            0, 0, 0, 0, 0, 0,
+                          };
+    GLushort indices[] = { 0, 1, 2, 0, 2, 3 ,
+                           0, 0, 0, 0, 0, 0
+                         };
+    // Set the viewport
+    glViewport(0, 0, esContext->width, esContext->height);
+
+    if (!userData->programObject2_loaded)
+    {
+        GLbyte vShaderStr[] =
+            "attribute vec4 a_position;   \n"
+            "void main()                  \n"
+            "{                            \n"
+            "   gl_Position = a_position; \n"
+            "}                            \n";
+        GLbyte fShaderStr[] =
+            "precision mediump float;                            \n"
+            "vec3 colorA = vec3(0.0,0.0,0.0);                    \n"
+            "void main()                                         \n"
+            "{                                                   \n"
+            "      gl_FragColor =   vec4(colorA,1.0);            \n"
+            "}                                                   \n";
+        userData->programObject2 = esLoadProgram(vShaderStr, fShaderStr);
+        userData->programObject2_loaded = true;
+    }
+
+    // Use the program object
+    glUseProgram(userData->programObject2);
+    // Load the vertex position
+    GLint positionLoc2 = glGetAttribLocation(userData->programObject2, "a_position");
+    glVertexAttribPointer(positionLoc2, 3, GL_FLOAT,
+                          GL_FALSE, 5 * sizeof(GLfloat), vVertices);
+    // Load the texture coordinate
+    //glVertexAttribPointer(userData->texCoordLoc, 2, GL_FLOAT,
+    //                      GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3]);
+    glEnableVertexAttribArray(positionLoc2);
+    //glEnableVertexAttribArray(userData->texCoordLoc);
+    // --------------
+    // --------------
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+}
+
+
 void Draw(ESContext *esContext)
 {
     // dbg(9, "opengl:draw\n");
@@ -9454,6 +9533,7 @@ void Draw(ESContext *esContext)
 
     // Slow !!
     // --------------
+    DrawBlackRect(esContext);
 }
 
 
@@ -9478,7 +9558,14 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
     dbg(9, "openGL: ShutDown [part1]\n");
+
     // Delete program object
+    if (userData->programObject2_loaded)
+    {
+        glDeleteProgram(userData->programObject2);
+        userData->programObject2_loaded = false;
+    }
+
     glDeleteProgram(userData->programObject);
     eglMakeCurrent(esContext->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglDestroySurface(esContext->eglDisplay, esContext->eglSurface);
