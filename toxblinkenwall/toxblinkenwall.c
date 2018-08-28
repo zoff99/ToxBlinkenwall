@@ -844,6 +844,7 @@ size_t ao_play_bytes;
 
 int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
+int toxav_audioiterate_thread_stop = 0;
 
 uint32_t global_av_iterate_ms = 4;
 uint32_t global_iterate_ms = 4;
@@ -7087,6 +7088,27 @@ void *thread_av(void *data)
     dbg(2, "ToxVideo:Clean thread exit!\n");
 }
 
+void *thread_audio_av(void *data)
+{
+    ToxAV *av = (ToxAV *) data;
+    pthread_t id = pthread_self();
+
+    while (toxav_audioiterate_thread_stop != 1)
+    {
+        toxav_audio_iterate(av);
+
+        if (global_video_active == 1)
+        {
+            usleep(4 * 1000);
+        }
+        else
+        {
+            usleep(100 * 1000);
+        }
+    }
+
+    dbg(2, "ToxVideo:Clean audio thread exit!\n");
+}
 
 void *thread_video_av(void *data)
 {
@@ -9426,7 +9448,7 @@ void DrawBlackRect(ESContext *esContext)
                             1.0f,  0.0f,              // TexCoord 3
                             0, 0, 0, 0, 0, 0,
                           };
-    GLushort indices[] = { 0, 1, 2, 0, 2, 3 ,
+    GLushort indices[] = { 0, 1, 2, 0, 2, 3,
                            0, 0, 0, 0, 0, 0
                          };
     // Set the viewport
@@ -9498,7 +9520,7 @@ void Draw(ESContext *esContext)
                             1.0f,  0.0f,         // TexCoord 3
                             0, 0, 0, 0, 0, 0,
                           };
-    GLushort indices[] = { 0, 1, 2, 0, 2, 3 ,
+    GLushort indices[] = { 0, 1, 2, 0, 2, 3,
                            0, 0, 0, 0, 0, 0
                          };
     // Set the viewport
@@ -10097,6 +10119,7 @@ int main(int argc, char *argv[])
         dbg(0, "Error at toxav_new: %d\n", rc);
     }
 
+    toxav_audio_iterate_seperation(mytox_av, true);
     CallControl mytox_CC;
     memset(&mytox_CC, 0, sizeof(CallControl));
     // init AV callbacks -------------------------------
@@ -10110,9 +10133,10 @@ int main(int argc, char *argv[])
 #endif
     // init AV callbacks -------------------------------
     // start toxav thread ------------------------------
-    pthread_t tid[6]; // 0 -> toxav_iterate thread, 1 -> video send thread
+    pthread_t tid[7]; // 0 -> toxav_iterate thread, 1 -> video send thread
     // 2 -> audio recording thread, 3 -> read keys from pipe
     // 4 -> invite phonebook entries, 5 -> openGL thread
+    // 6 -> toxav_audio_iterate thread
     // start toxav thread ------------------------------
     toxav_iterate_thread_stop = 0;
 
@@ -10136,6 +10160,18 @@ int main(int argc, char *argv[])
     {
         pthread_setname_np(tid[1], "t_video_av");
         dbg(2, "AV video Thread successfully created\n");
+    }
+
+    toxav_audioiterate_thread_stop = 0;
+
+    if (pthread_create(&(tid[6]), NULL, thread_audio_av, (void *)mytox_av) != 0)
+    {
+        dbg(0, "AV audio Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(tid[6], "t_audio_av");
+        dbg(2, "AV audio Thread successfully created\n");
     }
 
     // start toxav thread ------------------------------
@@ -10270,6 +10306,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    toxav_video_thread_stop = 1;
+    toxav_audioiterate_thread_stop = 1;
 #ifdef HAVE_OUTPUT_OPENGL
     opengl_shutdown = 1;
     yieldcpu(100);
