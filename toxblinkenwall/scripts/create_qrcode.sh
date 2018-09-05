@@ -3,9 +3,9 @@
 function background
 {
 
-qrcode_file_png=~/ToxBlinkenwall/toxblinkenwall/toxid.png
-qrcode_file_rgba=~/ToxBlinkenwall/toxblinkenwall/toxid.rgba
-qrcode_touchfile_ready=~/ToxBlinkenwall/toxblinkenwall/toxid_ready.txt
+qrcode_file_png=$(dirname "$0")/../toxid.png
+qrcode_file_rgba=$(dirname "$0")/../toxid.rgba
+qrcode_touchfile_ready=$(dirname "$0")/../toxid_ready.txt
 toxidstr="$1"
 
 . $(dirname "$0")/vars.sh

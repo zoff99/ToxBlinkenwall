@@ -3,7 +3,7 @@
 function background
 {
 
-qrcode_file_rgba=~/ToxBlinkenwall/toxblinkenwall/toxid.rgba
+qrcode_file_rgba=$(dirname "$0")/../toxid.rgba
 
 . $(dirname "$0")/vars.sh
 

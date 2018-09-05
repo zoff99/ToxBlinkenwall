@@ -3,9 +3,9 @@
 function background
 {
 
-gfx_dir=~/ToxBlinkenwall/toxblinkenwall/gfx/
+gfx_dir=$(dirname "$0")/../gfx/
 delay=0.4
-touchfile=~/ToxBlinkenwall/toxblinkenwall/_endless_loading_stop.txt
+touchfile=$(dirname "$0")/../_endless_loading_stop.txt
 
 rm -f "$touchfile"
 

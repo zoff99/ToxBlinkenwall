@@ -2,7 +2,7 @@
 
 function background2
 {
-	file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
+	file_with_text=$(dirname "$0")/../tmp/text.dat
 
 	. $(dirname "$0")/vars.sh
 	$(dirname "$0")/stop_image_endless.sh
@@ -20,8 +20,8 @@ function background
 
 # set -x
 
-gfx_dir=~/ToxBlinkenwall/toxblinkenwall/texttmp/
-file_with_text=~/ToxBlinkenwall/toxblinkenwall/tmp/text.dat
+gfx_dir=$(dirname "$0")/../texttmp/
+file_with_text=$(dirname "$0")/../tmp/text.dat
 font_=' -font DejaVu-Sans-Oblique '
 split_long_words_and_lines_at=26
 cut_at_lines=12

@@ -1,6 +1,6 @@
 #! /bin/bash
 
-gfx_dir=~/ToxBlinkenwall/toxblinkenwall/gfx/
+gfx_dir=$(dirname "$0")/../gfx/
 
 . $(dirname "$0")/vars.sh
 

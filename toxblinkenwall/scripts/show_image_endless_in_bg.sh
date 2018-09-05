@@ -6,8 +6,8 @@ function background
 $(dirname "$0")/stop_image_endless.sh
 sleep 1.5
 
-gfx_dir=~/ToxBlinkenwall/toxblinkenwall/tmp/
-touchfile=~/ToxBlinkenwall/toxblinkenwall/_endless_image_stop.txt
+gfx_dir=$(dirname "$0")/../tmp/
+touchfile=$(dirname "$0")/../_endless_image_stop.txt
 img="$1"
 
 rm -f "$touchfile"

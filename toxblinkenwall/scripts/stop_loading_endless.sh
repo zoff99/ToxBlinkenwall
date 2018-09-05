@@ -1,4 +1,4 @@
 #! /bin/bash
 
-touchfile=~/ToxBlinkenwall/toxblinkenwall/_endless_loading_stop.txt
+touchfile=$(dirname "$0")/../_endless_loading_stop.txt
 touch "$touchfile"

@@ -3,7 +3,7 @@
 function background
 {
 
-file_rgba=~/ToxBlinkenwall/toxblinkenwall/gfx/tox_help.rgba
+file_rgba=$(dirname "$0")/../gfx/tox_help.rgba
 
 . $(dirname "$0")/vars.sh
 
