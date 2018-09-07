@@ -210,10 +210,34 @@ export HD
 
 ' >> ~/.profile
 
+        alsa_0_cfg="/usr/share/alsa/alsa_0.conf"
+        alsa_1_cfg="/usr/share/alsa/alsa_1.conf"
+        alsa_template="$_HOME_/ToxBlinkenwall/__first_install_on_pi/alsa_template.txt"
+
+        cat "$alsa_template" | sed -e "s#@@USBCARD@@#""$(aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq |grep 'U0')""#" > /tmp/alsa_tmp.txt
+
+        sudo cp -av "/usr/share/alsa/alsa.conf" "$alsa_0_cfg"
+        sudo cp -av "/usr/share/alsa/alsa.conf" "$alsa_1_cfg"
+        cat /tmp/alsa_tmp.txt | sudo tee -a "$alsa_0_cfg"
+
+        cat /tmp/alsa_tmp.txt | sed -e 's#slave.pcm "card_bcm"#slave.pcm "usb"#' > /tmp/alsa_tmp2.txt
+
+        cat /tmp/alsa_tmp2.txt | sudo tee -a "$alsa_1_cfg"
+        sudo cp -av "$alsa_0_cfg" "/usr/share/alsa/alsa.conf"
+
+        rm -f /tmp/alsa_tmp.txt
+        rm -f /tmp/alsa_tmp2.txt
+
+        sudo cp -av /etc/ImageMagick-6/policy.xml /etc/ImageMagick-6/policy.xml.BACKUP
+        sudo sed -i -e 's#^.*<policy domain="path".*$#<!-- removed by ToxBlinkenwall -->#g' /etc/ImageMagick-6/policy.xml
+
         touch ~/.tbw_install.ready
+        echo "... READY"
     fi
+
+
     . ~/.profile
-    # $_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
+    $_HOME_/ToxBlinkenwall/toxblinkenwall/initscript.sh start
 else
     echo "ERROR !!"
 fi

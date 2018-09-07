@@ -24,7 +24,7 @@
 # run:
 #   cat /proc/asound/cards
 # or:
-#   aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq
+#   aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq |grep 'U0'
 
 # example usb audio: U0x4b40x309
 

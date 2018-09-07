@@ -1,0 +1,29 @@
+
+pcm.usb
+{
+    type hw
+    card @@USBCARD@@
+}
+
+pcm.card_bcm {
+    type hw
+    card ALSA
+}
+
+pcm.!default {
+    type asym
+
+    playback.pcm
+    {
+        type plug
+        slave.pcm "card_bcm"
+    }
+
+    capture.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+}
+
+defaults.pcm.!card ALSA
