@@ -35,7 +35,7 @@ sleep 1
 sudo apt-get --yes --force-yes install libjpeg-dev libpng-dev imagemagick htop mc fbset cmake qrencode
 sudo apt-get --yes --force-yes install libqrencode-dev vim nano wget git make
 sudo apt-get --yes --force-yes install autotools-dev libtool bc libv4l-dev libv4lconvert0 v4l-conf v4l-utils
-sudo apt-get --yes --force-yes install libopus-dev libvpx-dev pkg-config libjpeg-dev libpulse-dev libconfig-dev
+sudo apt-get --yes --force-yes install pkg-config libjpeg-dev libpulse-dev libconfig-dev
 sudo apt-get --yes --force-yes install automake checkinstall check yasm
 sudo apt-get --yes --force-yes install libao-dev libasound2-dev
 
@@ -75,11 +75,8 @@ git checkout v12.3
 --disable-libxcb-xfixes \
 --enable-parser=h264 \
 --enable-runtime-cpudetect \
---enable-omx-rpi --enable-mmal \
---enable-omx \
+--enable-mmal \
 --enable-decoder=h264_mmal \
---enable-decoder=h264_vdpau \
---enable-vdpau \
 --enable-gpl --enable-decoder=h264
 make clean
 make -j4

@@ -135,6 +135,12 @@ network={
  *
  */
 
+/*
+ * http://www.twam.info/wp-content/uploads/2009/04/v4l2grab.c
+ * gcc v4l2grab.c -o v4l2grab -Wall -ljpeg -DIO_READ -DIO_MMAP -DIO_USERPTR
+ * ./v4l2grab -o image.jpg
+ */
+
 #define _GNU_SOURCE
 
 
@@ -6872,7 +6878,7 @@ void *thread_av(void *data)
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
-            // dbg(9, "AV Thread #%d:get frame\n", (int) id);
+            //  dbg(9, "AV Thread #%d:get frame\n", (int) id);
             // capturing is enabled, capture frames
             int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
                                  av_video_frame.w, av_video_frame.h);
