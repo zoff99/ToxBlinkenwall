@@ -18,6 +18,11 @@ GPIO.VERSION
 fifo_path = '../ext_keys.fifo'
 cur_button = -1
 
+# Custom ToxPhone1 values -----
+# ROW    = [4, -1, -1, 17]
+# COLUMN = [27, 18, 22, -1]
+# Custom ToxPhone1 values -----
+
 ROW    = [16, 20, 21, 5] # these are the GPIO numbers, NOT the real PIN numbers
 COLUMN = [6, 13, 19, 26]
 
