@@ -54,7 +54,6 @@ gcc \
 -DRASPBERRY_PI -DOMX_SKIP64BIT -DUSE_VCHIQ_ARM \
 -I/opt/vc/include -I/opt/vc/interface/vmcs_host/linux -I/opt/vc/interface/vcos/pthreads \
 $CF2 $CF3 \
--flto \
 -fstack-protector-all \
 -Wno-unused-variable \
 -fPIC -export-dynamic -I$_INST_/include -o toxblinkenwall -lm \
