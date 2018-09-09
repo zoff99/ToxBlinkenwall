@@ -67,7 +67,7 @@ while [ 1 == 1 ]; do
 
     # ---- only for RASPI ----
     if [ "$IS_ON""x" == "RASPI""x" ]; then
-            sudo ./toggle_alsa.sh 0
+            sudo ./toggle_alsa.sh 1
     fi
     # ---- only for RASPI ----
 
@@ -77,7 +77,7 @@ while [ 1 == 1 ]; do
 
     # ---- only for RASPI ----
     if [ "$IS_ON""x" == "RASPI""x" ]; then
-            sudo ./toggle_alsa.sh 0
+            sudo ./toggle_alsa.sh 1
     fi
     # ---- only for RASPI ----
 done
