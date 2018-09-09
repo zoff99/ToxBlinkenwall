@@ -155,7 +155,7 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 29
+#define VERSION_PATCH 30
 static const char global_version_string[] = "0.99.30";
 // ----------- version -----------
 // ----------- version -----------
