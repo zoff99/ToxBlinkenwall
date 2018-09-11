@@ -155,8 +155,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 30
-static const char global_version_string[] = "0.99.30";
+#define VERSION_PATCH 31
+static const char global_version_string[] = "0.99.31";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -224,12 +224,20 @@ static const char global_version_string[] = "0.99.30";
 #define AV_AUTO_PICKUP_CALL 1
 // --------- automatically pickup incoming calls ---------
 
+// --------- change nospam ---------
+#define CHANGE_NOSPAM_REGULARLY 1
+// --------- change nospam ---------
+
+
+// #define WANT_OS_UPDATE_FULL 1
+
+
+
+
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 #if 0
-
-// #define WANT_OS_UPDATE_FULL 1
 
 extern int global__ON_THE_FLY_CHANGES;
 extern int global__VPX_RESIZE_ALLOWED;
@@ -854,7 +862,7 @@ int toxav_audioiterate_thread_stop = 0;
 
 uint32_t global_av_iterate_ms = 4;
 uint32_t global_iterate_ms = 4;
-int global_opengl_iterate_ms = 1;
+int global_opengl_iterate_ms = 2;
 
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
@@ -906,7 +914,8 @@ int32_t global_remote_record_delay = 0;
 uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_tox_video_incoming_fps = 0;
-
+uint32_t global_last_change_nospam_ts = 0;
+#define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -1038,6 +1047,7 @@ static uint64_t bw_current_time_actual(void)
 
 uint32_t generate_random_uint32()
 {
+    // HINT: this is not perfectly randon, FIX ME!
     uint32_t r;
     struct timeval time;
     gettimeofday(&time, NULL);
@@ -2767,6 +2777,18 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
 }
 
 
+void change_nospam_to_new_random_value(Tox *tox)
+{
+    dbg(9, "change_nospam_to_new_random_value\n");
+    global_last_change_nospam_ts = (uint32_t)get_unix_time();
+    tox_self_set_nospam(tox, generate_random_uint32());
+    update_savedata_file(tox);
+    // new nospam created -> generate new QR code image
+    print_tox_id(tox);
+    delete_qrcode_generate_touchfile();
+    create_tox_id_qrcode(tox);
+}
+
 void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t length,
                        void *user_data)
 {
@@ -2774,12 +2796,7 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
     dbg(2, "add friend:002:friendnum=%d max_id=%d\n", friendnum, (int)Friends.max_idx);
     friendlist_onFriendAdded(tox, friendnum, 0);
     update_savedata_file(tox);
-    tox_self_set_nospam(tox, generate_random_uint32());
-    update_savedata_file(tox);
-    // new nospam created -> generate new QR code image
-    print_tox_id(tox);
-    delete_qrcode_generate_touchfile();
-    create_tox_id_qrcode(tox);
+    change_nospam_to_new_random_value(tox);
 }
 
 /* ssssshhh I stole this from ToxBot, don't tell anyone.. */
@@ -10302,6 +10319,14 @@ int main(int argc, char *argv[])
     while (tox_loop_running)
     {
         tox_iterate(tox, NULL);
+#ifdef CHANGE_NOSPAM_REGULARLY
+
+        if ((uint32_t)(global_last_change_nospam_ts + CHANGE_NOSPAM_REGULAR_INTERVAL_SECS) < (uint32_t)get_unix_time())
+        {
+            change_nospam_to_new_random_value(tox);
+        }
+
+#endif
 
         if (global_video_active == 1)
         {
