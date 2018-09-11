@@ -9674,7 +9674,40 @@ void *thread_opengl(void *data)
                                fb_screen_width,
                                fb_screen_height,
                                ES_WINDOW_ALPHA); // ES_WINDOW_RGB
+                //
+                // -------- Display some debug info about the used openGL ES videocore --------
+                //
+                dbg(9, "GL_RENDERER   = %s\n", (char *) glGetString(GL_RENDERER));
+                dbg(9, "GL_VERSION    = %s\n", (char *) glGetString(GL_VERSION));
+                dbg(9, "GL_VENDOR     = %s\n", (char *) glGetString(GL_VENDOR));
+                dbg(9, "GL_EXTENSIONS = %s\n", (char *) glGetString(GL_EXTENSIONS));
+                GLint myget[256];
+                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &myget);
+                dbg(9, "GL_IMPLEMENTATION_COLOR_READ_FORMAT=%04x %04x %04x %d \n", myget[0], myget[1], myget[2], myget[3]);
+                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &myget);
+                dbg(9, "GL_IMPLEMENTATION_COLOR_READ_TYPE=%04x %04x %04x %d \n", myget[0], myget[1], myget[2], myget[3]);
+                glGetIntegerv(GL_COLOR_WRITEMASK, &myget);
+                dbg(9, "GL_COLOR_WRITE_MASK=%d %d %d %d \n", myget[0], myget[1], myget[2], myget[3]);
+                glGetIntegerv(GL_BLEND, &myget);
+                dbg(9, "GL_BLEND =%d\n", myget[0]);
+                glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &myget);
+                dbg(9, "GL_MAX_RENDER_BUFFER_SIZE =%d\n", myget[0]);
+                glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &myget);
+                dbg(9, "GL_MAX_VERTEX_UNIFORM_VECTORS =%d\n", myget[0]);
+                glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &myget);
+                dbg(9, "GL_MAX_FRAGMENT_UNIFORM_VECTORS =%d\n", myget[0]);
+                glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &myget);
+                dbg(9, "GL_MAX_VERTEX_ATTRIBS =%d\n", myget[0]);
+                glGetIntegerv(GL_MAX_VIEWPORT_DIMS, &myget);
+                dbg(9, "GL_MAX_VIEWPORT_DIMS =%dx%d\n", myget[0], myget[1]);
+                glGetIntegerv(GL_VIEWPORT, &myget);
+                dbg(9, "GL_VIEWPORT =(%d,%d %d,%d)\n", myget[0], myget[1], myget[2], myget[3]);
+                //
+                // -------- Display some debug info about the used openGL ES videocore --------
+                //
                 Init(&esContext, (int)(fb_screen_width), (int)(fb_screen_height));
+                //
+                //
                 esRegisterDrawFunc(&esContext, Draw);
                 opengl_active = 1;
                 deltatime = 0.0f;
