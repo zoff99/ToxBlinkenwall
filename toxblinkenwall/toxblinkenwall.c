@@ -9433,6 +9433,7 @@ void __tt2(int i)
 void DrawBlackRect(ESContext *esContext)
 {
     openGL_UserData *userData = esContext->userData;
+    // TODO: don't calculate this every time!! FIX ME!! --------------------------
     float aspect = get_aspect_ratio(esContext->width, esContext->height,
                                     (int)incoming_video_width, (int)incoming_video_height);
     float right = get_opengl_w_factor(aspect);
@@ -9444,6 +9445,7 @@ void DrawBlackRect(ESContext *esContext)
     float right_final = (right * right2) - (8.0f / (float)(esContext->width));
     // dbg(9, "rf=%f r2=%f r=%f %d %d\n", (float)right_final, (float)right2, (float)right, (int)incoming_video_width_stride,
     //    (int)incoming_video_width_for_stride);
+    // TODO: don't calculate this every time!! FIX ME!! --------------------------
     GLfloat vVertices[] = { right_final,  1.0, 0.0f,  // left top postion
                             0.0f,  0.0f,              // TexCoord 0
                             right_final, -1.0, 0.0f,  // left bottom postion
