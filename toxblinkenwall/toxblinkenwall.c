@@ -727,6 +727,7 @@ struct fb_fix_screeninfo var_framebuffer_fix_info;
 #ifdef HAVE_OUTPUT_OPENGL
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
+#endif
 
 struct opengl_video_frame_data
 {
@@ -735,7 +736,6 @@ struct opengl_video_frame_data
     int y_stride;
     int video_width;
 };
-#endif
 
 size_t framebuffer_screensize = 0;
 unsigned char *framebuffer_mappedmem = NULL;
