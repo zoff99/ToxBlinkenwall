@@ -6203,7 +6203,7 @@ static void *video_play(void *dummy)
         global_upscaling_str = " U";
     }
 
-    dbg(9, "VP-DEBUG:010\n");
+    // dbg(9, "VP-DEBUG:010\n");
     int buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
     // dbg(9, "frame_width_px1=%d frame_width_px=%d frame_height_px1=%d\n", (int)frame_width_px1, (int)frame_width_px, (int)frame_height_px1);
     int horizontal_stride_pixels = 0;
@@ -6215,9 +6215,9 @@ static void *video_play(void *dummy)
         horizontal_stride_pixels_half = horizontal_stride_pixels / 2;
     }
 
-    dbg(9, "VP-DEBUG:011\n");
+    // dbg(9, "VP-DEBUG:011\n");
     uint8_t *bf_out_data = (uint8_t *)calloc(1, framebuffer_screensize);
-    dbg(9, "VP-DEBUG:012\n");
+    // dbg(9, "VP-DEBUG:012\n");
     long int i, j;
     // dbg(9, "full_width=%f vid_width=%f full_height=%f vid_height=%f\n", (float)full_width, (float)vid_width, (float)full_height, (float)vid_height);
     float ww = (float)var_framebuffer_info.xres / (float)vid_width;
@@ -6249,7 +6249,7 @@ static void *video_play(void *dummy)
     }
 
     // dbg(9, "vid_height_needed=%d vid_height=%d\n", (int)vid_height_needed, (int)vid_height);
-    dbg(9, "VP-DEBUG:013\n");
+    // dbg(9, "VP-DEBUG:013\n");
     int vid_width_needed = vid_width;
 
     if (hh > 0)
@@ -6267,7 +6267,7 @@ static void *video_play(void *dummy)
     if (downscale == 0)
         // if (((vid_height_needed + 10) < var_framebuffer_info.xres) && ((vid_height_needed + 10) < var_framebuffer_info.yres))
     {
-        dbg(9, "VP-DEBUG:014\n");
+        // dbg(9, "VP-DEBUG:014\n");
         // scale image up to output size -----------------------------
         // scale image up to output size -----------------------------
         // scale image up to output size -----------------------------
@@ -6359,11 +6359,11 @@ static void *video_play(void *dummy)
         // scale image up to output size -----------------------------
         // scale image up to output size -----------------------------
         // scale image up to output size -----------------------------
-        dbg(9, "VP-DEBUG:015\n");
+        // dbg(9, "VP-DEBUG:015\n");
     }
     else
     {
-        dbg(9, "VP-DEBUG:016\n");
+        // dbg(9, "VP-DEBUG:016\n");
         // scale image down to output size (or leave as is) ----------
         // scale image down to output size (or leave as is) ----------
         // scale image down to output size (or leave as is) ----------
@@ -6447,17 +6447,17 @@ static void *video_play(void *dummy)
         // scale image down to output size (or leave as is) ----------
         // scale image down to output size (or leave as is) ----------
         // scale image down to output size (or leave as is) ----------
-        dbg(9, "VP-DEBUG:017\n");
+        // dbg(9, "VP-DEBUG:017\n");
     }
 
-    dbg(9, "VP-DEBUG:018\n");
+    // dbg(9, "VP-DEBUG:018\n");
 
     if (y)
     {
         free((void *)y);
     }
 
-    dbg(9, "VP-DEBUG:019\n");
+    // dbg(9, "VP-DEBUG:019\n");
     /*
         if (u)
         {
@@ -6471,7 +6471,7 @@ static void *video_play(void *dummy)
             free((void *)v);
         }
     */
-    dbg(9, "VP-DEBUG:021\n");
+    // dbg(9, "VP-DEBUG:021\n");
 #endif
     dec_video_t_counter();
     // dbg(9, "VP-DEBUG:022-EXIT\n");
