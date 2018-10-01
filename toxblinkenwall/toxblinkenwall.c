@@ -678,6 +678,8 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
 void reset_toxav_call_waiting();
 
 
+const char *default_tox_name = "ToxBlinkenwall";
+const char *default_tox_status = "Metalab Blinkenwall";
 
 const char *savedata_filename = "savedata.tox";
 const char *savedata_tmp_filename = "savedata.tox.tmp";
@@ -3185,6 +3187,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .call <num>         --> call book entry <num>");
+    send_text_message_to_friend(tox, friend_number, " .label <name>       --> Set the device's name");
 }
 
 //void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
@@ -3800,6 +3803,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                             }
                         }
                     }
+                }
+            }
+            else if (strncmp((char *)message, ".label ", strlen((char *)".label ")) == 0)
+            {
+                if (strlen(message) > 7)
+                {
+                    tox_self_set_name(tox, (uint8_t *)message + 7, strlen(message + 7), NULL);
+                    update_savedata_file(tox);
                 }
             }
             else
@@ -10093,9 +10104,13 @@ int main(int argc, char *argv[])
 
     Tox *tox = create_tox();
     global_start_time = time(NULL);
-    const char *name = "ToxBlinkenwall";
-    tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
-    const char *status_message = "Metalab Blinkenwall";
+
+    if (tox_self_get_name_size(tox) == 0) {
+      const char *name = default_tox_name;
+      tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
+    }
+
+    const char *status_message = default_tox_status;
     tox_self_set_status_message(tox, (uint8_t *)status_message, strlen(status_message), NULL);
     Friends.max_idx = 0;
     bootstrap(tox);
