@@ -3187,7 +3187,8 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .set <num> <ToxID>  --> set <ToxId> as book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .del <num>          --> remove book entry <num>");
     send_text_message_to_friend(tox, friend_number, " .call <num>         --> call book entry <num>");
-    send_text_message_to_friend(tox, friend_number, " .label <name>       --> Set the device's name");
+    send_text_message_to_friend(tox, friend_number, " .setname <name>     --> Set the device's name");
+    send_text_message_to_friend(tox, friend_number, " .setstatus <msg>    --> Set the device's status line");
 }
 
 //void start_zipfile(mz_zip_archive *pZip, size_t size_pZip, const char* zip_file_full_path)
@@ -3805,11 +3806,19 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
-            else if (strncmp((char *)message, ".label ", strlen((char *)".label ")) == 0)
+            else if (strncmp((char *)message, ".setname ", strlen((char *)".setname ")) == 0)
             {
-                if (strlen(message) > 7)
+                if (strlen(message) > 9)
                 {
-                    tox_self_set_name(tox, (uint8_t *)message + 7, strlen(message + 7), NULL);
+                    tox_self_set_name(tox, (uint8_t *)message + 9, strlen(message + 9), NULL);
+                    update_savedata_file(tox);
+                }
+            }
+            else if (strncmp((char *)message, ".setstatus ", strlen((char *)".setstatus ")) == 0)
+            {
+                if (strlen(message) > 11)
+                {
+                    tox_self_set_status_message(tox, (uint8_t *)message + 11, strlen(message + 11), NULL);
                     update_savedata_file(tox);
                 }
             }
@@ -10106,12 +10115,13 @@ int main(int argc, char *argv[])
     global_start_time = time(NULL);
 
     if (tox_self_get_name_size(tox) == 0) {
-      const char *name = default_tox_name;
-      tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
+      tox_self_set_name(tox, (uint8_t *)default_tox_name, strlen(default_tox_name), NULL);
     }
 
-    const char *status_message = default_tox_status;
-    tox_self_set_status_message(tox, (uint8_t *)status_message, strlen(status_message), NULL);
+    if (tox_self_get_status_message_size(tox) == 0) {
+      tox_self_set_status_message(tox, (uint8_t *)default_tox_status, strlen(default_tox_status), NULL);
+    }
+
     Friends.max_idx = 0;
     bootstrap(tox);
     print_tox_id(tox);
