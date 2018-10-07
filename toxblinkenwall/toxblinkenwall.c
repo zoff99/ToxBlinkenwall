@@ -10105,9 +10105,10 @@ int main(int argc, char *argv[])
     Tox *tox = create_tox();
     global_start_time = time(NULL);
 
-    if (tox_self_get_name_size(tox) == 0) {
-      const char *name = default_tox_name;
-      tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
+    if (tox_self_get_name_size(tox) == 0)
+    {
+        const char *name = default_tox_name;
+        tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
     }
 
     const char *status_message = default_tox_status;
