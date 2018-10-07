@@ -10,7 +10,7 @@
 <br><br>
 
 ### Installation [Raspberry Pi or Linux]
-see [INSTALL.md](https://github.com/zoff99/ToxBlinkenwall/blob/master/INSTALL.md)
+use files in this directory: [https://github.com/zoff99/ToxBlinkenwall/tree/master/__first_install_on_pi](https://github.com/zoff99/ToxBlinkenwall/tree/master/__first_install_on_pi)
 
 <img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/toxblinkenwall_001.png"
       alt="logo"
