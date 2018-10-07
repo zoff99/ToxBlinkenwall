@@ -3809,8 +3809,13 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             {
                 if (strlen(message) > 7)
                 {
-                    tox_self_set_name(tox, (uint8_t *)message + 7, strlen(message + 7), NULL);
-                    update_savedata_file(tox);
+                    uint32_t self_name_max_len = tox_max_name_length();
+
+                    if (strlen(message + 7) < self_name_max_len)
+                    {
+                        tox_self_set_name(tox, (uint8_t *)message + 7, strlen(message + 7), NULL);
+                        update_savedata_file(tox);
+                    }
                 }
             }
             else
@@ -10107,8 +10112,11 @@ int main(int argc, char *argv[])
 
     if (tox_self_get_name_size(tox) == 0)
     {
-        const char *name = default_tox_name;
-        tox_self_set_name(tox, (uint8_t *)name, strlen(name), NULL);
+        uint32_t self_name_max_len = tox_max_name_length();
+        char self_name[1000];
+        CLEAR(self_name);
+        snprintf(self_name, (self_name_max_len - 1), "%s", default_tox_name);
+        tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
     }
 
     const char *status_message = default_tox_status;
