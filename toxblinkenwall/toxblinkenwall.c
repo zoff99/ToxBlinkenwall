@@ -10119,8 +10119,15 @@ int main(int argc, char *argv[])
         tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
     }
 
-    const char *status_message = default_tox_status;
-    tox_self_set_status_message(tox, (uint8_t *)status_message, strlen(status_message), NULL);
+    if (tox_self_get_status_message_size(tox) == 0)
+    {
+        uint32_t self_status_max_len = tox_max_status_message_length();
+        char self_status[1000];
+        CLEAR(self_status);
+        snprintf(self_status, (self_status_max_len - 1), "%s", default_tox_status);
+        tox_self_set_status_message(tox, (uint8_t *)self_status, strlen(self_status), NULL);
+    }
+
     Friends.max_idx = 0;
     bootstrap(tox);
     print_tox_id(tox);
