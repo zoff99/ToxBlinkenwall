@@ -2863,13 +2863,16 @@ void remove_friend(Tox *tox, uint32_t friend_number)
 #endif
 }
 
-void cmd_delfriend(Tox *tox, uint32_t friend_number, const char *message)
+void cmd_delfriend(Tox *tox, int64_t friend_number, const char *message)
 {
-    uint32_t del_friend_number = -1;
+    int64_t del_friend_number = -1;
 
     if (friend_number != del_friend_number)
     {
-        // remove_friend(tox, del_friend_number);
+        if (friend_numer > -1)
+        {
+            // remove_friend(tox, (uint32_t)del_friend_number);
+        }
     }
 }
 
@@ -3854,8 +3857,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
     if (send_back == 1)
     {
-        // ??? tox_friend_send_message(tox, friend_number, type, message, length, NULL);
-        // ??? send_text_message_to_friend(tox, friend_number, const char *fmt, ...)
+        // Do nothing for now
     }
 }
 
