@@ -2869,7 +2869,7 @@ void cmd_delfriend(Tox *tox, int64_t friend_number, const char *message)
 
     if (friend_number != del_friend_number)
     {
-        if (friend_numer > -1)
+        if (friend_number > -1)
         {
             // remove_friend(tox, (uint32_t)del_friend_number);
         }
