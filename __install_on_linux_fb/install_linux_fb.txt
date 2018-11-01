@@ -1,0 +1,70 @@
+# **********************************************
+#    Step for running ToxBlinkenwall on Linux
+#         with framebuffer video output
+# **********************************************
+
+# ----------------------------------------------
+# compile the static binary with docker
+# ----------------------------------------------
+./do_it___external_runme_for_docker.sh
+# the binary will be saved as:
+# "./artefacts/toxblinkenwall"
+# ----------------------------------------------
+
+
+# ----------------------------------------------
+# install software if missing
+# ----------------------------------------------
+sudo apt install libjpeg-turbo8
+sudo apt install libjpeg8
+sudo apt install v4l-utils
+sudo apt install fbset
+sudo apt install imagemagick
+sudo apt install libasound2
+sudo apt install qrencode
+# ----------------------------------------------
+
+
+# ----------------------------------------------
+# clone repo:
+# ----------------------------------------------
+cd ~/ # prepare everything in your HOMEDIR
+git clone https://github.com/zoff99/ToxBlinkenwall
+cd ./ToxBlinkenwall/toxblinkenwall
+
+# ----------------------------------------------
+# copy binary to rundir
+# ----------------------------------------------
+cp <where you ran your docker build>/artefacts/toxblinkenwall ./
+chmod u+x ./toxblinkenwall
+
+# ----------------------------------------------
+# edit "scripts/vars.sh"
+# ----------------------------------------------
+if [ "$HD""x" == "RASPIHD""x" ]; then
+  export BKWALL_WIDTH=1920 # your framebuffer max width
+  export BKWALL_HEIGHT=1080 # your framebuffer max height
+  export FB_WIDTH=1920 # your framebuffer max width
+  export FB_HEIGHT=1080 # your framebuffer max height
+fi
+# ----------------------------------------------
+
+# ----------------------------------------------
+# add to your ~/.profile
+# ----------------------------------------------
+export IS_ON=RASPI
+export HD=RASPIHD
+# ----------------------------------------------
+
+# ----------------------------------------------
+# source your ~/.profile
+# ----------------------------------------------
+. ~/.profile
+
+# ----------------------------------------------
+# finally run "./loop_services_linux_fb.sh"
+#
+#  !!WARNING!!: after this step you probably can't
+#               get back to your desktop!!
+# ----------------------------------------------
+
