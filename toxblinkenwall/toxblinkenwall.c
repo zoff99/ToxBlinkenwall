@@ -2349,27 +2349,6 @@ on_send_error:
 
 void resume_file_to_friend(Tox *m, uint32_t num, struct FileTransfer *ft)
 {
-    char *file_name_incl_full_path = NULL;
-    int j = find_friend_in_friendlist(ft->friendnum);
-
-    if (j > -1)
-    {
-        file_name_incl_full_path = malloc(300);
-        snprintf(file_name_incl_full_path, 299, "%s/%s", (const char *)Friends.list[j].worksubdir, ft->file_name);
-        dbg(2, "resume_file_to_friend:full path=%s\n", file_name_incl_full_path);
-        char file_id_str[TOX_FILE_ID_LENGTH * 2 + 1];
-        bin_id_to_string_all((char *)ft->file_id, (size_t)TOX_FILE_ID_LENGTH, file_id_str,
-                             (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
-        // dbg(2, "resume_file_to_friend:file_id=%d file_id_bin=%d\n", (int)file_id_str, (int)ft->file_id);
-        dbg(2, "resume_file_to_friend:file_id=%s\n", file_id_str);
-        dbg(2, "resume_file_to_friend:path=%s friendnum=%d filenum=%d\n", file_name_incl_full_path, (int)ft->friendnum,
-            (int)ft->filenum);
-        send_file_to_friend_real(m, ft->friendnum, file_name_incl_full_path, 1, ft->file_id);
-    }
-    else
-    {
-        dbg(0, "resume_file_to_friend:friend %d not found in friendlist\n", (int)ft->friendnum);
-    }
 }
 
 void send_file_to_friend(Tox *m, uint32_t num, const char *filename)
