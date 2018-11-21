@@ -144,7 +144,7 @@ cd $_SRC_
 git clone https://github.com/Zoxcore/c-toxcore
 cd c-toxcore
 
-git checkout "v0.99.0" # "toxav-multi-codec"
+git checkout "toxav-multi-codec"
 
 ./autogen.sh
 make clean
