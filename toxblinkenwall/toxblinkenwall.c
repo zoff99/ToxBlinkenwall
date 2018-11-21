@@ -179,6 +179,7 @@ static const char global_version_string[] = "0.99.31";
 #include <fcntl.h>
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <pthread.h>
 
