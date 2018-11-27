@@ -6775,7 +6775,7 @@ void *thread_av(void *data)
         dbg(2, "av_thread_lock created successfully\n");
     }
 
-    dbg(2, "AV Thread #%d: starting\n", (int) id);
+    dbg(2, "AV Thread #%d: starting\n", (size_t) id);
 
     if (video_call_enabled == 1)
     {
@@ -6869,7 +6869,7 @@ void *thread_av(void *data)
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
         pthread_t id = pthread_self();
-        dbg(2, "AV Thread #%d: init cam\n", (int) id);
+        dbg(2, "AV Thread #%d: init cam\n", (size_t) id);
         init_and_start_cam(1);
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
@@ -7144,7 +7144,7 @@ void *thread_video_av(void *data)
     //{
     //  dbg(2, "av_thread_lock video created successfully\n");
     //}
-    dbg(2, "AV video Thread #%d: starting\n", (int) id);
+    dbg(2, "AV video Thread #%d: starting\n", (size_t) id);
 #if 1
     // ------ thread priority ------
     struct sched_param param;
@@ -9699,25 +9699,25 @@ void *thread_opengl(void *data)
                 dbg(9, "GL_VENDOR     = %s\n", (char *) glGetString(GL_VENDOR));
                 dbg(9, "GL_EXTENSIONS = %s\n", (char *) glGetString(GL_EXTENSIONS));
                 GLint myget[256];
-                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &myget);
+                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, myget);
                 dbg(9, "GL_IMPLEMENTATION_COLOR_READ_FORMAT=%04x %04x %04x %d \n", myget[0], myget[1], myget[2], myget[3]);
-                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &myget);
+                glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, myget);
                 dbg(9, "GL_IMPLEMENTATION_COLOR_READ_TYPE=%04x %04x %04x %d \n", myget[0], myget[1], myget[2], myget[3]);
-                glGetIntegerv(GL_COLOR_WRITEMASK, &myget);
+                glGetIntegerv(GL_COLOR_WRITEMASK, myget);
                 dbg(9, "GL_COLOR_WRITE_MASK=%d %d %d %d \n", myget[0], myget[1], myget[2], myget[3]);
-                glGetIntegerv(GL_BLEND, &myget);
+                glGetIntegerv(GL_BLEND, myget);
                 dbg(9, "GL_BLEND =%d\n", myget[0]);
-                glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &myget);
+                glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, myget);
                 dbg(9, "GL_MAX_RENDER_BUFFER_SIZE =%d\n", myget[0]);
-                glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &myget);
+                glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, myget);
                 dbg(9, "GL_MAX_VERTEX_UNIFORM_VECTORS =%d\n", myget[0]);
-                glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &myget);
+                glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, myget);
                 dbg(9, "GL_MAX_FRAGMENT_UNIFORM_VECTORS =%d\n", myget[0]);
-                glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &myget);
+                glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, myget);
                 dbg(9, "GL_MAX_VERTEX_ATTRIBS =%d\n", myget[0]);
-                glGetIntegerv(GL_MAX_VIEWPORT_DIMS, &myget);
+                glGetIntegerv(GL_MAX_VIEWPORT_DIMS, myget);
                 dbg(9, "GL_MAX_VIEWPORT_DIMS =%dx%d\n", myget[0], myget[1]);
-                glGetIntegerv(GL_VIEWPORT, &myget);
+                glGetIntegerv(GL_VIEWPORT, myget);
                 dbg(9, "GL_VIEWPORT =(%d,%d %d,%d)\n", myget[0], myget[1], myget[2], myget[3]);
                 //
                 // -------- Display some debug info about the used openGL ES videocore --------
