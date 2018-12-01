@@ -2191,7 +2191,7 @@ int is_friend_online(Tox *tox, uint32_t num)
 
 static int find_friend_in_friendlist(uint32_t friendnum)
 {
-    int i;
+    size_t i;
 
     for (i = 0; i <= Friends.max_idx; ++i)
     {
@@ -2495,7 +2495,7 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         kill_all_file_transfers_friend(m, num);
 
         // friend went offline -> hang up on all calls
-        if (friend_to_send_video_to == num)
+        if ((int64_t)friend_to_send_video_to == (int64_t)num)
         {
             av_local_disconnect(mytox_av, num);
         }
@@ -3274,7 +3274,7 @@ void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
     {
         len = strlen(id);
 
-        if (len < (TOX_ADDRESS_SIZE * 2))
+        if ((size_t)len < (size_t)(TOX_ADDRESS_SIZE * 2))
         {
             continue;
         }
@@ -5167,7 +5167,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 
     if (global_video_active == 1)
     {
-        if (friend_to_send_video_to != friend_number)
+        if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
         {
             TOXAV_ERR_CALL_CONTROL error = 0;
             toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
@@ -5267,7 +5267,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         return;
     }
 
-    if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
+    if (((int64_t)friend_to_send_video_to != (int64_t)friend_number) && (global_video_active == 1))
     {
         if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
         {
@@ -5668,7 +5668,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     if (global_video_active == 1)
     {
-        if (friend_to_send_video_to == friend_number)
+        if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
             //dbg(0, "AUDIO:333:channels=%d, rate=%d, sample_count=%d\n",
             //    (int)channels,
@@ -6539,7 +6539,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     if (global_video_active == 1)
     {
-        if (friend_to_send_video_to == friend_number)
+        if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
 #ifdef HAVE_FRAMEBUFFER
 
