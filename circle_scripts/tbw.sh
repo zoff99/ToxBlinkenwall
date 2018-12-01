@@ -60,7 +60,7 @@ cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
 cat toxblinkenwall.c|grep '^#define HAVE_FRAMEBUFFER'
 
 # make certain warnings into errors!
-WARNS=' '
+WARNS=' -Werror=div-by-zero -Werror=sign-compare -Werror=format=2 '
 
 gcc \
 $CF2 $CF3 \
