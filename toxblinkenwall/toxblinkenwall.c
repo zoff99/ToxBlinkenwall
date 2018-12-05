@@ -201,6 +201,8 @@ static const char global_version_string[] = "0.99.31";
 
 #define V4LCONVERT 1
 
+#define USE_V4L2_H264 1
+
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
 #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
@@ -447,7 +449,11 @@ struct alsa_audio_play_data_block
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
+#ifndef USE_V4L2_H264
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
+#else
+#define VIDEO_BUFFER_COUNT 1 // also works with 3, but maybe that's not needed for hw encoding?
+#endif
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
 #define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY; // kbit/sec
@@ -4704,6 +4710,13 @@ int init_cam(int sleep_flag)
     dest_format.fmt.pix.width = format.fmt.pix.width;
     dest_format.fmt.pix.height = format.fmt.pix.height;
 
+#ifdef USE_V4L2_H264
+    format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+    dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+    format.fmt.pix.field = V4L2_FIELD_NONE;
+    dest_format.fmt.pix.field = V4L2_FIELD_NONE;
+#endif
+
     if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
     {
         dbg(2, "Video format(wanted): V4L2_PIX_FMT_YUV420\n");
@@ -4712,12 +4725,21 @@ int init_cam(int sleep_flag)
     {
         dbg(2, "Video format(wanted): V4L2_PIX_FMT_MJPEG\n");
     }
+    else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_H264)
+    {
+        dbg(2, "Video format(wanted): V4L2_PIX_FMT_H264\n");
+    }
     else
     {
         dbg(2, "Video format(wanted): %u\n", format.fmt.pix.pixelformat);
     }
 
-    // Get <-> Set ??
+    // Get <-> Set ?? -> S_FMT must be called before, otherwise G_FMT just tells the default
+    if (-1 == xioctl(fd, VIDIOC_S_FMT, &format))
+    {
+        dbg(0, "VIDIOC_S_FMT\n");
+    }
+
     if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
     {
         dbg(0, "VIDIOC_G_FMT\n");
@@ -4730,6 +4752,10 @@ int init_cam(int sleep_flag)
     else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG)
     {
         dbg(2, "Video format(got): V4L2_PIX_FMT_MJPEG\n");
+    }
+    else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_H264)
+    {
+        dbg(2, "Video format(got): V4L2_PIX_FMT_H264\n");
     }
     else
     {
@@ -4750,11 +4776,6 @@ int init_cam(int sleep_flag)
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
     dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
-
-    if (-1 == xioctl(fd, VIDIOC_S_FMT, &format))
-    {
-        dbg(0, "VIDIOC_S_FMT\n");
-    }
 
     if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
     {
