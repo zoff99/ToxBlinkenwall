@@ -5052,6 +5052,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     }*/
     // dbg(9, "buf.index=%d\n", (int)buf.index);
     void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
+    dbg(9, "V4L: buffer size %d\n", buf.bytesused); // relevant for H264 format
     /* assumes planes are continuous memory */
 #ifdef V4LCONVERT
     // dbg(9, "V4LCONVERT\n");
