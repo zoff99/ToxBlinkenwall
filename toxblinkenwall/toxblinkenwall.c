@@ -5065,7 +5065,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     // dbg(9, "V4L: buffer size %d\n", buf.bytesused);
     *buf_len = buf.bytesused;
 #ifdef USE_V4L2_H264
-    y = data;
+    memcpy(y, data, (size_t)buf_len);
 #endif
 #ifndef USE_V4L2_H264
     /* assumes planes are continuous memory */
