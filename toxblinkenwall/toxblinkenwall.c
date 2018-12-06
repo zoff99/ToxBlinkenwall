@@ -6976,10 +6976,13 @@ void *thread_av(void *data)
             {
                 if (global_send_first_frame > 0)
                 {
+#ifndef USE_V4L2_H264
                     black_yuf_frame_xy();
+#endif
                     global_send_first_frame--;
                 }
 
+#ifndef USE_V4L2_H264
                 // "0" -> [48]
                 // "9" -> [57]
                 // ":" -> [58]
@@ -6991,8 +6994,11 @@ void *thread_av(void *data)
                     free(date_time_str);
                 }
 
+#endif
+#ifndef USE_V4L2_H264
 #ifdef BLINKING_DOT_ON_OUTGOING_VIDEOFRAME
                 blinking_dot_on_frame_xy(10, 30, &global_blink_state);
+#endif
 #endif
 
                 if (friend_to_send_video_to != -1)
@@ -7041,6 +7047,8 @@ void *thread_av(void *data)
                         //        update_out_fps_counter, global_timespan_video_out);
                     }
 
+#ifndef USE_V4L2_H264
+
                     if (global_show_fps_on_video == 1)
                     {
                         // dbg(9, "global_video_out_fps()=%d %d %d\n", global_video_out_fps,
@@ -7057,6 +7065,8 @@ void *thread_av(void *data)
                             text_on_yuf_frame_xy(50, 30, "fps: --");
                         }
                     }
+
+#endif
 
                     if (update_out_fps_counter > update_fps_every)
                     {
