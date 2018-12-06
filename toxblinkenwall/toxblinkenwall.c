@@ -201,8 +201,16 @@ static const char global_version_string[] = "0.99.31";
 
 #define V4LCONVERT 1
 
-#define USE_V4L2_H264 1
+// --------- video recording: choose only 1 of those! ---------
+#define USE_V4L2_H264 1         // use HW encoding with H264 directly
+// #define USE_TC_ENCODING 1    // [* DEFAULT]
 
+#ifdef USE_V4L2_H264
+#undef V4LCONVERT
+#endif
+
+// --------- video recording: choose only 1 of those! ---------
+//
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
 #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
@@ -449,11 +457,13 @@ struct alsa_audio_play_data_block
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
+
 #ifndef USE_V4L2_H264
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 #else
 #define VIDEO_BUFFER_COUNT 1 // also works with 3, but maybe that's not needed for hw encoding?
 #endif
+
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
 #define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
 uint32_t DEFAULT_GLOBAL_VID_BITRATE = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY; // kbit/sec
@@ -629,6 +639,7 @@ typedef struct TOXCAM_AV_VIDEO_FRAME
     uint16_t w, h;
     uint8_t *y, *u, *v;
 //    uint8_t bit_depth;
+    uint32_t buf_len;
 } toxcam_av_video_frame;
 
 
@@ -4709,7 +4720,6 @@ int init_cam(int sleep_flag)
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
     dest_format.fmt.pix.width = format.fmt.pix.width;
     dest_format.fmt.pix.height = format.fmt.pix.height;
-
 #ifdef USE_V4L2_H264
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
@@ -4897,9 +4907,9 @@ int init_cam(int sleep_flag)
     return fd;
 }
 
-int v4l_set_bitrate(uint32_t bitrate) {
+int v4l_set_bitrate(uint32_t bitrate)
+{
     struct v4l2_control ctrl;
-
     ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
     ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
 
@@ -5007,7 +5017,7 @@ void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *
 }
 
 
-int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t height)
+int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t height, uint32_t *buf_len)
 {
     if (width != video_width || height != video_height)
     {
@@ -5052,7 +5062,12 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     }*/
     // dbg(9, "buf.index=%d\n", (int)buf.index);
     void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
-    dbg(9, "V4L: buffer size %d\n", buf.bytesused); // relevant for H264 format
+    // dbg(9, "V4L: buffer size %d\n", buf.bytesused);
+    *buf_len = buf.bytesused;
+#ifdef USE_V4L2_H264
+    y = data;
+#endif
+#ifndef USE_V4L2_H264
     /* assumes planes are continuous memory */
 #ifdef V4LCONVERT
     // dbg(9, "V4LCONVERT\n");
@@ -5077,16 +5092,21 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     }
 
 #endif
+#endif
 
     if (-1 == xioctl(global_cam_device_fd, VIDIOC_QBUF, &buf))
     {
         dbg(9, "VIDIOC_QBUF (1) error %d, %s\n", errno, strerror(errno));
     }
 
+#ifdef USE_V4L2_H264
+    return 1;
+#else
 #ifdef V4LCONVERT
     return (result == -1 ? 0 : 1);
 #else
     return 1;
+#endif
 #endif
 }
 
@@ -6666,6 +6686,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
 void set_av_video_frame()
 {
+#ifdef USE_V4L2_H264
+    av_video_frame.y = calloc(1, input.d_w * input.d_h * 32); // TODO: calc the correct size? or max size at least?
+#else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
     av_video_frame.u = input.planes[1]; /**< U (Chroma) plane */
@@ -6673,6 +6696,7 @@ void set_av_video_frame()
     av_video_frame.w = input.d_w;
     av_video_frame.h = input.d_h;
     //av_video_frame.bit_depth = input.bit_depth;
+#endif
     dbg(2, "ToxVideo:av_video_frame set\n");
 }
 
@@ -6710,8 +6734,13 @@ void *video_record(void *dummy)
 
     if (friend_to_send_video_to > -1)
     {
+#ifdef USE_V4L2_H264
+        toxav_video_send_frame_h264(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
+                                    av_video_frame_copy->y, av_video_frame_copy->buf_len, &error);
+#else
         toxav_video_send_frame(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
                                av_video_frame_copy->y, av_video_frame_copy->u, av_video_frame_copy->v, &error);
+#endif
     }
 
     free(av_video_frame_copy->y);
@@ -6941,7 +6970,7 @@ void *thread_av(void *data)
             //  dbg(9, "AV Thread #%d:get frame\n", (int) id);
             // capturing is enabled, capture frames
             int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
-                                 av_video_frame.w, av_video_frame.h);
+                                 av_video_frame.w, av_video_frame.h, &(av_video_frame.buf_len));
 
             if (r == 1)
             {
@@ -7041,8 +7070,13 @@ void *thread_av(void *data)
 
                     if (friend_to_send_video_to > -1)
                     {
+#ifdef USE_V4L2_H264
+                        toxav_video_send_frame_h264(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
+                                                    av_video_frame.y, av_video_frame.buf_len, &error);
+#else
                         toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
                                                av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
+#endif
                     }
 
                     if (error)
@@ -7080,12 +7114,17 @@ void *thread_av(void *data)
                     if (get_video_trec_counter() <= MAX_VIDEO_RECORD_THREADS)
                     {
                         toxcam_av_video_frame av_video_frame_copy;
+#ifdef USE_V4L2_H264
+                        size_t video_frame_size_bytes = av_video_frame.buf_len;
+#else
                         size_t video_frame_size_bytes = (size_t)((av_video_frame.w * av_video_frame.h) * (3 / 2)); // TODO: stride!!!
+#endif
                         av_video_frame_copy.y = (uint8_t *)calloc(1, video_frame_size_bytes);
                         av_video_frame_copy.u = (uint8_t *)(av_video_frame_copy.y + (av_video_frame.w * av_video_frame.h));
                         av_video_frame_copy.v = (uint8_t *)(av_video_frame_copy.u + ((av_video_frame.w * av_video_frame.h) / 4));
                         av_video_frame_copy.w = av_video_frame.w;
                         av_video_frame_copy.h = av_video_frame.h;
+                        av_video_frame_copy.buf_len = av_video_frame.buf_len;
                         memcpy(av_video_frame_copy.y, av_video_frame.y, video_frame_size_bytes);
                         inc_video_trec_counter();
 
