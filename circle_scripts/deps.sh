@@ -170,7 +170,7 @@ fi
 cd $_SRC_
 git clone https://github.com/Zoxcore/c-toxcore
 cd c-toxcore
-git checkout "release"
+git checkout "master"
 
 sed -i -e 'sm#define DISABLE_H264_ENCODER_FEATURE.*m#define DISABLE_H264_ENCODER_FEATURE 1m' toxav/rtp.c
 cat toxav/rtp.c |grep 'define DISABLE_H264_ENCODER_FEATURE'
