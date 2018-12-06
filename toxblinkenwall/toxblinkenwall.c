@@ -5021,15 +5021,21 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
 {
     if (width != video_width || height != video_height)
     {
-        dbg(9, "V4L:\twidth/height mismatch %u %u != %u %u\n", width, height, video_width, video_height);
+        // dbg(9, "V4L:\twidth/height mismatch %u %u != %u %u\n", width, height, video_width, video_height);
         return 0;
     }
 
-    struct v4l2_buffer buf;
+#ifdef USE_V4L2_H264
 
+    if (!y)
+    {
+        return 0;
+    }
+
+#endif
+    struct v4l2_buffer buf;
     // ** // CLEAR(buf);
     buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
     buf.memory = V4L2_MEMORY_MMAP; // V4L2_MEMORY_USERPTR;
 
     if (-1 == ioctl(global_cam_device_fd, VIDIOC_DQBUF, &buf))
