@@ -6687,7 +6687,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 void set_av_video_frame()
 {
 #ifdef USE_V4L2_H264
-    av_video_frame.y = calloc(1, input.d_w * input.d_h * 32); // TODO: calc the correct size? or max size at least?
+    av_video_frame.y = calloc(1, video_width * video_height * 32); // TODO: calc the correct size? or max size at least?
+    av_video_frame.w = video_width;
+    av_video_frame.h = video_height;
 #else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
