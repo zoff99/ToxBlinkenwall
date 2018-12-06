@@ -4897,6 +4897,29 @@ int init_cam(int sleep_flag)
     return fd;
 }
 
+int v4l_set_bitrate(uint32_t bitrate) {
+    struct v4l2_control ctrl;
+
+    ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
+    ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
+
+    if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+    {
+        dbg(1, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
+        return 0;
+    }
+
+    ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+    ctrl.value = bitrate;
+
+    if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+    {
+        dbg(1, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
+        return 0;
+    }
+
+    return 1;
+}
 
 int v4l_startread()
 {
