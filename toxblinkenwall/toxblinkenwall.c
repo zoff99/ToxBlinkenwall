@@ -188,6 +188,7 @@ static const char global_version_string[] = "0.99.31";
 #include <linux/sched.h>
 
 #include <sodium/utils.h>
+#include <sodium/crypto_generichash.h>
 
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
@@ -4922,7 +4923,7 @@ int v4l_set_bitrate(uint32_t bitrate)
         dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error %d, %s\n", errno, strerror(errno));
 
         ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-        ctrl.value = bitrate;
+        ctrl.value = bitrate * 1000;
 
         if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
         {
@@ -4947,7 +4948,7 @@ int v4l_set_bitrate(uint32_t bitrate)
     memset(&ecs, 0, sizeof(ecs));
     memset(&ec, 0, sizeof(ec));
     ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-    ec.value = bitrate;
+    ec.value = bitrate * 1000;
     ec.size = 0;
     ecs.controls = &ec;
     ecs.count = 1;
@@ -5016,7 +5017,7 @@ int v4l_set_bitrate(uint32_t bitrate)
     memset(&ecs, 0, sizeof(ecs));
     memset(&ec, 0, sizeof(ec));
     ec.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
-    ec.value = 1;
+    ec.value = 60;
     ec.size = 0;
     ecs.controls = &ec;
     ecs.count = 1;
@@ -5172,17 +5173,11 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         return 0;
     }
 
-#ifdef USE_V4L2_H264
-
-    if (!y)
-    {
-        return 0;
-    }
-
-#endif
     struct v4l2_buffer buf;
+
     // ** // CLEAR(buf);
     buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
     buf.memory = V4L2_MEMORY_MMAP; // V4L2_MEMORY_USERPTR;
 
     if (-1 == ioctl(global_cam_device_fd, VIDIOC_DQBUF, &buf))
@@ -5219,6 +5214,22 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     *buf_len = buf.bytesused;
 #ifdef USE_V4L2_H264
     memcpy(y, data, (size_t)(*buf_len));
+    uint8_t *hash1 = calloc(1, 100);
+    uint8_t *hash2 = calloc(1, 100);
+    crypto_generichash(hash1, 32,
+                       data, (unsigned long long)(*buf_len),
+                       NULL, 0);
+    crypto_generichash(hash2, 32,
+                       y, (unsigned long long)(*buf_len),
+                       NULL, 0);
+    char aaastr[101];
+    CLEAR(aaastr);
+    bin_to_hex_string(hash1, (size_t) 32, aaastr);
+    dbg(9, "h642_data_hash1=%s\n", aaastr);
+    bin_to_hex_string(hash2, (size_t) 32, aaastr);
+    dbg(9, "h642_data_hash2=%s\n", aaastr);
+    free(hash1);
+    free(hash2);
 #endif
 #ifndef USE_V4L2_H264
     /* assumes planes are continuous memory */
@@ -6840,9 +6851,11 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 void set_av_video_frame()
 {
 #ifdef USE_V4L2_H264
-    av_video_frame.y = calloc(1, video_width * video_height * 32); // TODO: calc the correct size? or max size at least?
+    av_video_frame.y = calloc(1, video_width * video_height * 4); // TODO: calc the correct size? or max size at least?
+    dbg(2, "h264 buf size=%d ptr=%p\n", (int)(video_width * video_height * 2), av_video_frame.y);
     av_video_frame.w = video_width;
     av_video_frame.h = video_height;
+    dbg(2, "h264 w=%d h=%d\n", (int)video_width, (int)video_height);
 #else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
@@ -6944,7 +6957,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
-    v4l_set_bitrate(1500);
+    v4l_set_bitrate(1200);
 }
 
 void fully_stop_cam()
@@ -7228,7 +7241,9 @@ void *thread_av(void *data)
                     {
                         update_out_fps_counter = 0;
                         global_timespan_video_out = 0;
+#ifndef USE_V4L2_H264
                         update_status_line_1_text();
+#endif
                     }
 
 #if 1
@@ -7237,6 +7252,16 @@ void *thread_av(void *data)
                     if (friend_to_send_video_to > -1)
                     {
 #ifdef USE_V4L2_H264
+
+                        if (av_video_frame.buf_len > 50)
+                        {
+                            dbg(9, "toxav_video_send_frame_h264:size=%d data[50]=%d data[51]=%d\n",
+                                (int)av_video_frame.buf_len,
+                                (int) * (av_video_frame.y + 50),
+                                (int) * (av_video_frame.y + 51)
+                               );
+                        }
+
                         toxav_video_send_frame_h264(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
                                                     av_video_frame.y, av_video_frame.buf_len, &error);
 #else
