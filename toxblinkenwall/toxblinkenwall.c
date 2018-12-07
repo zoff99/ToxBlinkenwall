@@ -458,10 +458,10 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 
-#ifndef USE_V4L2_H264
-#define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
+#ifdef USE_V4L2_H264
+#define VIDEO_BUFFER_COUNT 3 // also works with 3, but maybe that's not needed for hw encoding?
 #else
-#define VIDEO_BUFFER_COUNT 1 // also works with 3, but maybe that's not needed for hw encoding?
+#define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 #endif
 
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
@@ -4910,24 +4910,171 @@ int init_cam(int sleep_flag)
 int v4l_set_bitrate(uint32_t bitrate)
 {
     struct v4l2_control ctrl;
-    ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
-    ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
+    /*
+        ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
+        ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
 
-    if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error %d, %s\n", errno, strerror(errno));
+
+        ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+        ctrl.value = bitrate;
+
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
+    */
+    /*
+        ctrl.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
+        ctrl.value = 1;
+
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error %d, %s\n", errno, strerror(errno));
+    */
+    struct v4l2_ext_controls ecs;
+    struct v4l2_ext_control ec;
+    memset(&ecs, 0, sizeof(ecs));
+    memset(&ec, 0, sizeof(ec));
+    ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+    ec.value = bitrate;
+    ec.size = 0;
+    ecs.controls = &ec;
+    ecs.count = 1;
+    ecs.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+
+    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
     {
-        dbg(1, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
-        return 0;
+        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
     }
 
-    ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-    ctrl.value = bitrate;
+    memset(&ecs, 0, sizeof(ecs));
+    memset(&ec, 0, sizeof(ec));
+    ec.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
+    ec.value = 1;
+    ec.size = 0;
+    ecs.controls = &ec;
+    ecs.count = 1;
+    ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
 
-    if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
     {
-        dbg(1, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
-        return 0;
+        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error\n");
     }
 
+    /*
+       memset(&ecs, 0, sizeof(ecs));
+       memset(&ec, 0, sizeof(ec));
+       ec.id = V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL;
+       ec.value = V4L2_MPEG_VIDEO_MPEG4_LEVEL_0;
+       ec.size = 0;
+       ecs.controls = &ec;
+       ecs.count = 1;
+       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+       {
+          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL error\n");
+       }
+
+       memset(&ecs, 0, sizeof(ecs));
+       memset(&ec, 0, sizeof(ec));
+       ec.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
+       ec.value = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
+       ec.size = 0;
+       ecs.controls = &ec;
+       ecs.count = 1;
+       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+       {
+          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_PROFILE error\n");
+       }
+    */
+    memset(&ecs, 0, sizeof(ecs));
+    memset(&ec, 0, sizeof(ec));
+    ec.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
+    ec.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
+    ec.size = 0;
+    ecs.controls = &ec;
+    ecs.count = 1;
+    ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+
+    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+    {
+        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error\n");
+    }
+
+    memset(&ecs, 0, sizeof(ecs));
+    memset(&ec, 0, sizeof(ec));
+    ec.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
+    ec.value = 1;
+    ec.size = 0;
+    ecs.controls = &ec;
+    ecs.count = 1;
+    ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+
+    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+    {
+        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error\n");
+    }
+
+    /*
+       memset(&ecs, 0, sizeof(ecs));
+       memset(&ec, 0, sizeof(ec));
+       ec.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
+       ec.value = V4L2_MPEG_VIDEO_HEADER_MODE_JOINED_WITH_1ST_FRAME;
+       ec.size = 0;
+       ecs.controls = &ec;
+       ecs.count = 1;
+       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+       {
+          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error\n");
+       }
+    */
+    /*
+
+        ctrl.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
+        ctrl.value = V4L2_MPEG_VIDEO_HEADER_MODE_JOINED_WITH_1ST_FRAME;
+
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error %d, %s\n", errno, strerror(errno));
+
+        ctrl.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
+        ctrl.value = 5;
+
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error %d, %s\n", errno, strerror(errno));
+
+
+        ctrl.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE;
+        ctrl.value = 2;
+
+        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_GOP_SIZE error %d, %s\n", errno, strerror(errno));
+            //return 0;
+        }
+        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_GOP_SIZE error %d, %s\n", errno, strerror(errno));
+
+    */
     return 1;
 }
 
@@ -6797,6 +6944,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
+    v4l_set_bitrate(1500);
 }
 
 void fully_stop_cam()
