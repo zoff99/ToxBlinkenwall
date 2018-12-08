@@ -4784,6 +4784,10 @@ int init_cam(int sleep_flag)
         format.fmt.pix.height = 480;
     }
 
+#ifdef USE_V4L2_H264
+    format.fmt.pix.width = 1280;
+    format.fmt.pix.height = 720;
+#endif
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
     dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
@@ -5214,22 +5218,24 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     *buf_len = buf.bytesused;
 #ifdef USE_V4L2_H264
     memcpy(y, data, (size_t)(*buf_len));
-    uint8_t *hash1 = calloc(1, 100);
-    uint8_t *hash2 = calloc(1, 100);
-    crypto_generichash(hash1, 32,
-                       data, (unsigned long long)(*buf_len),
-                       NULL, 0);
-    crypto_generichash(hash2, 32,
-                       y, (unsigned long long)(*buf_len),
-                       NULL, 0);
-    char aaastr[101];
-    CLEAR(aaastr);
-    bin_to_hex_string(hash1, (size_t) 32, aaastr);
-    dbg(9, "h642_data_hash1=%s\n", aaastr);
-    bin_to_hex_string(hash2, (size_t) 32, aaastr);
-    dbg(9, "h642_data_hash2=%s\n", aaastr);
-    free(hash1);
-    free(hash2);
+    /*
+        uint8_t *hash1 = calloc(1, 100);
+        uint8_t *hash2 = calloc(1, 100);
+        crypto_generichash(hash1, 32,
+                           data, (unsigned long long)(*buf_len),
+                           NULL, 0);
+        crypto_generichash(hash2, 32,
+                           y, (unsigned long long)(*buf_len),
+                           NULL, 0);
+        char aaastr[101];
+        CLEAR(aaastr);
+        bin_to_hex_string(hash1, (size_t) 32, aaastr);
+        dbg(9, "h642_data_hash1=%s\n", aaastr);
+        bin_to_hex_string(hash2, (size_t) 32, aaastr);
+        dbg(9, "h642_data_hash2=%s\n", aaastr);
+        free(hash1);
+        free(hash2);
+    */
 #endif
 #ifndef USE_V4L2_H264
     /* assumes planes are continuous memory */
