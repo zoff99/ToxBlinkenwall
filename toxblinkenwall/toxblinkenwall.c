@@ -7018,7 +7018,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
-    v4l_set_bitrate(1000);
+    v4l_set_bitrate(4000);
 }
 
 void fully_stop_cam()
