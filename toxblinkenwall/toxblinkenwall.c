@@ -208,8 +208,27 @@ static const char global_version_string[] = "0.99.31";
 
 #ifdef USE_V4L2_H264
 #undef V4LCONVERT
-    FILE *streamout_file;
+FILE *streamout_file;
+
+/*
+#include "interface/mmal/mmal.h"
+#include "interface/mmal/mmal_logging.h"
+#include "interface/mmal/mmal_buffer.h"
+#include "interface/mmal/util/mmal_util.h"
+#include "interface/mmal/util/mmal_util_params.h"
+#include "interface/mmal/util/mmal_default_components.h"
+#include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_parameters_camera.h"
+#include "interface/mmal/mmal_parameters_video.h"
+*/
+
 #endif
+
+uint32_t h264_bufcounter = 0;
+uint32_t h264_bufcounter_first = 1;
+uint8_t *h264_frame_buf_save = NULL;
+uint32_t h264_frame_buf_save_len = 0;
+uint32_t av_video_frame_buf_size = 0;
 
 // --------- video recording: choose only 1 of those! ---------
 //
@@ -4725,6 +4744,8 @@ int init_cam(int sleep_flag)
 #ifdef USE_V4L2_H264
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+    format.fmt.pix.width = 1920;
+    format.fmt.pix.height = 1080;
     format.fmt.pix.field = V4L2_FIELD_NONE;
     dest_format.fmt.pix.field = V4L2_FIELD_NONE;
 #endif
@@ -4786,8 +4807,8 @@ int init_cam(int sleep_flag)
     }
 
 #ifdef USE_V4L2_H264
-    format.fmt.pix.width = 1280;
-    format.fmt.pix.height = 720;
+    format.fmt.pix.width = 1920;
+    format.fmt.pix.height = 1080;
 #endif
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
@@ -5081,6 +5102,15 @@ int v4l_set_bitrate(uint32_t bitrate)
         dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_GOP_SIZE error %d, %s\n", errno, strerror(errno));
 
     */
+    /*
+        MMAL_PORT_T *encoder_input = NULL, *encoder_output = NULL;
+        //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
+        if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, 1) != MMAL_SUCCESS)
+        {
+         dbg(1, "failed to set INLINE HEADER FLAG parameters\n");
+         // Continue rather than abort..
+        }
+    */
     return 1;
 }
 
@@ -5218,10 +5248,29 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     // dbg(9, "V4L: buffer size %d\n", buf.bytesused);
     *buf_len = buf.bytesused;
 #ifdef USE_V4L2_H264
-
-    fwrite(data, buf.bytesused, 1, streamout_file);
-
+    // fwrite(data, buf.bytesused, 1, streamout_file);
+    // memset(y, 0, av_video_frame_buf_size);
     memcpy(y, data, (size_t)(*buf_len));
+
+    if (h264_bufcounter == 0)
+    {
+        if (h264_frame_buf_save == NULL)
+        {
+            h264_bufcounter_first = 0;
+            h264_frame_buf_save = calloc(1, 1920 * 1080 * 8);
+        }
+
+        memcpy(h264_frame_buf_save, data, (size_t)(*buf_len));
+        h264_frame_buf_save_len = *buf_len;
+        dbg(9, "H264__:SAVE\n");
+    }
+    else if (h264_bufcounter == 100)
+    {
+        memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
+        dbg(9, "H264__:*RESTORE*\n");
+    }
+
+    h264_bufcounter++;
     /*
         uint8_t *hash1 = calloc(1, 100);
         uint8_t *hash2 = calloc(1, 100);
@@ -6861,14 +6910,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 void set_av_video_frame()
 {
 #ifdef USE_V4L2_H264
-    av_video_frame.y = calloc(1, video_width * video_height * 4); // TODO: calc the correct size? or max size at least?
+    av_video_frame_buf_size = video_width * video_height * 4;
+    av_video_frame.y = calloc(1, av_video_frame_buf_size); // TODO: calc the correct size? or max size at least?
     dbg(2, "h264 buf size=%d ptr=%p\n", (int)(video_width * video_height * 2), av_video_frame.y);
     av_video_frame.w = video_width;
     av_video_frame.h = video_height;
     dbg(2, "h264 w=%d h=%d\n", (int)video_width, (int)video_height);
-    
     streamout_file = fopen("h264out.mp4", "w");
-
 #else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
@@ -6970,7 +7018,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
-    v4l_set_bitrate(1200);
+    v4l_set_bitrate(1000);
 }
 
 void fully_stop_cam()
@@ -7140,6 +7188,7 @@ void *thread_av(void *data)
     accepting_calls = 1;
     dbg(2, "--- accepting calls NOW ---\n");
     global_timespan_video_out = 0;
+    h264_bufcounter = 0;
 
     while (toxav_iterate_thread_stop != 1)
     {
@@ -7265,16 +7314,16 @@ void *thread_av(void *data)
                     if (friend_to_send_video_to > -1)
                     {
 #ifdef USE_V4L2_H264
-
-                        if (av_video_frame.buf_len > 50)
-                        {
-                            dbg(9, "toxav_video_send_frame_h264:size=%d data[50]=%d data[51]=%d\n",
-                                (int)av_video_frame.buf_len,
-                                (int) * (av_video_frame.y + 50),
-                                (int) * (av_video_frame.y + 51)
-                               );
-                        }
-
+                        /*
+                                                if (av_video_frame.buf_len > 50)
+                                                {
+                                                    dbg(9, "toxav_video_send_frame_h264:size=%d data[50]=%d data[51]=%d\n",
+                                                        (int)av_video_frame.buf_len,
+                                                        (int) * (av_video_frame.y + 50),
+                                                        (int) * (av_video_frame.y + 51)
+                                                       );
+                                                }
+                        */
                         toxav_video_send_frame_h264(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
                                                     av_video_frame.y, av_video_frame.buf_len, &error);
 #else
@@ -7385,6 +7434,15 @@ void *thread_av(void *data)
         else
         {
             yieldcpu(100);
+
+            if (h264_bufcounter_first == 1)
+            {
+                h264_bufcounter = 0;
+            }
+            else
+            {
+                h264_bufcounter = 1;
+            }
         }
     }
 
