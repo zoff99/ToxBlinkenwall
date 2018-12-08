@@ -208,6 +208,7 @@ static const char global_version_string[] = "0.99.31";
 
 #ifdef USE_V4L2_H264
 #undef V4LCONVERT
+    FILE *streamout_file;
 #endif
 
 // --------- video recording: choose only 1 of those! ---------
@@ -5217,6 +5218,9 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     // dbg(9, "V4L: buffer size %d\n", buf.bytesused);
     *buf_len = buf.bytesused;
 #ifdef USE_V4L2_H264
+
+    fwrite(data, buf.bytesused, 1, streamout_file);
+
     memcpy(y, data, (size_t)(*buf_len));
     /*
         uint8_t *hash1 = calloc(1, 100);
@@ -6862,6 +6866,9 @@ void set_av_video_frame()
     av_video_frame.w = video_width;
     av_video_frame.h = video_height;
     dbg(2, "h264 w=%d h=%d\n", (int)video_width, (int)video_height);
+    
+    streamout_file = fopen("h264out.mp4", "w");
+
 #else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
