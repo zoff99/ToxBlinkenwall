@@ -949,6 +949,7 @@ int global_video_in_h = 0;
 int global_update_opengl_status_text = 0;
 uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
+uint32_t global_encoder_video_bitrate_prev = 0;
 uint32_t global_network_round_trip_ms = 0;
 int32_t global_play_delay_ms = 0;
 int32_t global_remote_record_delay = 0;
@@ -4744,8 +4745,8 @@ int init_cam(int sleep_flag)
 #ifdef USE_V4L2_H264
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-    format.fmt.pix.width = 1920;
-    format.fmt.pix.height = 1080;
+    format.fmt.pix.width = 1280;
+    format.fmt.pix.height = 720;
     format.fmt.pix.field = V4L2_FIELD_NONE;
     dest_format.fmt.pix.field = V4L2_FIELD_NONE;
 #endif
@@ -4807,8 +4808,8 @@ int init_cam(int sleep_flag)
     }
 
 #ifdef USE_V4L2_H264
-    format.fmt.pix.width = 1920;
-    format.fmt.pix.height = 1080;
+    format.fmt.pix.width = 1280;
+    format.fmt.pix.height = 720;
 #endif
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
@@ -5208,6 +5209,33 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         return 0;
     }
 
+    if (global_encoder_video_bitrate_prev != global_encoder_video_bitrate)
+    {
+        global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
+#ifndef USE_V4L2_H264
+        struct v4l2_ext_controls ecs;
+        struct v4l2_ext_control ec;
+        memset(&ecs, 0, sizeof(ecs));
+        memset(&ec, 0, sizeof(ec));
+        ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+        ec.value = global_encoder_video_bitrate * 1000;
+        ec.size = 0;
+        ecs.controls = &ec;
+        ecs.count = 1;
+        ecs.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+
+        if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
+        }
+        else
+        {
+            // dbg(9, "set encoder bitrate to %d\n", global_encoder_video_bitrate);
+        }
+
+#endif
+    }
+
     struct v4l2_buffer buf;
 
     // ** // CLEAR(buf);
@@ -5257,14 +5285,14 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         if (h264_frame_buf_save == NULL)
         {
             h264_bufcounter_first = 0;
-            h264_frame_buf_save = calloc(1, 1920 * 1080 * 8);
+            h264_frame_buf_save = calloc(1, (size_t)(*buf_len));
         }
 
         memcpy(h264_frame_buf_save, data, (size_t)(*buf_len));
         h264_frame_buf_save_len = *buf_len;
         dbg(9, "H264__:SAVE\n");
     }
-    else if (h264_bufcounter == 100)
+    else if (h264_bufcounter == 200)
     {
         memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
         dbg(9, "H264__:*RESTORE*\n");
@@ -5533,6 +5561,7 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
+        global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
         global_encoder_video_bitrate = (uint32_t)comm_number;
     }
     else if (comm_value == TOXAV_CALL_COMM_INCOMING_FPS)
@@ -7018,7 +7047,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
-    v4l_set_bitrate(4000);
+    v4l_set_bitrate(100);
 }
 
 void fully_stop_cam()
