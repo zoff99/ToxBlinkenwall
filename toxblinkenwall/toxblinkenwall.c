@@ -209,6 +209,8 @@ static const char global_version_string[] = "0.99.31";
 #ifdef USE_V4L2_H264
 #undef V4LCONVERT
 FILE *streamout_file;
+#define PI_H264_CAM_W 1280 // 1640 // 1280
+#define PI_H264_CAM_H  720 // 922 // 1232 // 720
 
 /*
 #include "interface/mmal/mmal.h"
@@ -4745,8 +4747,8 @@ int init_cam(int sleep_flag)
 #ifdef USE_V4L2_H264
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-    format.fmt.pix.width = 1280;
-    format.fmt.pix.height = 720;
+    format.fmt.pix.width = PI_H264_CAM_W; // 1280;
+    format.fmt.pix.height = PI_H264_CAM_H; // 720;
     format.fmt.pix.field = V4L2_FIELD_NONE;
     dest_format.fmt.pix.field = V4L2_FIELD_NONE;
 #endif
@@ -4808,8 +4810,8 @@ int init_cam(int sleep_flag)
     }
 
 #ifdef USE_V4L2_H264
-    format.fmt.pix.width = 1280;
-    format.fmt.pix.height = 720;
+    format.fmt.pix.width = PI_H264_CAM_W;
+    format.fmt.pix.height = PI_H264_CAM_H;
 #endif
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
@@ -5212,7 +5214,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     if (global_encoder_video_bitrate_prev != global_encoder_video_bitrate)
     {
         global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
-#ifndef USE_V4L2_H264
+#ifdef USE_V4L2_H264
         struct v4l2_ext_controls ecs;
         struct v4l2_ext_control ec;
         memset(&ecs, 0, sizeof(ecs));
