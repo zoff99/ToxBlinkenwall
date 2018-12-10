@@ -5038,20 +5038,21 @@ int v4l_set_bitrate(uint32_t bitrate)
         dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
     }
 
-    memset(&ecs, 0, sizeof(ecs));
-    memset(&ec, 0, sizeof(ec));
-    ec.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
-    ec.value = 1;
-    ec.size = 0;
-    ecs.controls = &ec;
-    ecs.count = 1;
-    ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+    /*
+        memset(&ecs, 0, sizeof(ecs));
+        memset(&ec, 0, sizeof(ec));
+        ec.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
+        ec.value = 1;
+        ec.size = 0;
+        ecs.controls = &ec;
+        ecs.count = 1;
+        ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
 
-    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
-    {
-        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error\n");
-    }
-
+        if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+        {
+            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error\n");
+        }
+    */
     /*
        memset(&ecs, 0, sizeof(ecs));
        memset(&ec, 0, sizeof(ec));
@@ -5167,6 +5168,25 @@ int v4l_set_bitrate(uint32_t bitrate)
     return 1;
 }
 
+void set_repeat_headers_on()
+{
+    struct v4l2_ext_controls ecs;
+    struct v4l2_ext_control ec;
+    memset(&ecs, 0, sizeof(ecs));
+    memset(&ec, 0, sizeof(ec));
+    ec.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
+    ec.value = 1;
+    ec.size = 0;
+    ecs.controls = &ec;
+    ecs.count = 1;
+    ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
+
+    if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+    {
+        dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error\n");
+    }
+}
+
 int v4l_startread()
 {
     dbg(9, "start cam\n");
@@ -5196,6 +5216,7 @@ int v4l_startread()
         //}
     }
 
+    set_repeat_headers_on();
     type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
     if (-1 == xioctl(global_cam_device_fd, VIDIOC_STREAMON, &type))
