@@ -5367,7 +5367,7 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     }
     else if (h264_bufcounter == 200)
     {
-        memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
+        /* disable foring extra SPS sending */ memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
         dbg(9, "H264__:*RESTORE*\n");
     }
 
