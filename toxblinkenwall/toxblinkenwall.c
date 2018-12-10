@@ -205,33 +205,6 @@ static const char global_version_string[] = "0.99.31";
 // --------- video recording: choose only 1 of those! ---------
 #define USE_V4L2_H264 1         // use HW encoding with H264 directly
 // #define USE_TC_ENCODING 1    // [* DEFAULT]
-
-#ifdef USE_V4L2_H264
-#undef V4LCONVERT
-FILE *streamout_file;
-#define PI_H264_CAM_W 1280 // 1640 // 1280
-#define PI_H264_CAM_H  720 // 922 // 1232 // 720
-
-/*
-#include "interface/mmal/mmal.h"
-#include "interface/mmal/mmal_logging.h"
-#include "interface/mmal/mmal_buffer.h"
-#include "interface/mmal/util/mmal_util.h"
-#include "interface/mmal/util/mmal_util_params.h"
-#include "interface/mmal/util/mmal_default_components.h"
-#include "interface/mmal/util/mmal_connection.h"
-#include "interface/mmal/mmal_parameters_camera.h"
-#include "interface/mmal/mmal_parameters_video.h"
-*/
-
-#endif
-
-uint32_t h264_bufcounter = 0;
-uint32_t h264_bufcounter_first = 1;
-uint8_t *h264_frame_buf_save = NULL;
-uint32_t h264_frame_buf_save_len = 0;
-uint32_t av_video_frame_buf_size = 0;
-
 // --------- video recording: choose only 1 of those! ---------
 //
 // --------- video output: choose only 1 of those! ---------
@@ -321,6 +294,23 @@ int global__SEND_VIDEO_RAW_YUV;
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
+
+
+
+
+#ifdef USE_V4L2_H264
+#undef V4LCONVERT
+FILE *streamout_file;
+#define PI_H264_CAM_W 1280 // 1640 // 1280
+#define PI_H264_CAM_H  720 // 922 // 1232 // 720
+#define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
+#endif
+
+uint32_t h264_bufcounter = 0;
+uint32_t h264_bufcounter_first = 1;
+uint8_t *h264_frame_buf_save = NULL;
+uint32_t h264_frame_buf_save_len = 0;
+uint32_t av_video_frame_buf_size = 0;
 
 
 
@@ -4987,47 +4977,14 @@ int init_cam(int sleep_flag)
     return fd;
 }
 
-int v4l_set_bitrate(uint32_t bitrate)
+int v4l_setup_v4l2_camera_device(uint32_t start_bitrate)
 {
-    struct v4l2_control ctrl;
-    /*
-        ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
-        ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE_MODE error %d, %s\n", errno, strerror(errno));
-
-        ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-        ctrl.value = bitrate * 1000;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error %d, %s\n", errno, strerror(errno));
-    */
-    /*
-        ctrl.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
-        ctrl.value = 1;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error %d, %s\n", errno, strerror(errno));
-    */
     struct v4l2_ext_controls ecs;
     struct v4l2_ext_control ec;
     memset(&ecs, 0, sizeof(ecs));
     memset(&ec, 0, sizeof(ec));
     ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-    ec.value = bitrate * 1000;
+    ec.value = start_bitrate * 1000;
     ec.size = 0;
     ecs.controls = &ec;
     ecs.count = 1;
@@ -5038,48 +4995,6 @@ int v4l_set_bitrate(uint32_t bitrate)
         dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
     }
 
-    /*
-        memset(&ecs, 0, sizeof(ecs));
-        memset(&ec, 0, sizeof(ec));
-        ec.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
-        ec.value = 1;
-        ec.size = 0;
-        ecs.controls = &ec;
-        ecs.count = 1;
-        ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
-
-        if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER error\n");
-        }
-    */
-    /*
-       memset(&ecs, 0, sizeof(ecs));
-       memset(&ec, 0, sizeof(ec));
-       ec.id = V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL;
-       ec.value = V4L2_MPEG_VIDEO_MPEG4_LEVEL_0;
-       ec.size = 0;
-       ecs.controls = &ec;
-       ecs.count = 1;
-       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
-       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
-       {
-          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL error\n");
-       }
-
-       memset(&ecs, 0, sizeof(ecs));
-       memset(&ec, 0, sizeof(ec));
-       ec.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
-       ec.value = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
-       ec.size = 0;
-       ecs.controls = &ec;
-       ecs.count = 1;
-       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
-       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
-       {
-          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_PROFILE error\n");
-       }
-    */
     memset(&ecs, 0, sizeof(ecs));
     memset(&ec, 0, sizeof(ec));
     ec.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
@@ -5097,7 +5012,7 @@ int v4l_set_bitrate(uint32_t bitrate)
     memset(&ecs, 0, sizeof(ecs));
     memset(&ec, 0, sizeof(ec));
     ec.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
-    ec.value = 60;
+    ec.value = 125; // try to get an I-Frame about every 5 seconds, at 25fps
     ec.size = 0;
     ecs.controls = &ec;
     ecs.count = 1;
@@ -5108,63 +5023,6 @@ int v4l_set_bitrate(uint32_t bitrate)
         dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error\n");
     }
 
-    /*
-       memset(&ecs, 0, sizeof(ecs));
-       memset(&ec, 0, sizeof(ec));
-       ec.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
-       ec.value = V4L2_MPEG_VIDEO_HEADER_MODE_JOINED_WITH_1ST_FRAME;
-       ec.size = 0;
-       ecs.controls = &ec;
-       ecs.count = 1;
-       ecs.ctrl_class = V4L2_CTRL_ID2CLASS(ec.id);
-       if(ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
-       {
-          dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error\n");
-       }
-    */
-    /*
-
-        ctrl.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
-        ctrl.value = V4L2_MPEG_VIDEO_HEADER_MODE_JOINED_WITH_1ST_FRAME;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_HEADER_MODE error %d, %s\n", errno, strerror(errno));
-
-        ctrl.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
-        ctrl.value = 5;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_H264_I_PERIOD error %d, %s\n", errno, strerror(errno));
-
-
-        ctrl.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE;
-        ctrl.value = 2;
-
-        if (-1 == xioctl(global_cam_device_fd, VIDIOC_S_CTRL, &ctrl))
-        {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_GOP_SIZE error %d, %s\n", errno, strerror(errno));
-            //return 0;
-        }
-        dbg(9, "VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_GOP_SIZE error %d, %s\n", errno, strerror(errno));
-
-    */
-    /*
-        MMAL_PORT_T *encoder_input = NULL, *encoder_output = NULL;
-        //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
-        if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, 1) != MMAL_SUCCESS)
-        {
-         dbg(1, "failed to set INLINE HEADER FLAG parameters\n");
-         // Continue rather than abort..
-        }
-    */
     return 1;
 }
 
@@ -7127,7 +6985,7 @@ void init_and_start_cam(int sleep_flag)
     set_av_video_frame();
     // start streaming
     v4l_startread();
-    v4l_set_bitrate(100);
+    v4l_setup_v4l2_camera_device(INITIAL_H264_ENCODER_BITRATE);
 }
 
 void fully_stop_cam()
