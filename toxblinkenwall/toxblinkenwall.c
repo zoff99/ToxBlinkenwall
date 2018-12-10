@@ -788,6 +788,7 @@ uint16_t video_width = 0;
 uint16_t video_height = 0;
 struct v4l2_format format;
 struct v4l2_format dest_format;
+int camera_supports_h264 = 0;
 toxcam_av_video_frame av_video_frame;
 vpx_image_t input;
 int global_video_active = 0;
@@ -4645,6 +4646,54 @@ static int xioctl(int fh, unsigned long request, void *arg)
 }
 
 
+int detect_h264_on_camera(int fd)
+{
+    int supported = 0;
+    CLEAR(format);
+    CLEAR(dest_format);
+    format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
+    format.fmt.pix.width = 1280;
+    format.fmt.pix.height = 720;
+    dest_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+    dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+    format.fmt.pix.width = PI_H264_CAM_W; // 1280;
+    format.fmt.pix.height = PI_H264_CAM_H; // 720;
+    format.fmt.pix.field = V4L2_FIELD_NONE;
+    dest_format.fmt.pix.field = V4L2_FIELD_NONE;
+
+    // Get <-> Set ?? -> S_FMT must be called before, otherwise G_FMT just tells the default
+    if (-1 == xioctl(fd, VIDIOC_S_FMT, &format))
+    {
+        dbg(0, "VIDIOC_S_FMT\n");
+    }
+
+    if (-1 == xioctl(fd, VIDIOC_G_FMT, &format))
+    {
+        dbg(0, "VIDIOC_G_FMT\n");
+    }
+
+    if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
+    {
+        dbg(2, "Video format(got): V4L2_PIX_FMT_YUV420\n");
+    }
+    else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_MJPEG)
+    {
+        dbg(2, "Video format(got): V4L2_PIX_FMT_MJPEG\n");
+    }
+    else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_H264)
+    {
+        dbg(2, "Video format(got): V4L2_PIX_FMT_H264\n");
+        supported = 1;
+    }
+    else
+    {
+        dbg(2, "Video format(got): %u\n", format.fmt.pix.pixelformat);
+    }
+
+    return supported;
+}
 
 int init_cam(int sleep_flag)
 {
@@ -4731,6 +4780,7 @@ int init_cam(int sleep_flag)
         dbg(0, "Cropping not supported (2)\n");
     }
 
+    camera_supports_h264 = detect_h264_on_camera(fd);
 #ifdef V4LCONVERT
     v4lconvert_data = v4lconvert_create(fd);
 #endif
