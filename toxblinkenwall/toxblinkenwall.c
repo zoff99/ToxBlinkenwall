@@ -500,7 +500,7 @@ uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 
 // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
-int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p encoding
+int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p software encoding
 #define PROXY_PORT_TOR_DEFAULT 9050
 
 int default_fps_sleep_corrected;
@@ -4684,8 +4684,8 @@ int detect_h264_on_camera(int fd)
     }
     else if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_H264)
     {
-        dbg(2, "Video format(got): V4L2_PIX_FMT_H264\n");
         supported = 1;
+        dbg(2, "H264 HW encoding IS supported\n");
     }
     else
     {
@@ -4895,7 +4895,7 @@ int init_cam(int sleep_flag)
         memset(setfps, 0, sizeof(struct v4l2_streamparm));
         setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps->parm.capture.timeperframe.numerator = 1;
-        setfps->parm.capture.timeperframe.denominator = 25; // try to set ~33fps
+        setfps->parm.capture.timeperframe.denominator = 25; // try to set ~25fps
 
         if (-1 == xioctl(fd, VIDIOC_S_PARM, setfps))
         {
@@ -5352,26 +5352,33 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
     // fwrite(data, buf.bytesused, 1, streamout_file);
     // memset(y, 0, av_video_frame_buf_size);
     memcpy(y, data, (size_t)(*buf_len));
+// workaround if SPS/PPS is not sent on every frame -------------------
+#if 0
 
     if (h264_bufcounter == 0)
     {
-        if (h264_frame_buf_save == NULL)
-        {
-            h264_bufcounter_first = 0;
-            h264_frame_buf_save = calloc(1, (size_t)(*buf_len));
-        }
-
-        memcpy(h264_frame_buf_save, data, (size_t)(*buf_len));
-        h264_frame_buf_save_len = *buf_len;
-        dbg(9, "H264__:SAVE\n");
+        //if (h264_frame_buf_save == NULL)
+        //{
+        //    h264_bufcounter_first = 0;
+        //    h264_frame_buf_save = calloc(1, (size_t)(*buf_len));
+        //}
+        //memcpy(h264_frame_buf_save, data, (size_t)(*buf_len));
+        //h264_frame_buf_save_len = *buf_len;
+        //dbg(9, "H264__:SAVE\n");
     }
     else if (h264_bufcounter == 200)
     {
         /* disable foring extra SPS sending */ memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
-        dbg(9, "H264__:*RESTORE*\n");
+        // dbg(9, "H264__:*RESTORE*\n");
     }
 
-    h264_bufcounter++;
+    if (h264_bufcounter < 300)
+    {
+        h264_bufcounter++;
+    }
+
+#endif
+// workaround if SPS/PPS is not sent on every frame -------------------
     /*
         uint8_t *hash1 = calloc(1, 100);
         uint8_t *hash2 = calloc(1, 100);
