@@ -670,7 +670,7 @@ void show_tox_id_qrcode();
 void show_tox_client_application_download_links();
 void show_help_image();
 void fully_stop_cam();
-void init_and_start_cam(int sleep_flag);
+void init_and_start_cam(int sleep_flag, bool h264_on);
 static int get_policy(char p, int *policy);
 static void display_thread_sched_attr(char *msg);
 static void display_sched_attr(char *msg, int policy, struct sched_param *param);
@@ -1388,7 +1388,7 @@ void button_d()
         usleep(1000 * 10); // sleep 10ms
         video_high = 1 - video_high; // toggle between 1 and 0
         global_update_opengl_status_text = 1;
-        init_and_start_cam(0);
+        init_and_start_cam(0, false);
     }
 }
 
@@ -5034,8 +5034,6 @@ int v4l_stream_off()
     }
 
     ret = 1;
-    using_h264_encoder_in_toxcore = 0;
-    using_h264_hw_accel = 0;
     return ret;
 }
 
@@ -6765,10 +6763,10 @@ static struct timeval tm_outgoing_video_frames;
 int first_outgoing_video_frame = 1;
 // ---- DEBUG ----
 
-void init_and_start_cam(int sleep_flag)
+void init_and_start_cam(int sleep_flag, bool h264_on)
 {
     dbg(9, "init_and_start_cam()\n");
-    global_cam_device_fd = init_cam(sleep_flag, false);
+    global_cam_device_fd = init_cam(sleep_flag, h264_on);
     set_av_video_frame();
     v4l_startread();
     v4l_set_repeat_headers_on();
@@ -6788,6 +6786,8 @@ void fully_stop_cam()
 
     v4lconvert_destroy(v4lconvert_data);
     free(av_video_frame.h264_buf);
+    using_h264_encoder_in_toxcore = 0;
+    using_h264_hw_accel = 0;
     size_t i;
 
     for (i = 0; i < n_buffers; ++i)
@@ -6930,7 +6930,7 @@ void *thread_av(void *data)
         // --------------- start up the camera ---------------
         pthread_t id = pthread_self();
         dbg(2, "AV Thread #%d: init cam\n", (size_t) id);
-        init_and_start_cam(1);
+        init_and_start_cam(1, false);
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
     }
@@ -6950,7 +6950,19 @@ void *thread_av(void *data)
     {
         if (global_video_active == 1)
         {
-            // pthread_mutex_lock(&av_thread_lock);
+            // if we can use HW Accel. H264 encoder, switch to it now
+            if (using_h264_encoder_in_toxcore == 1)
+            {
+                if (using_h264_hw_accel == 0)
+                {
+                    fully_stop_cam();
+                    yieldcpu(50);
+                    using_h264_hw_accel = 1;
+                    dbg(9, "switching to H264 hardware accel. encoder\n");
+                    init_and_start_cam(0, true);
+                }
+            }
+
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
@@ -7138,7 +7150,7 @@ void *thread_av(void *data)
                 yieldcpu(100);
             }
 
-            init_and_start_cam(0);
+            init_and_start_cam(0, false);
         }
     }
 
