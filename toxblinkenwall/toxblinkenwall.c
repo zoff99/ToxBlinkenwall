@@ -199,11 +199,8 @@ static const char global_version_string[] = "0.99.31";
 
 
 
-
-#define V4LCONVERT 1
-
 // --------- video recording: choose only 1 of those! ---------
-#define USE_V4L2_H264 1         // use HW encoding with H264 directly
+#define USE_V4L2_H264 1         // use HW encoding with H264 directly if available
 // #define USE_TC_ENCODING 1    // [* DEFAULT]
 // --------- video recording: choose only 1 of those! ---------
 //
@@ -298,21 +295,15 @@ int global__SEND_VIDEO_RAW_YUV;
 
 
 
-#ifdef USE_V4L2_H264
-#undef V4LCONVERT
-FILE *streamout_file;
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
 #define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
-#endif
-
 uint32_t h264_bufcounter = 0;
 uint32_t h264_bufcounter_first = 1;
 uint8_t *h264_frame_buf_save = NULL;
 uint32_t h264_frame_buf_save_len = 0;
-uint32_t av_video_frame_buf_size = 0;
-
-
+int using_h264_hw_accel = 0;
+int using_h264_encoder_in_toxcore = 0;
 
 #ifdef HAVE_FRAMEBUFFER
 #include <linux/fb.h>
@@ -409,9 +400,8 @@ BWRingBuffer *video_play_rb = NULL;
 #endif
 
 
-#ifdef V4LCONVERT
 #include <libv4lconvert.h>
-#endif
+
 
 #define STBIR_SATURATE_INT 1
 #define STBIR_DEFAULT_FILTER_UPSAMPLE STBIR_FILTER_BOX
@@ -422,11 +412,7 @@ BWRingBuffer *video_play_rb = NULL;
 
 #define UTF8_EXTENDED_OFFSET 64
 
-
-#ifdef V4LCONVERT
 static struct v4lconvert_data *v4lconvert_data;
-#endif
-
 
 
 typedef struct DHT_node
@@ -471,11 +457,7 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 
-#ifdef USE_V4L2_H264
-#define VIDEO_BUFFER_COUNT 3 // also works with 3, but maybe that's not needed for hw encoding?
-#else
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
-#endif
 
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
 #define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
@@ -651,8 +633,9 @@ typedef struct TOXCAM_AV_VIDEO_FRAME
 {
     uint16_t w, h;
     uint8_t *y, *u, *v;
-//    uint8_t bit_depth;
     uint32_t buf_len;
+    uint16_t h264_w, h264_h;
+    uint8_t *h264_buf;
 } toxcam_av_video_frame;
 
 
@@ -4685,7 +4668,7 @@ int detect_h264_on_camera(int fd)
     return supported;
 }
 
-int init_cam(int sleep_flag)
+int init_cam(int sleep_flag, bool h264_codec)
 {
     int video_dev_open_error = 0;
     int fd;
@@ -4716,9 +4699,6 @@ int init_cam(int sleep_flag)
 
     struct v4l2_capability cap;
 
-    struct v4l2_cropcap    cropcap;
-
-    // struct v4l2_crop       crop;
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
     {
         dbg(0, "VIDIOC_QUERYCAP\n");
@@ -4734,46 +4714,8 @@ int init_cam(int sleep_flag)
         dbg(0, "The device does not support streaming i/o.\n");
     }
 
-    /* Select video input, video standard and tune here. */
-    CLEAR(cropcap);
-    cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-    if (0 == xioctl(fd, VIDIOC_CROPCAP, &cropcap))
-    {
-#if 0
-        crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        crop.c    = cropcap.defrect; /* reset to full area */
-        /* Scale the width and height to 50 % of their original size and center the output. */
-        crop.c.width = crop.c.width / 2;
-        crop.c.height = crop.c.height / 2;
-        crop.c.left = crop.c.left + crop.c.width / 2;
-        crop.c.top = crop.c.top + crop.c.height / 2;
-
-        if (-1 == xioctl(fd, VIDIOC_S_CROP, &crop))
-        {
-            switch (errno)
-            {
-                case EINVAL:
-                    dbg(0, "Cropping not supported (1)\n");
-                    break;
-
-                default:
-                    dbg(0, "some error on croping setup\n");
-                    break;
-            }
-        }
-
-#endif
-    }
-    else
-    {
-        dbg(0, "Cropping not supported (2)\n");
-    }
-
     camera_supports_h264 = detect_h264_on_camera(fd);
-#ifdef V4LCONVERT
     v4lconvert_data = v4lconvert_create(fd);
-#endif
     CLEAR(format);
     CLEAR(dest_format);
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -4784,14 +4726,16 @@ int init_cam(int sleep_flag)
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
     dest_format.fmt.pix.width = format.fmt.pix.width;
     dest_format.fmt.pix.height = format.fmt.pix.height;
-#ifdef USE_V4L2_H264
-    format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-    dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-    format.fmt.pix.width = PI_H264_CAM_W; // 1280;
-    format.fmt.pix.height = PI_H264_CAM_H; // 720;
-    format.fmt.pix.field = V4L2_FIELD_NONE;
-    dest_format.fmt.pix.field = V4L2_FIELD_NONE;
-#endif
+
+    if (h264_codec)
+    {
+        format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+        dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+        format.fmt.pix.width = PI_H264_CAM_W; // 1280;
+        format.fmt.pix.height = PI_H264_CAM_H; // 720;
+        format.fmt.pix.field = V4L2_FIELD_NONE;
+        dest_format.fmt.pix.field = V4L2_FIELD_NONE;
+    }
 
     if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
     {
@@ -4849,10 +4793,12 @@ int init_cam(int sleep_flag)
         format.fmt.pix.height = 480;
     }
 
-#ifdef USE_V4L2_H264
-    format.fmt.pix.width = PI_H264_CAM_W;
-    format.fmt.pix.height = PI_H264_CAM_H;
-#endif
+    if (h264_codec)
+    {
+        format.fmt.pix.width = PI_H264_CAM_W;
+        format.fmt.pix.height = PI_H264_CAM_H;
+    }
+
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
     dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
@@ -4867,15 +4813,6 @@ int init_cam(int sleep_flag)
     dbg(2, "Video size(got): %u %u\n", video_width, video_height);
     dest_format.fmt.pix.width = format.fmt.pix.width;
     dest_format.fmt.pix.height = format.fmt.pix.height;
-    /* Buggy driver paranoia. */
-    /*
-        min = fmt.fmt.pix.width * 2;
-        if (fmt.fmt.pix.bytesperline < min)
-            fmt.fmt.pix.bytesperline = min;
-        min                          = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
-        if (fmt.fmt.pix.sizeimage < min)
-            fmt.fmt.pix.sizeimage = min;
-    */
     // HINT: set camera device fps -----------------------
     struct v4l2_streamparm *setfps;
     setfps = (struct v4l2_streamparm *)calloc(1, sizeof(struct v4l2_streamparm));
@@ -4936,9 +4873,8 @@ int init_cam(int sleep_flag)
     }
 
     buffers = calloc(bufrequest.count, sizeof(*buffers));
-
-    // dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
-    // dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
+    dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
+    dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
 
     for (n_buffers = 0; n_buffers < bufrequest.count; ++n_buffers)
     {
@@ -4953,16 +4889,6 @@ int init_cam(int sleep_flag)
             dbg(9, "VIDIOC_QUERYBUF (2) error %d, %s\n", errno, strerror(errno));
         }
 
-        // else
-        //{
-        //    dbg(9, "VIDIOC_QUERYBUF (2) *OK*  %d, %s\n", errno, strerror(errno));
-        //}
-        /*
-                if (ioctl(fd, VIDIOC_QUERYBUF, &bufferinfo) < 0)
-                {
-                    dbg(0, "VIDIOC_QUERYBUF %d %s\n", errno, strerror(errno));
-                }
-        */
         buffers[n_buffers].length = bufferinfo.length;
         buffers[n_buffers].start  = mmap(NULL /* start anywhere */, bufferinfo.length, PROT_READ | PROT_WRITE /* required */,
                                          MAP_SHARED /* recommended */, fd, bufferinfo.m.offset);
@@ -4973,9 +4899,10 @@ int init_cam(int sleep_flag)
         }
     }
 
-    // dbg(0, "VIDIOC_REQBUFS number of buffers[2b]=%d\n", (int)n_buffers);
+    dbg(0, "VIDIOC_REQBUFS number of buffers[2b]=%d\n", (int)n_buffers);
     return fd;
 }
+
 
 int v4l_setup_v4l2_camera_device(uint32_t start_bitrate)
 {
@@ -5026,8 +4953,9 @@ int v4l_setup_v4l2_camera_device(uint32_t start_bitrate)
     return 1;
 }
 
-void set_repeat_headers_on()
+void v4l_set_repeat_headers_on()
 {
+    dbg(9, "v4l_set_repeat_headers_on()\n");
     struct v4l2_ext_controls ecs;
     struct v4l2_ext_control ec;
     memset(&ecs, 0, sizeof(ecs));
@@ -5045,9 +4973,23 @@ void set_repeat_headers_on()
     }
 }
 
+int v4vl_stream_on()
+{
+    dbg(9, "v4vl_stream_on()\n");
+    enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+    if (-1 == xioctl(global_cam_device_fd, VIDIOC_STREAMON, &type))
+    {
+        dbg(9, "VIDIOC_STREAMON error %d, %s\n", errno, strerror(errno));
+        return 0;
+    }
+
+    return 1;
+}
+
 int v4l_startread()
 {
-    dbg(9, "start cam\n");
+    dbg(9, "v4l_startread()\n");
     size_t i;
     enum v4l2_buf_type type;
 
@@ -5074,32 +5016,27 @@ int v4l_startread()
         //}
     }
 
-    set_repeat_headers_on();
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-    if (-1 == xioctl(global_cam_device_fd, VIDIOC_STREAMON, &type))
-    {
-        dbg(9, "VIDIOC_STREAMON error %d, %s\n", errno, strerror(errno));
-        return 0;
-    }
-
     return 1;
 }
 
 
-int v4l_endread()
+int v4l_stream_off()
 {
-    dbg(9, "stop webcam\n");
+    int ret = 0;
+    dbg(9, "v4l_stream_off()\n");
     enum v4l2_buf_type type;
     type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
     if (-1 == xioctl(global_cam_device_fd, VIDIOC_STREAMOFF, &type))
     {
         dbg(9, "VIDIOC_STREAMOFF error %d, %s\n", errno, strerror(errno));
-        return 0;
+        ret = 0;
     }
 
-    return 1;
+    ret = 1;
+    using_h264_encoder_in_toxcore = 0;
+    using_h264_hw_accel = 0;
+    return ret;
 }
 
 
@@ -5132,47 +5069,49 @@ void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *
 }
 
 
-int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t height, uint32_t *buf_len)
+int v4l_getframe(toxcam_av_video_frame *avfr, uint32_t *buf_len)
 {
-    if (width != video_width || height != video_height)
+    int result = -1;
+
+    if (avfr->w != video_width || avfr->h != video_height)
     {
-        dbg(9, "V4L:\twidth/height mismatch %u %u != %u %u\n", width, height, video_width, video_height);
+        dbg(9, "V4L:\twidth/height mismatch %u %u != %u %u\n", avfr->w, avfr->h, video_width, video_height);
         return 0;
     }
 
     if (global_encoder_video_bitrate_prev != global_encoder_video_bitrate)
     {
         global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
-#ifdef USE_V4L2_H264
-        struct v4l2_ext_controls ecs;
-        struct v4l2_ext_control ec;
-        memset(&ecs, 0, sizeof(ecs));
-        memset(&ec, 0, sizeof(ec));
-        ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-        ec.value = global_encoder_video_bitrate * 1000;
-        ec.size = 0;
-        ecs.controls = &ec;
-        ecs.count = 1;
-        ecs.ctrl_class = V4L2_CTRL_CLASS_MPEG;
 
-        if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+        if (using_h264_hw_accel == 1)
         {
-            dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
-        }
-        else
-        {
-            // dbg(9, "set encoder bitrate to %d\n", global_encoder_video_bitrate);
-        }
+            struct v4l2_ext_controls ecs;
+            struct v4l2_ext_control ec;
+            memset(&ecs, 0, sizeof(ecs));
+            memset(&ec, 0, sizeof(ec));
+            ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+            ec.value = global_encoder_video_bitrate * 1000;
+            ec.size = 0;
+            ecs.controls = &ec;
+            ecs.count = 1;
+            ecs.ctrl_class = V4L2_CTRL_CLASS_MPEG;
 
-#endif
+            if (ioctl(global_cam_device_fd, VIDIOC_S_EXT_CTRLS, &ecs) < 0)
+            {
+                dbg(1, "EE:VIDIOC_S_CTRL V4L2_CID_MPEG_VIDEO_BITRATE error\n");
+            }
+            else
+            {
+                // dbg(9, "set encoder bitrate to %d\n", global_encoder_video_bitrate);
+            }
+        }
     }
 
     struct v4l2_buffer buf;
 
-    // ** // CLEAR(buf);
     buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    buf.memory = V4L2_MEMORY_MMAP; // V4L2_MEMORY_USERPTR;
+    buf.memory = V4L2_MEMORY_MMAP;
 
     if (-1 == ioctl(global_cam_device_fd, VIDIOC_DQBUF, &buf))
     {
@@ -5193,112 +5132,40 @@ int v4l_getframe(uint8_t *y, uint8_t *u, uint8_t *v, uint16_t width, uint16_t he
         }
     }
 
-    /*for (i = 0; i < n_buffers; ++i)
-        if (buf.m.userptr == (unsigned long)buffers[i].start
-                && buf.length == buffers[i].length)
-            break;
-
-    if(i >= n_buffers) {
-        dbg(9, "fatal error\n");
-        return 0;
-    }*/
-    // dbg(9, "buf.index=%d\n", (int)buf.index);
-    void *data = (void *)buffers[buf.index].start; // length = buf.bytesused //(void*)buf.m.userptr
-    // dbg(9, "V4L: buffer size %d\n", buf.bytesused);
+    void *data = (void *)buffers[buf.index].start;
     *buf_len = buf.bytesused;
-#ifdef USE_V4L2_H264
-    // fwrite(data, buf.bytesused, 1, streamout_file);
-    // memset(y, 0, av_video_frame_buf_size);
-    memcpy(y, data, (size_t)(*buf_len));
-// workaround if SPS/PPS is not sent on every frame -------------------
-#if 0
 
-    if (h264_bufcounter == 0)
+    if (using_h264_hw_accel == 1)
     {
-        //if (h264_frame_buf_save == NULL)
-        //{
-        //    h264_bufcounter_first = 0;
-        //    h264_frame_buf_save = calloc(1, (size_t)(*buf_len));
-        //}
-        //memcpy(h264_frame_buf_save, data, (size_t)(*buf_len));
-        //h264_frame_buf_save_len = *buf_len;
-        //dbg(9, "H264__:SAVE\n");
-    }
-    else if (h264_bufcounter == 200)
-    {
-        /* disable foring extra SPS sending */ memcpy(y, h264_frame_buf_save, (size_t)(h264_frame_buf_save_len));
-        // dbg(9, "H264__:*RESTORE*\n");
-    }
-
-    if (h264_bufcounter < 300)
-    {
-        h264_bufcounter++;
-    }
-
-#endif
-// workaround if SPS/PPS is not sent on every frame -------------------
-    /*
-        uint8_t *hash1 = calloc(1, 100);
-        uint8_t *hash2 = calloc(1, 100);
-        crypto_generichash(hash1, 32,
-                           data, (unsigned long long)(*buf_len),
-                           NULL, 0);
-        crypto_generichash(hash2, 32,
-                           y, (unsigned long long)(*buf_len),
-                           NULL, 0);
-        char aaastr[101];
-        CLEAR(aaastr);
-        bin_to_hex_string(hash1, (size_t) 32, aaastr);
-        dbg(9, "h642_data_hash1=%s\n", aaastr);
-        bin_to_hex_string(hash2, (size_t) 32, aaastr);
-        dbg(9, "h642_data_hash2=%s\n", aaastr);
-        free(hash1);
-        free(hash2);
-    */
-#endif
-#ifndef USE_V4L2_H264
-    /* assumes planes are continuous memory */
-#ifdef V4LCONVERT
-    // dbg(9, "V4LCONVERT\n");
-    int result = v4lconvert_convert(v4lconvert_data, &format, &dest_format, data, buf.bytesused, y,
-                                    (video_width * video_height * 3) / 2);
-
-    if (result == -1)
-    {
-        dbg(0, "v4lconvert_convert error %s\n", v4lconvert_get_error_message(v4lconvert_data));
-    }
-
-#else
-    dbg(9, "convert2\n");
-
-    if (format.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
-    {
-        dbg(9, "yuv422to420\n");
-        yuv422to420(y, u, v, data, video_width, video_height);
+        // copy frame data into buffer
+        memcpy(avfr->h264_buf, data, (size_t)(*buf_len));
     }
     else
     {
-    }
+        // v4l2 will copy the data for us
+        result = v4lconvert_convert(v4lconvert_data, &format, &dest_format, data, buf.bytesused, avfr->y,
+                                    (video_width * video_height * 3) / 2);
 
-#endif
-#endif
+        if (result == -1)
+        {
+            dbg(0, "v4lconvert_convert error %s\n", v4lconvert_get_error_message(v4lconvert_data));
+        }
+    }
 
     if (-1 == xioctl(global_cam_device_fd, VIDIOC_QBUF, &buf))
     {
         dbg(9, "VIDIOC_QBUF (1) error %d, %s\n", errno, strerror(errno));
     }
 
-#ifdef USE_V4L2_H264
-    return 1;
-#else
-#ifdef V4LCONVERT
-    return (result == -1 ? 0 : 1);
-#else
-    return 1;
-#endif
-#endif
+    if (using_h264_hw_accel == 1)
+    {
+        return 1;
+    }
+    else
+    {
+        return (result == -1 ? 0 : 1);
+    }
 }
-
 
 void close_cam()
 {
@@ -5320,11 +5187,6 @@ void close_cam()
         global_framebuffer_device_fd = 0;
     }
 
-//  if (bf_out_data != NULL)
-//  {
-//      free(bf_out_data);
-//      bf_out_data = NULL;
-//  }
 #ifdef HAVE_LIBAO
 
     if (_ao_device != NULL)
@@ -5353,9 +5215,7 @@ void close_cam()
 
     Pa_Terminate();
 #endif
-#ifdef V4LCONVERT
     v4lconvert_destroy(v4lconvert_data);
-#endif
     size_t i;
 
     for (i = 0; i < n_buffers; ++i)
@@ -5368,17 +5228,12 @@ void close_cam()
 
     close(global_cam_device_fd);
 }
-
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
-
-
-
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
-
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
 {
     TOXAV_ERR_ANSWER err;
@@ -5407,6 +5262,7 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
     // change some settings here -------
     reset_toxav_call_waiting();
 }
+
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
@@ -5470,14 +5326,17 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8)
     {
         global_encoder_string = " VP8 ";
+        using_h264_encoder_in_toxcore = 0;
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
     {
         global_encoder_string = " H264";
+        using_h264_encoder_in_toxcore = 1;
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
     {
         global_encoder_string = " H264.P";
+        using_h264_encoder_in_toxcore = 1;
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
     {
@@ -5670,6 +5529,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         friend_number, state, send_audio, send_video, global_video_active, global_send_first_frame, friend_to_send_video_to);
 }
 
+
 static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
@@ -5770,8 +5630,6 @@ int get_audio_t_counter()
 }
 #endif
 
-
-
 void inc_video_t_counter()
 {
     sem_wait(&count_video_play_threads);
@@ -5791,7 +5649,6 @@ void dec_video_t_counter()
 
     sem_post(&count_video_play_threads);
 }
-
 int get_video_t_counter()
 {
     sem_wait(&count_video_play_threads);
@@ -5799,15 +5656,12 @@ int get_video_t_counter()
     sem_post(&count_video_play_threads);
     return ret;
 }
-
-
 void inc_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
     count_video_record_threads_int++;
     sem_post(&count_video_record_threads);
 }
-
 void dec_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
@@ -5820,7 +5674,6 @@ void dec_video_trec_counter()
 
     sem_post(&count_video_record_threads);
 }
-
 int get_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
@@ -5828,12 +5681,7 @@ int get_video_trec_counter()
     sem_post(&count_video_record_threads);
     return ret;
 }
-
-
-
-
 #ifdef HAVE_ALSA_PLAY
-
 void *alsa_audio_play(void *data)
 {
     struct alsa_audio_play_data_block *adb = (struct alsa_audio_play_data_block *)data;
@@ -5876,13 +5724,8 @@ void *alsa_audio_play(void *data)
     dec_audio_t_counter();
     pthread_exit(0);
 }
-
 #endif
-
-
-
 #ifdef HAVE_LIBAO
-
 void *audio_play(void *data)
 {
     struct audio_play_data_block *adb = (struct audio_play_data_block *)data;
@@ -5910,10 +5753,7 @@ void *audio_play(void *data)
     dec_audio_t_counter();
     pthread_exit(0);
 }
-
 #endif
-
-
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
@@ -6316,8 +6156,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     // free(rb_write(cc->arb, f));
     // pthread_mutex_unlock(cc->arb_mutex);
 }
-
-
 void update_status_line_on_fb()
 {
 #ifdef HAVE_FRAMEBUFFER
@@ -6332,8 +6170,6 @@ void update_status_line_on_fb()
     global_update_opengl_status_text = 1;
 #endif
 }
-
-
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
@@ -6730,14 +6566,10 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:022-EXIT\n");
     pthread_exit(0);
 }
-
-
 // ---- DEBUG ----
 static struct timeval tm_incoming_video_frames;
 int first_incoming_video_frame = 1;
 // ---- DEBUG ----
-
-
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
@@ -6873,29 +6705,22 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     //    dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
     //}
 }
-
 void set_av_video_frame()
 {
-#ifdef USE_V4L2_H264
-    av_video_frame_buf_size = video_width * video_height * 4;
-    av_video_frame.y = calloc(1, av_video_frame_buf_size); // TODO: calc the correct size? or max size at least?
-    dbg(2, "h264 buf size=%d ptr=%p\n", (int)(video_width * video_height * 2), av_video_frame.y);
-    av_video_frame.w = video_width;
-    av_video_frame.h = video_height;
+    uint32_t h264_av_video_frame_buf_size = video_width * video_height * 4;
+    av_video_frame.h264_buf = calloc(1, h264_av_video_frame_buf_size); // TODO: calc the correct size? or max size at least?
+    dbg(2, "h264 buf size=%d ptr=%p\n", (int)(video_width * video_height * 2), av_video_frame.h264_buf);
+    av_video_frame.h264_w = video_width;
+    av_video_frame.h264_h = video_height;
     dbg(2, "h264 w=%d h=%d\n", (int)video_width, (int)video_height);
-    streamout_file = fopen("h264out.mp4", "w");
-#else
     vpx_img_alloc(&input, VPX_IMG_FMT_I420, video_width, video_height, 1);
     av_video_frame.y = input.planes[0]; /**< Y (Luminance) plane and  VPX_PLANE_PACKED */
     av_video_frame.u = input.planes[1]; /**< U (Chroma) plane */
     av_video_frame.v = input.planes[2]; /**< V (Chroma) plane */
     av_video_frame.w = input.d_w;
     av_video_frame.h = input.d_h;
-    //av_video_frame.bit_depth = input.bit_depth;
-#endif
     dbg(2, "ToxVideo:av_video_frame set\n");
 }
-
 void fb_copy_frame_to_fb(void *videoframe)
 {
     if (framebuffer_mappedmem != NULL)
@@ -6903,7 +6728,6 @@ void fb_copy_frame_to_fb(void *videoframe)
         memcpy(framebuffer_mappedmem, videoframe, framebuffer_screensize);
     }
 }
-
 void fb_fill_black()
 {
     if (framebuffer_mappedmem != NULL)
@@ -6911,8 +6735,6 @@ void fb_fill_black()
         memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
     }
 }
-
-
 void fb_fill_xxx()
 {
     if (framebuffer_mappedmem != NULL)
@@ -6920,9 +6742,6 @@ void fb_fill_xxx()
         memset(framebuffer_mappedmem, 0xa3, framebuffer_screensize);
     }
 }
-
-
-
 void *video_record(void *dummy)
 {
     TOXAV_ERR_SEND_FRAME error = 0;
@@ -6970,35 +6789,28 @@ void *video_record(void *dummy)
 
     dec_video_trec_counter();
 }
-
-
-
 // ---- DEBUG ----
 static struct timeval tm_outgoing_video_frames;
 int first_outgoing_video_frame = 1;
 // ---- DEBUG ----
-
-
 void init_and_start_cam(int sleep_flag)
 {
-    global_cam_device_fd = init_cam(sleep_flag);
+    global_cam_device_fd = init_cam(sleep_flag, false);
     set_av_video_frame();
-    // start streaming
     v4l_startread();
+    v4l_set_repeat_headers_on();
+    v4vl_stream_on();
     v4l_setup_v4l2_camera_device(INITIAL_H264_ENCODER_BITRATE);
 }
-
 void fully_stop_cam()
 {
     if (video_call_enabled == 1)
     {
         // end streaming
-        v4l_endread();
+        v4l_stream_off();
     }
 
-#ifdef V4LCONVERT
     v4lconvert_destroy(v4lconvert_data);
-#endif
     size_t i;
 
     for (i = 0; i < n_buffers; ++i)
@@ -7011,7 +6823,6 @@ void fully_stop_cam()
 
     close(global_cam_device_fd);
 }
-
 void *thread_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -7167,37 +6978,40 @@ void *thread_av(void *data)
 // ----------------- for sending video -----------------
             //  dbg(9, "AV Thread #%d:get frame\n", (int) id);
             // capturing is enabled, capture frames
-            int r = v4l_getframe(av_video_frame.y, av_video_frame.u, av_video_frame.v,
-                                 av_video_frame.w, av_video_frame.h, &(av_video_frame.buf_len));
+            int r = v4l_getframe(&av_video_frame, &(av_video_frame.buf_len));
 
             if (r == 1)
             {
                 if (global_send_first_frame > 0)
                 {
-#ifndef USE_V4L2_H264
-                    black_yuf_frame_xy();
-#endif
+                    if (using_h264_hw_accel != 1)
+                    {
+                        black_yuf_frame_xy();
+                    }
+
                     global_send_first_frame--;
                 }
 
-#ifndef USE_V4L2_H264
-                // "0" -> [48]
-                // "9" -> [57]
-                // ":" -> [58]
-                char *date_time_str = get_current_time_date_formatted();
-
-                if (date_time_str)
+                if (using_h264_hw_accel != 1)
                 {
-                    text_on_yuf_frame_xy(10, 10, date_time_str);
-                    free(date_time_str);
+                    // "0" -> [48]
+                    // "9" -> [57]
+                    // ":" -> [58]
+                    char *date_time_str = get_current_time_date_formatted();
+
+                    if (date_time_str)
+                    {
+                        text_on_yuf_frame_xy(10, 10, date_time_str);
+                        free(date_time_str);
+                    }
                 }
 
-#endif
-#ifndef USE_V4L2_H264
+                if (using_h264_hw_accel != 1)
+                {
 #ifdef BLINKING_DOT_ON_OUTGOING_VIDEOFRAME
-                blinking_dot_on_frame_xy(10, 30, &global_blink_state);
+                    blinking_dot_on_frame_xy(10, 30, &global_blink_state);
 #endif
-#endif
+                }
 
                 if (friend_to_send_video_to != -1)
                 {
@@ -7245,58 +7059,60 @@ void *thread_av(void *data)
                         //        update_out_fps_counter, global_timespan_video_out);
                     }
 
-#ifndef USE_V4L2_H264
-
-                    if (global_show_fps_on_video == 1)
+                    if (using_h264_hw_accel != 1)
                     {
-                        // dbg(9, "global_video_out_fps()=%d %d %d\n", global_video_out_fps,
-                        //        update_out_fps_counter, global_timespan_video_out);
-                        if (global_video_out_fps > 0)
+                        if (global_show_fps_on_video == 1)
                         {
-                            char fps_str[1000];
-                            CLEAR(fps_str);
-                            snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(global_video_out_fps));
-                            text_on_yuf_frame_xy(50, 30, fps_str);
-                        }
-                        else
-                        {
-                            text_on_yuf_frame_xy(50, 30, "fps: --");
+                            // dbg(9, "global_video_out_fps()=%d %d %d\n", global_video_out_fps,
+                            //        update_out_fps_counter, global_timespan_video_out);
+                            if (global_video_out_fps > 0)
+                            {
+                                char fps_str[1000];
+                                CLEAR(fps_str);
+                                snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(global_video_out_fps));
+                                text_on_yuf_frame_xy(50, 30, fps_str);
+                            }
+                            else
+                            {
+                                text_on_yuf_frame_xy(50, 30, "fps: --");
+                            }
                         }
                     }
-
-#endif
 
                     if (update_out_fps_counter > update_fps_every)
                     {
                         update_out_fps_counter = 0;
                         global_timespan_video_out = 0;
-#ifndef USE_V4L2_H264
-                        update_status_line_1_text();
-#endif
+
+                        if (using_h264_hw_accel != 1)
+                        {
+                            update_status_line_1_text();
+                        }
                     }
 
-#if 1
                     TOXAV_ERR_SEND_FRAME error = 0;
 
                     if (friend_to_send_video_to > -1)
                     {
-#ifdef USE_V4L2_H264
-                        /*
-                                                if (av_video_frame.buf_len > 50)
-                                                {
-                                                    dbg(9, "toxav_video_send_frame_h264:size=%d data[50]=%d data[51]=%d\n",
-                                                        (int)av_video_frame.buf_len,
-                                                        (int) * (av_video_frame.y + 50),
-                                                        (int) * (av_video_frame.y + 51)
-                                                       );
-                                                }
-                        */
-                        toxav_video_send_frame_h264(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
-                                                    av_video_frame.y, av_video_frame.buf_len, &error);
-#else
-                        toxav_video_send_frame(av, friend_to_send_video_to, av_video_frame.w, av_video_frame.h,
-                                               av_video_frame.y, av_video_frame.u, av_video_frame.v, &error);
-#endif
+                        if (using_h264_hw_accel == 1)
+                        {
+                            toxav_video_send_frame_h264(av, friend_to_send_video_to,
+                                                        av_video_frame.h264_w,
+                                                        av_video_frame.h264_h,
+                                                        av_video_frame.h264_buf,
+                                                        av_video_frame.buf_len,
+                                                        &error);
+                        }
+                        else
+                        {
+                            toxav_video_send_frame(av, friend_to_send_video_to,
+                                                   av_video_frame.w,
+                                                   av_video_frame.h,
+                                                   av_video_frame.y,
+                                                   av_video_frame.u,
+                                                   av_video_frame.v,
+                                                   &error);
+                        }
                     }
 
                     if (error)
@@ -7323,77 +7139,14 @@ void *thread_av(void *data)
                             // *TODO* if these keep piling up --> just disconnect the call!!
                         }
                     }
-
-#else
-                    // ---------------------------------------
-                    // TODO: threading here crashes :-(
-                    //       check me
-                    // ---------------------------------------
-                    pthread_t video_record_thread;
-
-                    if (get_video_trec_counter() <= MAX_VIDEO_RECORD_THREADS)
-                    {
-                        toxcam_av_video_frame av_video_frame_copy;
-#ifdef USE_V4L2_H264
-                        size_t video_frame_size_bytes = av_video_frame.buf_len;
-#else
-                        size_t video_frame_size_bytes = (size_t)((av_video_frame.w * av_video_frame.h) * (3 / 2)); // TODO: stride!!!
-#endif
-                        av_video_frame_copy.y = (uint8_t *)calloc(1, video_frame_size_bytes);
-                        av_video_frame_copy.u = (uint8_t *)(av_video_frame_copy.y + (av_video_frame.w * av_video_frame.h));
-                        av_video_frame_copy.v = (uint8_t *)(av_video_frame_copy.u + ((av_video_frame.w * av_video_frame.h) / 4));
-                        av_video_frame_copy.w = av_video_frame.w;
-                        av_video_frame_copy.h = av_video_frame.h;
-                        av_video_frame_copy.buf_len = av_video_frame.buf_len;
-                        memcpy(av_video_frame_copy.y, av_video_frame.y, video_frame_size_bytes);
-                        inc_video_trec_counter();
-
-                        if (pthread_create(&video_record_thread, NULL, video_record, (void *)&av_video_frame_copy))
-                        {
-                            free(av_video_frame_copy.y);
-                            // free(av_video_frame_copy.u); // --> all in one buffer!!
-                            // free(av_video_frame_copy.v); // --> all in one buffer!!
-                            dec_video_trec_counter();
-                            dbg(0, "error creating video record thread\n");
-                        }
-                        else
-                        {
-                            dbg(0, "creating video record thread #%d\n", get_video_t_counter());
-
-                            if (pthread_detach(video_record_thread))
-                            {
-                                dbg(0, "error detaching video record thread\n");
-                            }
-
-                            // zzzzzz
-                            // yieldcpu(1);
-                        }
-                    }
-                    else
-                    {
-                        dbg(1, "more than %d video record threads already\n", (int)MAX_VIDEO_RECORD_THREADS);
-                    }
-
-                    // ---------------------------------------
-                    // TODO: threading here crashes :-(
-                    //       check me
-                    // ---------------------------------------
-#endif
                 }
             }
             else if (r == -1)
             {
-                // debug_error("uToxVideo:\tErr... something really bad happened trying to get this frame, I'm just going "
-                //            "to plots now!\n");
-                //video_device_stop();
-                //close_video_device(video_device);
                 // dbg(0, "ToxVideo:something really bad happened trying to get this frame\n");
             }
 
-            // pthread_mutex_unlock(&av_thread_lock);
             yieldcpu(default_fps_sleep_corrected); /* ~25 frames per second */
-            // yieldcpu(80); /* ~12 frames per second */
-            // yieldcpu(40); /* 60fps = 16.666ms || 25 fps = 40ms || the data quality is SO much better at 25... */
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
 // ----------------- for sending video -----------------
@@ -7416,11 +7169,12 @@ void *thread_av(void *data)
     if (video_call_enabled == 1)
     {
         // end streaming
-        v4l_endread();
+        v4l_stream_off();
     }
 
     dbg(2, "ToxVideo:Clean thread exit!\n");
 }
+
 
 void *thread_audio_av(void *data)
 {
@@ -7443,7 +7197,6 @@ void *thread_audio_av(void *data)
 
     dbg(2, "ToxVideo:Clean audio thread exit!\n");
 }
-
 void *thread_video_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -7507,7 +7260,6 @@ void *thread_video_av(void *data)
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
 }
-
 void reset_toxav_call_waiting()
 {
     if (call_waiting_for_answer == 1)
@@ -7516,7 +7268,6 @@ void reset_toxav_call_waiting()
         call_waiting_friend_num = -1;
     }
 }
-
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
     int really_in_call = 0;
@@ -7558,21 +7309,12 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
         show_tox_id_qrcode();
     }
 }
-
-
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
-
-
-
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
-
-
-
-
 /**
  *
  * 8x8 monochrome bitmap fonts for rendering
@@ -7583,7 +7325,6 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
  * License: Public Domain
  *
  **/
-
 // Constant: font8x8_basic
 // Contains an 8x8 font map for unicode points U+0000 - U+007F (basic latin)
 char font8x8_basic[128][8] =
@@ -7717,7 +7458,6 @@ char font8x8_basic[128][8] =
     { 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+007E (~)
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
 };
-
 // Constant: font8x8_00A0
 // Contains an 8x8 font map for unicode points U+00A0 - U+00FF (extended latin)
 char font8x8_ext_latin[96][8] =
@@ -7819,12 +7559,9 @@ char font8x8_ext_latin[96][8] =
     { 0x00, 0x00, 0x06, 0x3E, 0x66, 0x3E, 0x06, 0x00},   // U+00FE (thorn)
     { 0x00, 0x33, 0x00, 0x33, 0x33, 0x3E, 0x30, 0x1F}    // U+00FF (y umlaut)
 };
-
 // "0" -> [48]
 // "9" -> [57]
 // ":" -> [58]
-
-
 char *get_bitmap_from_font(int font_char_num)
 {
     char *ret_bitmap = font8x8_basic[0x3F]; // fallback: "?"
@@ -7844,7 +7581,6 @@ char *get_bitmap_from_font(int font_char_num)
 #endif
     return ret_bitmap;
 }
-
 void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
                          uint8_t col_value, uint8_t *yy, int w)
 {
@@ -7876,8 +7612,6 @@ void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
         }
     }
 }
-
-
 void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value)
 {
     int font_w = 8;
@@ -7908,7 +7642,6 @@ void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_
         }
     }
 }
-
 void black_yuf_frame_xy()
 {
     const uint8_t r = 0;
@@ -7916,7 +7649,6 @@ void black_yuf_frame_xy()
     const uint8_t b = 0;
     left_top_bar_into_yuv_frame(0, 0, av_video_frame.w, av_video_frame.h, r, g, b);
 }
-
 void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int *state)
 {
     uint8_t r;
@@ -7948,8 +7680,6 @@ void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int *state)
         left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, 30, 30, r, g, b);
     }
 }
-
-
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g,
                                uint8_t b)
 {
@@ -7962,16 +7692,12 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
     yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total] = u;
     yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total + (size_total / 4)] = v;
 }
-
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v)
 {
     *y = RGB2Y(r, g, b);
     *u = RGB2U(r, g, b);
     *v = RGB2V(r, g, b);
 }
-
-
-
 void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int px_x, int px_y,
                                 uint8_t r, uint8_t g, uint8_t b)
 {
@@ -7991,8 +7717,6 @@ void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uin
     // fb_buf[(location + 2)] = r;
     // fb_buf[(location + 3)] = 0; // a,  No transparency
 }
-
-
 void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int bar_start_x_pix,
                                   int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -8008,8 +7732,6 @@ void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, u
         }
     }
 }
-
-
 void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf,
                           int start_x_pix, int start_y_pix, int font_char_num, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -8049,8 +7771,6 @@ void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *
         }
     }
 }
-
-
 void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix,
                            int start_y_pix, const char *text)
 {
@@ -8105,10 +7825,6 @@ void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t 
         carriage++;
     }
 }
-
-
-
-
 void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
                               int w, int h)
 {
@@ -8157,8 +7873,6 @@ void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text
         carriage++;
     }
 }
-
-
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
 {
     int carriage = 0;
@@ -8206,7 +7920,6 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
         carriage++;
     }
 }
-
 void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
                                  uint8_t g, uint8_t b)
 {
@@ -8232,13 +7945,9 @@ void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int b
         }
     }
 }
-
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
-
-
-
 static int get_policy(char p, int *policy)
 {
     switch (p)
@@ -8263,7 +7972,6 @@ static int get_policy(char p, int *policy)
             return 0;
     }
 }
-
 static void display_sched_attr(char *msg, int policy, struct sched_param *param)
 {
     dbg(9, "%s:policy=%s, priority=%d\n", msg,
@@ -8274,7 +7982,6 @@ static void display_sched_attr(char *msg, int policy, struct sched_param *param)
         "???",
         param->sched_priority);
 }
-
 static void display_thread_sched_attr(char *msg)
 {
     int policy, s;
@@ -8288,14 +7995,10 @@ static void display_thread_sched_attr(char *msg)
 
     display_sched_attr(msg, policy, &param);
 }
-
-
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
-
 #ifdef HAVE_ALSA_REC
-
 void close_sound_device()
 {
     if (have_input_sound_device == 1)
@@ -8304,7 +8007,6 @@ void close_sound_device()
         snd_pcm_close(audio_capture_handle);
     }
 }
-
 void init_sound_device()
 {
     int i;
@@ -8387,14 +8089,12 @@ void init_sound_device()
         //exit (1);
     }
 }
-
 void inc_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
     count_audio_record_threads_int++;
     sem_post(&count_audio_record_threads);
 }
-
 void dec_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
@@ -8407,7 +8107,6 @@ void dec_audio_record_t_counter()
 
     sem_post(&count_audio_record_threads);
 }
-
 int get_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
@@ -8415,7 +8114,6 @@ int get_audio_record_t_counter()
     sem_post(&count_audio_record_threads);
     return ret;
 }
-
 // r -u /dev/fb0 -j 640 -k 480
 void *audio_record__(void *buf_pointer)
 {
@@ -8445,8 +8143,6 @@ void *audio_record__(void *buf_pointer)
     dec_audio_record_t_counter();
     pthread_exit(0);
 }
-
-
 void *thread_record_alsa_audio(void *data)
 {
     int i;
@@ -8554,14 +8250,10 @@ void *thread_record_alsa_audio(void *data)
 
     close_sound_device();
 }
-
 #endif
-
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
-
-
 void call_entry_num(Tox *tox, int entry_num)
 {
     if (accepting_calls == 1)
@@ -8585,7 +8277,6 @@ void call_entry_num(Tox *tox, int entry_num)
         }
     }
 }
-
 void toggle_speaker()
 {
 #ifdef HAVE_ALSA_PLAY
@@ -8618,7 +8309,6 @@ void toggle_speaker()
     update_status_line_on_fb();
 #endif
 }
-
 void toggle_quality()
 {
     int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
@@ -8660,9 +8350,6 @@ void toggle_quality()
         }
     }
 }
-
-
-
 void *thread_phonebook_invite(void *data)
 {
     Tox *tox = (Tox *)data;
@@ -8692,10 +8379,7 @@ void *thread_phonebook_invite(void *data)
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
 }
-
-
 #ifdef HAVE_EXTERNAL_KEYS
-
 void *thread_ext_keys(void *data)
 {
     char buf[MAX_READ_FIFO_BUF];
@@ -8788,13 +8472,8 @@ void *thread_ext_keys(void *data)
 
     close(ext_keys_fd);
 }
-
 #endif
-
-
-
 #ifdef HAVE_ALSA_PLAY
-
 void close_sound_play_device()
 {
     dbg(0, "ALSA:015\n");
@@ -8807,7 +8486,6 @@ void close_sound_play_device()
 
     dbg(0, "ALSA:016\n");
 }
-
 void init_sound_play_device(int channels, int sample_rate)
 {
     dbg(0, "ALSA:002\n");
@@ -9004,8 +8682,6 @@ void init_sound_play_device(int channels, int sample_rate)
 
     dbg(0, "ALSA:009\n");
 }
-
-
 static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate)
 {
     // dbg(9, "play_device:stream recovery ...\n");
@@ -9078,16 +8754,7 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
     dbg(0, "ALSA:012\n");
     return err;
 }
-
 #endif
-
-
-
-
-
-
-
-
 void sigint_handler(int signo)
 {
     if (signo == SIGINT)
@@ -9114,17 +8781,7 @@ void sigint_handler(int signo)
 #endif
     }
 }
-
-
-
-
-
-
-
-
 #ifdef HAVE_OUTPUT_OPENGL
-
-
 /*
 float get_scale_factor(int dst_width, int dst_height, int src_width, int src_height)
 {
@@ -9132,7 +8789,6 @@ float get_scale_factor(int dst_width, int dst_height, int src_width, int src_hei
     return scale;
 }
 */
-
 float get_aspect_ratio(int dst_width, int dst_height, int src_width, int src_height)
 {
     if (dst_height == 0)
@@ -9158,7 +8814,6 @@ float get_aspect_ratio(int dst_width, int dst_height, int src_width, int src_hei
     float aspect = ((float)src_width / (float)src_height) / (aspect_dst);
     return aspect;
 }
-
 float get_opengl_h_factor(float scale)
 {
     if (scale == 0)
@@ -9175,7 +8830,6 @@ float get_opengl_h_factor(float scale)
         return (1 / scale);
     }
 }
-
 float get_opengl_w_factor(float scale)
 {
     if (scale == 0)
@@ -9192,7 +8846,6 @@ float get_opengl_w_factor(float scale)
         return 1.0f;
     }
 }
-
 // Create a shader object, load the shader source, and
 // compile the shader.
 //
@@ -9234,8 +8887,6 @@ GLuint LoadShader(GLenum type, const char *shaderSrc)
 
     return shader;
 }
-
-
 #if 0
 void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 {
@@ -9251,8 +8902,6 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
     fclose(fileptr);
 }
 #endif
-
-
 // Initialize the shader and program object
 //
 // params: ww -> screen width, hh -> screen height
@@ -9432,8 +9081,6 @@ int Init(ESContext *esContext, int ww, int hh)
     /* bind the Y texture. */
     return GL_TRUE;
 }
-
-
 void Update(ESContext *esContext, float deltatime)
 {
     //dbg(9, "openGL: Update\n");
@@ -9598,7 +9245,6 @@ void Update(ESContext *esContext, float deltatime)
     // dbg(9, "openGL: global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
     //    sem_post(&video_play_lock);
 }
-
 void draw_fps_to_overlay(ESContext *esContext, float fps)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9658,7 +9304,6 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
              (int)global_decoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
-
 void DrawOverlay(ESContext *esContext, int changed)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9740,7 +9385,6 @@ void DrawOverlay(ESContext *esContext, int changed)
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
-
 /* debugging timing functions */
 /* debugging timing functions */
 uint64_t global_global_tt1 = 0;
@@ -9748,7 +9392,6 @@ void __tt1()
 {
     global_global_tt1 = bw_current_time_actual();
 }
-
 void __tt2(int i)
 {
     uint64_t tt2 = bw_current_time_actual();
@@ -9756,8 +9399,6 @@ void __tt2(int i)
 }
 /* debugging timing functions */
 /* debugging timing functions */
-
-
 void DrawBlackRect(ESContext *esContext)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9824,8 +9465,6 @@ void DrawBlackRect(ESContext *esContext)
     // --------------
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
-
-
 void Draw(ESContext *esContext)
 {
     // dbg(9, "opengl:draw\n");
@@ -9893,8 +9532,6 @@ void Draw(ESContext *esContext)
     // --------------
     DrawBlackRect(esContext);
 }
-
-
 //
 void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
 {
@@ -9933,9 +9570,6 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
     // --------------------------------------
     // --------------------------------------
 }
-
-
-
 void *thread_opengl(void *data)
 {
 // --------- openGL
@@ -10119,14 +9753,7 @@ void *thread_opengl(void *data)
         ShutDown(&esContext, fb_screen_width, fb_screen_height);
     }
 }
-
 #endif
-
-
-
-
-
-
 int main(int argc, char *argv[])
 {
     // don't accept calls until video device is ready
@@ -10745,6 +10372,3 @@ int main(int argc, char *argv[])
     // HINT: for gprof you need an "exit()" call
     exit(0);
 }
-
-
-
