@@ -5649,6 +5649,7 @@ void dec_video_t_counter()
 
     sem_post(&count_video_play_threads);
 }
+
 int get_video_t_counter()
 {
     sem_wait(&count_video_play_threads);
@@ -5656,12 +5657,14 @@ int get_video_t_counter()
     sem_post(&count_video_play_threads);
     return ret;
 }
+
 void inc_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
     count_video_record_threads_int++;
     sem_post(&count_video_record_threads);
 }
+
 void dec_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
@@ -5674,6 +5677,7 @@ void dec_video_trec_counter()
 
     sem_post(&count_video_record_threads);
 }
+
 int get_video_trec_counter()
 {
     sem_wait(&count_video_record_threads);
@@ -5681,6 +5685,7 @@ int get_video_trec_counter()
     sem_post(&count_video_record_threads);
     return ret;
 }
+
 #ifdef HAVE_ALSA_PLAY
 void *alsa_audio_play(void *data)
 {
@@ -5725,6 +5730,7 @@ void *alsa_audio_play(void *data)
     pthread_exit(0);
 }
 #endif
+
 #ifdef HAVE_LIBAO
 void *audio_play(void *data)
 {
@@ -5754,6 +5760,7 @@ void *audio_play(void *data)
     pthread_exit(0);
 }
 #endif
+
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
@@ -6156,6 +6163,8 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     // free(rb_write(cc->arb, f));
     // pthread_mutex_unlock(cc->arb_mutex);
 }
+
+
 void update_status_line_on_fb()
 {
 #ifdef HAVE_FRAMEBUFFER
@@ -6170,6 +6179,8 @@ void update_status_line_on_fb()
     global_update_opengl_status_text = 1;
 #endif
 }
+
+
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
@@ -6566,10 +6577,12 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:022-EXIT\n");
     pthread_exit(0);
 }
+
 // ---- DEBUG ----
 static struct timeval tm_incoming_video_frames;
 int first_incoming_video_frame = 1;
 // ---- DEBUG ----
+
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
@@ -6705,6 +6718,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     //    dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
     //}
 }
+
 void set_av_video_frame()
 {
     uint32_t h264_av_video_frame_buf_size = video_width * video_height * 4;
@@ -6721,6 +6735,7 @@ void set_av_video_frame()
     av_video_frame.h = input.d_h;
     dbg(2, "ToxVideo:av_video_frame set\n");
 }
+
 void fb_copy_frame_to_fb(void *videoframe)
 {
     if (framebuffer_mappedmem != NULL)
