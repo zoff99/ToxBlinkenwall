@@ -6750,6 +6750,7 @@ void fb_fill_black()
         memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
     }
 }
+
 void fb_fill_xxx()
 {
     if (framebuffer_mappedmem != NULL)
@@ -6757,59 +6758,16 @@ void fb_fill_xxx()
         memset(framebuffer_mappedmem, 0xa3, framebuffer_screensize);
     }
 }
-void *video_record(void *dummy)
-{
-    TOXAV_ERR_SEND_FRAME error = 0;
-    toxcam_av_video_frame *av_video_frame_copy = (toxcam_av_video_frame *)dummy;
 
-    if (friend_to_send_video_to > -1)
-    {
-#ifdef USE_V4L2_H264
-        toxav_video_send_frame_h264(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
-                                    av_video_frame_copy->y, av_video_frame_copy->buf_len, &error);
-#else
-        toxav_video_send_frame(mytox_av, friend_to_send_video_to, av_video_frame_copy->w, av_video_frame_copy->h,
-                               av_video_frame_copy->y, av_video_frame_copy->u, av_video_frame_copy->v, &error);
-#endif
-    }
 
-    free(av_video_frame_copy->y);
-    // free(av_video_frame_copy->u); // --> all in one buffer!!
-    // free(av_video_frame_copy->v); // --> all in one buffer!!
-
-    if (error)
-    {
-        if (error == TOXAV_ERR_SEND_FRAME_SYNC)
-        {
-            //debug_notice("uToxVideo:\tVid Frame sync error: w=%u h=%u\n", av_video_frame.w,
-            //           av_video_frame.h);
-            // dbg(0, "TOXAV_ERR_SEND_FRAME_SYNC\n");
-        }
-        else if (error == TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED)
-        {
-            //debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
-            //  i, friend[i].call_state_self, friend[i].call_state_friend);
-            // dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
-        }
-        else
-        {
-            //debug_error("uToxVideo:\ttoxav_send_video error friend: %i error: %u\n",
-            //          friend[i].number, error);
-            dbg(0, "ToxVideo:toxav_send_video error %u\n", error);
-            // *TODO* if these keep piling up --> just disconnect the call!!
-            // *TODO* if these keep piling up --> just disconnect the call!!
-            // *TODO* if these keep piling up --> just disconnect the call!!
-        }
-    }
-
-    dec_video_trec_counter();
-}
 // ---- DEBUG ----
 static struct timeval tm_outgoing_video_frames;
 int first_outgoing_video_frame = 1;
 // ---- DEBUG ----
+
 void init_and_start_cam(int sleep_flag)
 {
+    dbg(9, "init_and_start_cam()\n");
     global_cam_device_fd = init_cam(sleep_flag, false);
     set_av_video_frame();
     v4l_startread();
@@ -6817,8 +6775,11 @@ void init_and_start_cam(int sleep_flag)
     v4vl_stream_on();
     v4l_setup_v4l2_camera_device(INITIAL_H264_ENCODER_BITRATE);
 }
+
 void fully_stop_cam()
 {
+    dbg(9, "fully_stop_cam()\n");
+
     if (video_call_enabled == 1)
     {
         // end streaming
@@ -6826,6 +6787,7 @@ void fully_stop_cam()
     }
 
     v4lconvert_destroy(v4lconvert_data);
+    free(av_video_frame.h264_buf);
     size_t i;
 
     for (i = 0; i < n_buffers; ++i)
@@ -6838,6 +6800,7 @@ void fully_stop_cam()
 
     close(global_cam_device_fd);
 }
+
 void *thread_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -7168,16 +7131,14 @@ void *thread_av(void *data)
         }
         else
         {
-            yieldcpu(100);
+            fully_stop_cam();
 
-            if (h264_bufcounter_first == 1)
+            while (global_video_active == 0)
             {
-                h264_bufcounter = 0;
+                yieldcpu(100);
             }
-            else
-            {
-                h264_bufcounter = 1;
-            }
+
+            init_and_start_cam(0);
         }
     }
 
@@ -7275,6 +7236,7 @@ void *thread_video_av(void *data)
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
 }
+
 void reset_toxav_call_waiting()
 {
     if (call_waiting_for_answer == 1)
@@ -7283,6 +7245,7 @@ void reset_toxav_call_waiting()
         call_waiting_friend_num = -1;
     }
 }
+
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
     int really_in_call = 0;
