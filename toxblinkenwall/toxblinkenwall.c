@@ -146,7 +146,7 @@ network={
 
 #include <tox/tox.h>
 #ifdef TOX_HAVE_TOXUTIL
-#include <tox/toxutil.h>
+    #include <tox/toxutil.h>
 #endif
 #include <tox/toxav.h>
 
@@ -243,49 +243,49 @@ static const char global_version_string[] = "0.99.31";
 // ---------- dirty hack ----------
 #if 0
 
-extern int global__ON_THE_FLY_CHANGES;
-extern int global__VPX_RESIZE_ALLOWED;
-extern int global__VPX_DROPFRAME_THRESH;
-extern int global__VPX_END_RESIZE_UP_THRESH;
-extern int global__VPX_END_RESIZE_DOWN_THRESH;
-extern int global__MAX_DECODE_TIME_US;
-extern int global__MAX_ENCODE_TIME_US;
-extern int global__VP8E_SET_CPUUSED_VALUE;
-extern int global__VPX_END_USAGE;
+    extern int global__ON_THE_FLY_CHANGES;
+    extern int global__VPX_RESIZE_ALLOWED;
+    extern int global__VPX_DROPFRAME_THRESH;
+    extern int global__VPX_END_RESIZE_UP_THRESH;
+    extern int global__VPX_END_RESIZE_DOWN_THRESH;
+    extern int global__MAX_DECODE_TIME_US;
+    extern int global__MAX_ENCODE_TIME_US;
+    extern int global__VP8E_SET_CPUUSED_VALUE;
+    extern int global__VPX_END_USAGE;
 
-extern int UTOX_DEFAULT_BITRATE_V;
+    extern int UTOX_DEFAULT_BITRATE_V;
 
-// old ---
-int global__VPX_KF_MAX_DIST;
-int global__VPX_G_LAG_IN_FRAMES;
-int global__VPX_ENCODER_USED;
-int global__VPX_DECODER_USED;
-int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
-int global__SEND_VIDEO_LOSSLESS;
-int global__SEND_VIDEO_RAW_YUV;
-// old ---
+    // old ---
+    int global__VPX_KF_MAX_DIST;
+    int global__VPX_G_LAG_IN_FRAMES;
+    int global__VPX_ENCODER_USED;
+    int global__VPX_DECODER_USED;
+    int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
+    int global__SEND_VIDEO_LOSSLESS;
+    int global__SEND_VIDEO_RAW_YUV;
+    // old ---
 
 #else
 
-int global__ON_THE_FLY_CHANGES;
-int global__VPX_RESIZE_ALLOWED;
-int global__VPX_DROPFRAME_THRESH;
-int global__VPX_END_RESIZE_UP_THRESH;
-int global__VPX_END_RESIZE_DOWN_THRESH;
-int global__MAX_DECODE_TIME_US;
-int global__MAX_ENCODE_TIME_US;
-int global__VP8E_SET_CPUUSED_VALUE;
-int global__VPX_END_USAGE;
-int global__VPX_KF_MAX_DIST;
-int global__VPX_G_LAG_IN_FRAMES;
+    int global__ON_THE_FLY_CHANGES;
+    int global__VPX_RESIZE_ALLOWED;
+    int global__VPX_DROPFRAME_THRESH;
+    int global__VPX_END_RESIZE_UP_THRESH;
+    int global__VPX_END_RESIZE_DOWN_THRESH;
+    int global__MAX_DECODE_TIME_US;
+    int global__MAX_ENCODE_TIME_US;
+    int global__VP8E_SET_CPUUSED_VALUE;
+    int global__VPX_END_USAGE;
+    int global__VPX_KF_MAX_DIST;
+    int global__VPX_G_LAG_IN_FRAMES;
 
-int UTOX_DEFAULT_BITRATE_V;
+    int UTOX_DEFAULT_BITRATE_V;
 
-int global__VPX_ENCODER_USED;
-int global__VPX_DECODER_USED;
-int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
-int global__SEND_VIDEO_LOSSLESS;
-int global__SEND_VIDEO_RAW_YUV;
+    int global__VPX_ENCODER_USED;
+    int global__VPX_DECODER_USED;
+    int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
+    int global__SEND_VIDEO_LOSSLESS;
+    int global__SEND_VIDEO_RAW_YUV;
 
 #endif
 // ---------- dirty hack ----------
@@ -306,7 +306,7 @@ int using_h264_hw_accel = 0;
 int using_h264_encoder_in_toxcore = 0;
 
 #ifdef HAVE_FRAMEBUFFER
-#include <linux/fb.h>
+    #include <linux/fb.h>
 #endif
 
 #ifdef HAVE_OUTPUT_OPENGL
@@ -387,16 +387,16 @@ BWRingBuffer *video_play_rb = NULL;
 
 
 #if defined(HAVE_ALSA_REC) || defined(HAVE_ALSA_PLAY)
-#include <alsa/asoundlib.h>
+    #include <alsa/asoundlib.h>
 #endif
 
 #ifdef HAVE_LIBAO
-#include <ao/ao.h>
+    #include <ao/ao.h>
 #endif
 
 #ifdef HAVE_PORTAUDIO
-#include <portaudio.h>
-#include "ringbuf.h"
+    #include <portaudio.h>
+    #include "ringbuf.h"
 #endif
 
 
@@ -675,9 +675,9 @@ static int get_policy(char p, int *policy);
 static void display_thread_sched_attr(char *msg);
 static void display_sched_attr(char *msg, int policy, struct sched_param *param);
 #ifdef HAVE_ALSA_PLAY
-void close_sound_play_device();
-void init_sound_play_device(int channels, int sample_rate);
-static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate);
+    void close_sound_play_device();
+    void init_sound_play_device(int channels, int sample_rate);
+    static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate);
 #endif
 int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin);
 void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str);
@@ -737,12 +737,12 @@ int global_framebuffer_device_fd = 0;
 int64_t global_disconnect_friend_num = -1;
 
 #ifdef HAVE_FRAMEBUFFER
-struct fb_var_screeninfo var_framebuffer_info;
-struct fb_fix_screeninfo var_framebuffer_fix_info;
+    struct fb_var_screeninfo var_framebuffer_info;
+    struct fb_fix_screeninfo var_framebuffer_fix_info;
 #endif
 #ifdef HAVE_OUTPUT_OPENGL
-struct fb_var_screeninfo var_framebuffer_info;
-struct fb_fix_screeninfo var_framebuffer_fix_info;
+    struct fb_var_screeninfo var_framebuffer_info;
+    struct fb_fix_screeninfo var_framebuffer_fix_info;
 #endif
 
 struct opengl_video_frame_data
@@ -777,38 +777,38 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 // uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
 
 #ifdef HAVE_EXTERNAL_KEYS
-int ext_keys_fd;
-char *ext_keys_fifo = "ext_keys.fifo";
-int do_read_ext_keys = 0;
-#define MAX_READ_FIFO_BUF 1000
+    int ext_keys_fd;
+    char *ext_keys_fifo = "ext_keys.fifo";
+    int do_read_ext_keys = 0;
+    #define MAX_READ_FIFO_BUF 1000
 #endif
 
 #ifdef HAVE_LIBAO
-int libao_cancel_pending = 0;
-ao_device *_ao_device = NULL;
-ao_sample_format _ao_format;
-int _ao_default_driver = -1;
-sem_t count_audio_play_threads;
-int count_audio_play_threads_int;
-#define MAX_AO_PLAY_THREADS 2
-sem_t audio_play_lock;
+    int libao_cancel_pending = 0;
+    ao_device *_ao_device = NULL;
+    ao_sample_format _ao_format;
+    int _ao_default_driver = -1;
+    sem_t count_audio_play_threads;
+    int count_audio_play_threads_int;
+    #define MAX_AO_PLAY_THREADS 2
+    sem_t audio_play_lock;
 #endif
 
 #ifdef HAVE_ALSA_PLAY
-snd_pcm_t *audio_play_handle;
-const char *audio_play_device = "default";
-int have_output_sound_device = 1;
-sem_t count_audio_play_threads;
-int count_audio_play_threads_int;
-long debug_alsa_play_001 = 0;
-#define MAX_ALSA_AUDIO_PLAY_THREADS 1
-sem_t audio_play_lock;
-#define ALSA_AUDIO_PLAY_START_THRESHOLD (200)
-#define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
-#define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
-// #define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
-#define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.1)
-#define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
+    snd_pcm_t *audio_play_handle;
+    const char *audio_play_device = "default";
+    int have_output_sound_device = 1;
+    sem_t count_audio_play_threads;
+    int count_audio_play_threads_int;
+    long debug_alsa_play_001 = 0;
+    #define MAX_ALSA_AUDIO_PLAY_THREADS 1
+    sem_t audio_play_lock;
+    #define ALSA_AUDIO_PLAY_START_THRESHOLD (200)
+    #define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
+    #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
+    // #define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
+    #define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.1)
+    #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
 
@@ -834,8 +834,8 @@ int count_video_record_threads_int;
 
 
 #ifdef HAVE_PORTAUDIO
-PaStream *portaudio_stream = NULL;
-ringbuf_t portaudio_out_rb;
+    PaStream *portaudio_stream = NULL;
+    ringbuf_t portaudio_out_rb;
 #endif
 
 
@@ -844,21 +844,21 @@ ringbuf_t portaudio_out_rb;
 #define DEFAULT_AUDIO_CAPTURE_CHANNELS (1)
 
 #ifdef HAVE_ALSA_REC
-snd_pcm_t *audio_capture_handle;
-// const char *audio_device = "plughw:0,0";
-// const char *audio_device = "hw:CARD=U0x46d0x933,DEV=0";
-const char *audio_device = "default";
-// sysdefault:CARD
-int do_audio_recording = 1;
-int have_input_sound_device = 1;
-#define MAX_ALSA_RECORD_THREADS 1
-#define AUDIO_RECORD_AUDIO_LENGTH (120)
-// frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
-// frame is also = ((AUDIO_RECORD_BUFFER_BYTES / DEFAULT_AUDIO_CAPTURE_CHANNELS) / 2)
-#define AUDIO_RECORD_BUFFER_FRAMES (((DEFAULT_AUDIO_CAPTURE_SAMPLERATE) * (AUDIO_RECORD_AUDIO_LENGTH)) / 1000)
-#define AUDIO_RECORD_BUFFER_BYTES (AUDIO_RECORD_BUFFER_FRAMES * 2)
-sem_t count_audio_record_threads;
-int count_audio_record_threads_int;
+    snd_pcm_t *audio_capture_handle;
+    // const char *audio_device = "plughw:0,0";
+    // const char *audio_device = "hw:CARD=U0x46d0x933,DEV=0";
+    const char *audio_device = "default";
+    // sysdefault:CARD
+    int do_audio_recording = 1;
+    int have_input_sound_device = 1;
+    #define MAX_ALSA_RECORD_THREADS 1
+    #define AUDIO_RECORD_AUDIO_LENGTH (120)
+    // frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
+    // frame is also = ((AUDIO_RECORD_BUFFER_BYTES / DEFAULT_AUDIO_CAPTURE_CHANNELS) / 2)
+    #define AUDIO_RECORD_BUFFER_FRAMES (((DEFAULT_AUDIO_CAPTURE_SAMPLERATE) * (AUDIO_RECORD_AUDIO_LENGTH)) / 1000)
+    #define AUDIO_RECORD_BUFFER_BYTES (AUDIO_RECORD_BUFFER_FRAMES * 2)
+    sem_t count_audio_record_threads;
+    int count_audio_record_threads_int;
 #endif
 
 uint32_t global_audio_bit_rate;
@@ -6963,9 +6963,9 @@ void *thread_av(void *data)
                 }
             }
 
-// ----------------- for sending video -----------------
-// ----------------- for sending video -----------------
-// ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
             //  dbg(9, "AV Thread #%d:get frame\n", (int) id);
             // capturing is enabled, capture frames
             int r = v4l_getframe(&av_video_frame, &(av_video_frame.buf_len));
@@ -7137,9 +7137,9 @@ void *thread_av(void *data)
             }
 
             yieldcpu(default_fps_sleep_corrected); /* ~25 frames per second */
-// ----------------- for sending video -----------------
-// ----------------- for sending video -----------------
-// ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
+            // ----------------- for sending video -----------------
         }
         else
         {
@@ -9562,7 +9562,7 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
 }
 void *thread_opengl(void *data)
 {
-// --------- openGL
+    // --------- openGL
     if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
     {
         dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
@@ -9735,7 +9735,7 @@ void *thread_opengl(void *data)
     }
 
     // esMainLoop(&esContext);
-// --------- openGL
+    // --------- openGL
 
     if (opengl_active == 1)
     {
