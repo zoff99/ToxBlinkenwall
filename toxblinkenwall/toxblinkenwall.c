@@ -6741,6 +6741,7 @@ void fb_copy_frame_to_fb(void *videoframe)
         memcpy(framebuffer_mappedmem, videoframe, framebuffer_screensize);
     }
 }
+
 void fb_fill_black()
 {
     if (framebuffer_mappedmem != NULL)
@@ -7163,7 +7164,6 @@ void *thread_av(void *data)
     dbg(2, "ToxVideo:Clean thread exit!\n");
 }
 
-
 void *thread_audio_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -7185,6 +7185,7 @@ void *thread_audio_av(void *data)
 
     dbg(2, "ToxVideo:Clean audio thread exit!\n");
 }
+
 void *thread_video_av(void *data)
 {
     ToxAV *av = (ToxAV *) data;
@@ -7315,6 +7316,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
  * License: Public Domain
  *
  **/
+
 // Constant: font8x8_basic
 // Contains an 8x8 font map for unicode points U+0000 - U+007F (basic latin)
 char font8x8_basic[128][8] =
@@ -7448,6 +7450,7 @@ char font8x8_basic[128][8] =
     { 0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+007E (~)
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}    // U+007F
 };
+
 // Constant: font8x8_00A0
 // Contains an 8x8 font map for unicode points U+00A0 - U+00FF (extended latin)
 char font8x8_ext_latin[96][8] =
@@ -7549,6 +7552,7 @@ char font8x8_ext_latin[96][8] =
     { 0x00, 0x00, 0x06, 0x3E, 0x66, 0x3E, 0x06, 0x00},   // U+00FE (thorn)
     { 0x00, 0x33, 0x00, 0x33, 0x33, 0x3E, 0x30, 0x1F}    // U+00FF (y umlaut)
 };
+
 // "0" -> [48]
 // "9" -> [57]
 // ":" -> [58]
@@ -7571,6 +7575,7 @@ char *get_bitmap_from_font(int font_char_num)
 #endif
     return ret_bitmap;
 }
+
 void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
                          uint8_t col_value, uint8_t *yy, int w)
 {
@@ -7602,6 +7607,7 @@ void print_font_char_ptr(int start_x_pix, int start_y_pix, int font_char_num,
         }
     }
 }
+
 void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value)
 {
     int font_w = 8;
@@ -7632,6 +7638,7 @@ void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_
         }
     }
 }
+
 void black_yuf_frame_xy()
 {
     const uint8_t r = 0;
@@ -7639,6 +7646,7 @@ void black_yuf_frame_xy()
     const uint8_t b = 0;
     left_top_bar_into_yuv_frame(0, 0, av_video_frame.w, av_video_frame.h, r, g, b);
 }
+
 void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int *state)
 {
     uint8_t r;
@@ -7670,6 +7678,7 @@ void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int *state)
         left_top_bar_into_yuv_frame(start_x_pix, start_y_pix, 30, 30, r, g, b);
     }
 }
+
 void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame_w, int frame_h, uint8_t r, uint8_t g,
                                uint8_t b)
 {
@@ -7682,12 +7691,14 @@ void set_color_in_yuv_frame_xy(uint8_t *yuv_frame, int px_x, int px_y, int frame
     yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total] = u;
     yuv_frame[(px_y / 2) * (frame_w / 2) + (px_x / 2) + size_total + (size_total / 4)] = v;
 }
+
 void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t *v)
 {
     *y = RGB2Y(r, g, b);
     *u = RGB2U(r, g, b);
     *v = RGB2V(r, g, b);
 }
+
 void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int px_x, int px_y,
                                 uint8_t r, uint8_t g, uint8_t b)
 {
@@ -7707,6 +7718,7 @@ void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uin
     // fb_buf[(location + 2)] = r;
     // fb_buf[(location + 3)] = 0; // a,  No transparency
 }
+
 void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int bar_start_x_pix,
                                   int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -7722,6 +7734,7 @@ void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, u
         }
     }
 }
+
 void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf,
                           int start_x_pix, int start_y_pix, int font_char_num, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -7761,6 +7774,7 @@ void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *
         }
     }
 }
+
 void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix,
                            int start_y_pix, const char *text)
 {
@@ -7815,6 +7829,7 @@ void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t 
         carriage++;
     }
 }
+
 void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
                               int w, int h)
 {
@@ -7863,6 +7878,7 @@ void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text
         carriage++;
     }
 }
+
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
 {
     int carriage = 0;
@@ -7910,6 +7926,7 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
         carriage++;
     }
 }
+
 void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
                                  uint8_t g, uint8_t b)
 {
@@ -7962,6 +7979,7 @@ static int get_policy(char p, int *policy)
             return 0;
     }
 }
+
 static void display_sched_attr(char *msg, int policy, struct sched_param *param)
 {
     dbg(9, "%s:policy=%s, priority=%d\n", msg,
@@ -7972,6 +7990,7 @@ static void display_sched_attr(char *msg, int policy, struct sched_param *param)
         "???",
         param->sched_priority);
 }
+
 static void display_thread_sched_attr(char *msg)
 {
     int policy, s;
@@ -7989,6 +8008,7 @@ static void display_thread_sched_attr(char *msg)
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 #ifdef HAVE_ALSA_REC
+
 void close_sound_device()
 {
     if (have_input_sound_device == 1)
@@ -7997,6 +8017,7 @@ void close_sound_device()
         snd_pcm_close(audio_capture_handle);
     }
 }
+
 void init_sound_device()
 {
     int i;
@@ -8079,12 +8100,14 @@ void init_sound_device()
         //exit (1);
     }
 }
+
 void inc_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
     count_audio_record_threads_int++;
     sem_post(&count_audio_record_threads);
 }
+
 void dec_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
@@ -8097,6 +8120,7 @@ void dec_audio_record_t_counter()
 
     sem_post(&count_audio_record_threads);
 }
+
 int get_audio_record_t_counter()
 {
     sem_wait(&count_audio_record_threads);
@@ -8105,6 +8129,7 @@ int get_audio_record_t_counter()
     return ret;
 }
 // r -u /dev/fb0 -j 640 -k 480
+
 void *audio_record__(void *buf_pointer)
 {
     if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
@@ -8133,6 +8158,7 @@ void *audio_record__(void *buf_pointer)
     dec_audio_record_t_counter();
     pthread_exit(0);
 }
+
 void *thread_record_alsa_audio(void *data)
 {
     int i;
@@ -8240,10 +8266,12 @@ void *thread_record_alsa_audio(void *data)
 
     close_sound_device();
 }
+
 #endif
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
+
 void call_entry_num(Tox *tox, int entry_num)
 {
     if (accepting_calls == 1)
@@ -8267,6 +8295,7 @@ void call_entry_num(Tox *tox, int entry_num)
         }
     }
 }
+
 void toggle_speaker()
 {
 #ifdef HAVE_ALSA_PLAY
@@ -8299,6 +8328,7 @@ void toggle_speaker()
     update_status_line_on_fb();
 #endif
 }
+
 void toggle_quality()
 {
     int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
@@ -8340,6 +8370,7 @@ void toggle_quality()
         }
     }
 }
+
 void *thread_phonebook_invite(void *data)
 {
     Tox *tox = (Tox *)data;
@@ -8369,6 +8400,7 @@ void *thread_phonebook_invite(void *data)
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
 }
+
 #ifdef HAVE_EXTERNAL_KEYS
 void *thread_ext_keys(void *data)
 {
@@ -8463,6 +8495,7 @@ void *thread_ext_keys(void *data)
     close(ext_keys_fd);
 }
 #endif
+
 #ifdef HAVE_ALSA_PLAY
 void close_sound_play_device()
 {
@@ -8476,6 +8509,7 @@ void close_sound_play_device()
 
     dbg(0, "ALSA:016\n");
 }
+
 void init_sound_play_device(int channels, int sample_rate)
 {
     dbg(0, "ALSA:002\n");
@@ -8672,6 +8706,7 @@ void init_sound_play_device(int channels, int sample_rate)
 
     dbg(0, "ALSA:009\n");
 }
+
 static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate)
 {
     // dbg(9, "play_device:stream recovery ...\n");
@@ -8745,6 +8780,7 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
     return err;
 }
 #endif
+
 void sigint_handler(int signo)
 {
     if (signo == SIGINT)
@@ -8771,6 +8807,7 @@ void sigint_handler(int signo)
 #endif
     }
 }
+
 #ifdef HAVE_OUTPUT_OPENGL
 /*
 float get_scale_factor(int dst_width, int dst_height, int src_width, int src_height)
@@ -8804,6 +8841,7 @@ float get_aspect_ratio(int dst_width, int dst_height, int src_width, int src_hei
     float aspect = ((float)src_width / (float)src_height) / (aspect_dst);
     return aspect;
 }
+
 float get_opengl_h_factor(float scale)
 {
     if (scale == 0)
@@ -8820,6 +8858,7 @@ float get_opengl_h_factor(float scale)
         return (1 / scale);
     }
 }
+
 float get_opengl_w_factor(float scale)
 {
     if (scale == 0)
@@ -8896,6 +8935,7 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 //
 // params: ww -> screen width, hh -> screen height
 //
+
 int Init(ESContext *esContext, int ww, int hh)
 {
     esContext->userData = malloc(sizeof(openGL_UserData));
@@ -9071,6 +9111,7 @@ int Init(ESContext *esContext, int ww, int hh)
     /* bind the Y texture. */
     return GL_TRUE;
 }
+
 void Update(ESContext *esContext, float deltatime)
 {
     //dbg(9, "openGL: Update\n");
@@ -9235,6 +9276,7 @@ void Update(ESContext *esContext, float deltatime)
     // dbg(9, "openGL: global_did_draw_frame:001:%d\n", (int)global_did_draw_frame);
     //    sem_post(&video_play_lock);
 }
+
 void draw_fps_to_overlay(ESContext *esContext, float fps)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9294,6 +9336,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
              (int)global_decoder_video_bitrate);
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, userData->ol_yy, userData->ol_ww, userData->ol_hh);
 }
+
 void DrawOverlay(ESContext *esContext, int changed)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9375,6 +9418,7 @@ void DrawOverlay(ESContext *esContext, int changed)
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
+
 /* debugging timing functions */
 /* debugging timing functions */
 uint64_t global_global_tt1 = 0;
@@ -9382,6 +9426,7 @@ void __tt1()
 {
     global_global_tt1 = bw_current_time_actual();
 }
+
 void __tt2(int i)
 {
     uint64_t tt2 = bw_current_time_actual();
@@ -9389,6 +9434,7 @@ void __tt2(int i)
 }
 /* debugging timing functions */
 /* debugging timing functions */
+
 void DrawBlackRect(ESContext *esContext)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9455,6 +9501,7 @@ void DrawBlackRect(ESContext *esContext)
     // --------------
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 }
+
 void Draw(ESContext *esContext)
 {
     // dbg(9, "opengl:draw\n");
@@ -9523,6 +9570,7 @@ void Draw(ESContext *esContext)
     DrawBlackRect(esContext);
 }
 //
+
 void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
 {
     openGL_UserData *userData = esContext->userData;
@@ -9560,6 +9608,7 @@ void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
     // --------------------------------------
     // --------------------------------------
 }
+
 void *thread_opengl(void *data)
 {
     // --------- openGL
@@ -9744,6 +9793,7 @@ void *thread_opengl(void *data)
     }
 }
 #endif
+
 int main(int argc, char *argv[])
 {
     // don't accept calls until video device is ready
