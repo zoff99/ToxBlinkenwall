@@ -5104,11 +5104,13 @@ int v4l_getframe(toxcam_av_video_frame *avfr, uint32_t *buf_len)
             memset(&ec, 0, sizeof(ec));
             ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
             uint32_t global_encoder_video_bitrate_tweaked = global_encoder_video_bitrate;
+
             if (global_encoder_video_bitrate > 500)
             {
                 // limit hw encoder bitrate
                 global_encoder_video_bitrate_tweaked = 500;
             }
+
             ec.value = global_encoder_video_bitrate_tweaked * 1000;
             ec.size = 0;
             ecs.controls = &ec;
@@ -6979,7 +6981,7 @@ void *thread_av(void *data)
                     hw_encoder_wanted_prev = hw_encoder_wanted;
                     fully_stop_cam();
                     yieldcpu(50);
-                    using_h264_hw_accel = 0;                    
+                    using_h264_hw_accel = 0;
                     dbg(9, "switching OFF H264 hardware accel. encoder\n");
                     init_and_start_cam(0, false);
                 }
