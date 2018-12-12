@@ -298,6 +298,7 @@ static const char global_version_string[] = "0.99.31";
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
 #define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
+#define H264_HW_ENCODER_MAX_VIDEO_BITRATE 10000 // kbit/s
 uint32_t h264_bufcounter = 0;
 uint32_t h264_bufcounter_first = 1;
 uint8_t *h264_frame_buf_save = NULL;
@@ -3508,11 +3509,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             {
                 if (strlen(message) > 7) // require min. 1 digits
                 {
+                    dbg(0, "hwenc:str=%s\n", message);
                     int value_new = get_number_in_string(message, (int)1);
+                    dbg(0, "hwenc:int=%d\n", value_new);
 
                     if ((value_new == 0) || (value_new == 1))
                     {
                         hw_encoder_wanted = value_new;
+                        dbg(0, "hwenc:hw_encoder_wanted=%d\n", hw_encoder_wanted);
                     }
                 }
             }
@@ -5105,10 +5109,10 @@ int v4l_getframe(toxcam_av_video_frame *avfr, uint32_t *buf_len)
             ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
             uint32_t global_encoder_video_bitrate_tweaked = global_encoder_video_bitrate;
 
-            if (global_encoder_video_bitrate > 500)
+            if (global_encoder_video_bitrate > H264_HW_ENCODER_MAX_VIDEO_BITRATE)
             {
                 // limit hw encoder bitrate
-                global_encoder_video_bitrate_tweaked = 500;
+                global_encoder_video_bitrate_tweaked = H264_HW_ENCODER_MAX_VIDEO_BITRATE;
             }
 
             ec.value = global_encoder_video_bitrate_tweaked * 1000;
@@ -6810,7 +6814,6 @@ void fully_stop_cam()
 
     v4lconvert_destroy(v4lconvert_data);
     free(av_video_frame.h264_buf);
-    using_h264_encoder_in_toxcore = 0;
     using_h264_hw_accel = 0;
     size_t i;
 
@@ -6988,6 +6991,11 @@ void *thread_av(void *data)
                 else
                 {
                     hw_encoder_wanted_prev = hw_encoder_wanted;
+                    dbg(9, "try to switch on HW encoder ... %d %d %d\n",
+                        using_h264_encoder_in_toxcore,
+                        using_h264_hw_accel,
+                        hw_encoder_wanted_prev
+                       );
                 }
             }
 
@@ -7185,6 +7193,7 @@ void *thread_av(void *data)
         else
         {
             fully_stop_cam();
+            using_h264_encoder_in_toxcore = 0;
 
             while (global_video_active == 0)
             {
@@ -7198,7 +7207,7 @@ void *thread_av(void *data)
     if (video_call_enabled == 1)
     {
         // end streaming
-        v4l_stream_off();
+        fully_stop_cam();
     }
 
     dbg(2, "ToxVideo:Clean thread exit!\n");
