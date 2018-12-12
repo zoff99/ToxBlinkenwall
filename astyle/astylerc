@@ -1,3 +1,6 @@
+#
+## ---- use astyle 3.1 ----
+#
 # Bracket Style Options
 --style=allman
 
