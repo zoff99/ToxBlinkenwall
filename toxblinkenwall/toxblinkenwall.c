@@ -304,6 +304,8 @@ uint8_t *h264_frame_buf_save = NULL;
 uint32_t h264_frame_buf_save_len = 0;
 int using_h264_hw_accel = 0;
 int using_h264_encoder_in_toxcore = 0;
+int hw_encoder_wanted = 1;
+int hw_encoder_wanted_prev = 1;
 
 #ifdef HAVE_FRAMEBUFFER
     #include <linux/fb.h>
@@ -3175,6 +3177,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
     send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
+    send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>  --> use hw encoder");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
     // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
@@ -3499,6 +3502,18 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 if (accepting_calls == 1)
                 {
                     button_d();
+                }
+            }
+            else if (strncmp((char *)message, ".hwenc ", strlen((char *)".hwenc ")) == 0)
+            {
+                if (strlen(message) > 7) // require min. 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)1);
+
+                    if ((value_new == 0) || (value_new == 1))
+                    {
+                        hw_encoder_wanted = value_new;
+                    }
                 }
             }
             else if (strncmp((char *)message, ".xqt ", strlen((char *)".xqt ")) == 0)
@@ -5088,7 +5103,13 @@ int v4l_getframe(toxcam_av_video_frame *avfr, uint32_t *buf_len)
             memset(&ecs, 0, sizeof(ecs));
             memset(&ec, 0, sizeof(ec));
             ec.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-            ec.value = global_encoder_video_bitrate * 1000;
+            uint32_t global_encoder_video_bitrate_tweaked = global_encoder_video_bitrate;
+            if (global_encoder_video_bitrate > 500)
+            {
+                // limit hw encoder bitrate
+                global_encoder_video_bitrate_tweaked = 500;
+            }
+            ec.value = global_encoder_video_bitrate_tweaked * 1000;
             ec.size = 0;
             ecs.controls = &ec;
             ecs.count = 1;
@@ -6951,10 +6972,27 @@ void *thread_av(void *data)
     {
         if (global_video_active == 1)
         {
+            if (hw_encoder_wanted_prev != hw_encoder_wanted)
+            {
+                if (hw_encoder_wanted == 0)
+                {
+                    hw_encoder_wanted_prev = hw_encoder_wanted;
+                    fully_stop_cam();
+                    yieldcpu(50);
+                    using_h264_hw_accel = 0;                    
+                    dbg(9, "switching OFF H264 hardware accel. encoder\n");
+                    init_and_start_cam(0, false);
+                }
+                else
+                {
+                    hw_encoder_wanted_prev = hw_encoder_wanted;
+                }
+            }
+
             // if we can use HW Accel. H264 encoder, switch to it now
             if (using_h264_encoder_in_toxcore == 1)
             {
-                if (using_h264_hw_accel == 0)
+                if ((using_h264_hw_accel == 0) && (hw_encoder_wanted_prev == 1))
                 {
                     fully_stop_cam();
                     yieldcpu(50);
