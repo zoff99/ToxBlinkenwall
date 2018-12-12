@@ -13,7 +13,7 @@
 --indent-col1-comments
 
 # Padding Options
-#--break-blocks
+--break-blocks
 --pad-header
 --pad-oper
 --unpad-paren
