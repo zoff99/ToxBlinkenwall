@@ -930,8 +930,8 @@ uint32_t global_decoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate = 0;
 uint32_t global_encoder_video_bitrate_prev = 0;
 uint32_t global_network_round_trip_ms = 0;
-int32_t global_play_delay_ms = 0;
-int32_t global_remote_record_delay = 0;
+int64_t global_play_delay_ms = 0;
+int64_t global_remote_record_delay = 0;
 uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_tox_video_incoming_fps = 0;
@@ -5374,7 +5374,17 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     }
     else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
     {
-        global_play_delay_ms = (int32_t)comm_number;
+        global_play_delay_ms = (int64_t)comm_number;
+
+        if (global_play_delay_ms < 0)
+        {
+            global_play_delay_ms = 0;
+        }
+        else if (global_play_delay_ms > 20000)
+        {
+            global_play_delay_ms = 20000;
+        }
+
         // dbg(9, "vplay_delay=%d\n", (int)global_play_delay_ms);
     }
     else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
@@ -5392,7 +5402,16 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     }
     else if (comm_value == TOXAV_CALL_COMM_REMOTE_RECORD_DELAY)
     {
-        global_remote_record_delay = (uint32_t)comm_number;
+        global_remote_record_delay = (int64_t)comm_number;
+
+        if (global_remote_record_delay < 0)
+        {
+            global_remote_record_delay = 0;
+        }
+        else if (global_remote_record_delay > 20000)
+        {
+            global_remote_record_delay = 20000;
+        }
     }
 }
 
