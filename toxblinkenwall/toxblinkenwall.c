@@ -5356,12 +5356,12 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
     {
         global_encoder_string = " H264";
-        using_h264_encoder_in_toxcore = 1;
+        //using_h264_encoder_in_toxcore = 1;
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
     {
         global_encoder_string = " H264.P";
-        using_h264_encoder_in_toxcore = 1;
+        //using_h264_encoder_in_toxcore = 1;
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
     {
