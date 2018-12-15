@@ -1,3 +1,6 @@
+#
+## ---- use astyle 3.1 ----
+#
 # Bracket Style Options
 --style=allman
 
@@ -6,12 +9,14 @@
 
 # Indentation Options
 --indent-switches
-#--indent-preproc-block
+--indent-preproc-block
+--indent-col1-comments
 
 # Padding Options
---pad-header
 --break-blocks
+--pad-header
 --pad-oper
+--unpad-paren
 --delete-empty-lines
 --unpad-paren
 --align-pointer=name
@@ -19,8 +24,12 @@
 
 # Formatting Options
 --add-brackets
+--add-braces
 --convert-tabs
 --max-code-length=120
+--attach-return-type
+--attach-return-type-decl
+
 
 # Other Options
 --preserve-date
