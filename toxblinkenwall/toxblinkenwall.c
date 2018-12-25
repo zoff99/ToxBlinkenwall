@@ -155,8 +155,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 31
-static const char global_version_string[] = "0.99.31";
+#define VERSION_PATCH 32
+static const char global_version_string[] = "0.99.32";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -770,7 +770,7 @@ vpx_image_t input;
 int global_video_active = 0;
 int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
-int video_high = 0;
+int video_high = 1;
 int switch_tcponly = 0;
 int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
@@ -9876,7 +9876,7 @@ int main(int argc, char *argv[])
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
-    video_high = 0;
+    video_high = 1;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
     v4l2_device = malloc(400);
