@@ -4736,14 +4736,15 @@ int init_cam(int sleep_flag, bool h264_codec)
     }
 
     struct v4l2_cropcap cropcap;
-    memset(&cropcap, 0, sizeof (cropcap));
+
+    memset(&cropcap, 0, sizeof(cropcap));
+
     cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    if (-1 == ioctl (fd, VIDIOC_CROPCAP, &cropcap))
+    if (-1 == ioctl(fd, VIDIOC_CROPCAP, &cropcap))
     {
         dbg(0, "VIDIOC_CROPCAP Error\n");
     }
-
 
     camera_supports_h264 = detect_h264_on_camera(fd);
     v4lconvert_data = v4lconvert_create(fd);
@@ -4762,8 +4763,6 @@ int init_cam(int sleep_flag, bool h264_codec)
         format.fmt.pix.width = 640;
         format.fmt.pix.height = 480;
     }
-
-
 
     dest_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
@@ -4836,14 +4835,13 @@ int init_cam(int sleep_flag, bool h264_codec)
         format.fmt.pix.height = 480;
     }
 
-/*
-    if (h264_codec)
-    {
-        format.fmt.pix.width = PI_H264_CAM_W;
-        format.fmt.pix.height = PI_H264_CAM_H;
-    }
-*/
-
+    /*
+        if (h264_codec)
+        {
+            format.fmt.pix.width = PI_H264_CAM_W;
+            format.fmt.pix.height = PI_H264_CAM_H;
+        }
+    */
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
     dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
@@ -4877,8 +4875,6 @@ int init_cam(int sleep_flag, bool h264_codec)
         free(setfps);
         setfps = NULL;
     }
-
-
 
     // HINT: set camera device fps -----------------------
     struct v4l2_requestbuffers bufrequest;
@@ -4914,7 +4910,6 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     dbg(0, "VIDIOC_REQBUFS got type=%d\n", (int)bufrequest.type);
     dbg(0, "requested %d buffers from video input device\n", bufrequest.count);
-
     buffers = calloc(bufrequest.count, sizeof(*buffers));
     dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
     dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
@@ -5381,20 +5376,24 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_encoder_string = " H264";
 #ifdef USE_V4L2_H264
+
         if (camera_supports_h264 == 1)
         {
             using_h264_encoder_in_toxcore = 1;
         }
+
 #endif
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
     {
         global_encoder_string = " H264.P";
 #ifdef USE_V4L2_H264
+
         if (camera_supports_h264 == 1)
         {
             using_h264_encoder_in_toxcore = 1;
         }
+
 #endif
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
@@ -6262,7 +6261,7 @@ void update_status_line_on_fb()
  * crop_width and crop_height must be a multiple of 4
  */
 void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height_px1, uint32_t ystride_,
-    uint32_t ustride_, uint32_t vstride_, uint32_t crop_width, uint32_t crop_height)
+                    uint32_t ustride_, uint32_t vstride_, uint32_t crop_width, uint32_t crop_height)
 {
     uint32_t remove_x_pixels = (frame_width_px1 - crop_width) / 4;
     uint32_t remove_y_pixels = (frame_height_px1 - crop_height) / 4;
@@ -6270,15 +6269,13 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
     uint32_t result_height = 512;
     uint8_t *y_result = calloc(1, (result_width * result_height) * 1.5);
     memset(y_result, 0, (result_width * result_height) * 1.5);
-
     uint8_t *y_result_pos = y_result;
     uint8_t *y_source_pos = *y;
-    
     // dbg(9, "ys=%d us=%d vs=%d\n", ystride_, ustride_, vstride_);
     // dbg(9, "%d %d\n", remove_x_pixels, remove_y_pixels);
-
     y_source_pos = *y + (2 * remove_x_pixels) + (2 * remove_y_pixels * ystride_);
-    for (uint32_t i=0;i<result_height;i++)
+
+    for (uint32_t i = 0; i < result_height; i++)
     {
         memcpy(y_result_pos, y_source_pos, result_width);
         y_result_pos = y_result_pos + result_width;
@@ -6288,25 +6285,28 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
 #if 1
     y_source_pos = *y + (ystride_ * frame_height_px1) + remove_x_pixels + (remove_y_pixels * ustride_);
     y_result_pos = y_result + (result_width * result_height);
-    for (uint32_t i=0;i<(result_height / 2);i++)
+
+    for (uint32_t i = 0; i < (result_height / 2); i++)
     {
         memcpy(y_result_pos, y_source_pos, (result_width / 2));
         y_result_pos = y_result_pos + (result_width / 2);
         y_source_pos = y_source_pos + ustride_;
     }
-#endif
 
+#endif
 #if 1
-    y_source_pos = *y + (ystride_ * frame_height_px1) + ((frame_height_px1 / 2) * ustride_) + remove_x_pixels + (remove_y_pixels * vstride_);
+    y_source_pos = *y + (ystride_ * frame_height_px1) + ((frame_height_px1 / 2) * ustride_) + remove_x_pixels +
+                   (remove_y_pixels * vstride_);
     y_result_pos = y_result + (result_width * result_height) + ((result_width / 2) * (result_height / 2));
-    for (uint32_t i=0;i<(result_height / 2);i++)
+
+    for (uint32_t i = 0; i < (result_height / 2); i++)
     {
         memcpy(y_result_pos, y_source_pos, (result_width / 2));
         y_result_pos = y_result_pos + (result_width / 2);
         y_source_pos = y_source_pos + vstride_;
     }
-#endif
 
+#endif
     free(*y);
     *y = y_result;
 }
@@ -6370,11 +6370,7 @@ static void *video_play(void *dummy)
     //dbg(9, "VP-DEBUG:009\n");
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
-
-
     sem_post(&video_in_frame_copy_sem);
-
-
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
     //incoming_video_height = (int)frame_height_px;
@@ -6404,7 +6400,6 @@ static void *video_play(void *dummy)
             if (1 == 2) // ((frame_width_px1 == 1280) && (frame_height_px1 == 720))
             {
                 crop_yuv_frame(&y, frame_width_px1, frame_height_px1, ystride_, ustride_, vstride_, 896, 512);
-
                 fdata->p = y;
                 fdata->timestamp = bw_current_time_actual();
                 fdata->y_stride = 896;
@@ -6427,7 +6422,6 @@ static void *video_play(void *dummy)
                 free(((struct opengl_video_frame_data *)res)->p);
                 free(res);
             }
-
         }
     }
 
@@ -6435,12 +6429,10 @@ static void *video_play(void *dummy)
     // timspan_in_ms = __utimer_stop(&tm_01, "video_play_stage_1:", 0);
     // dbg(9, "VP-DEBUG:021\n");
 #endif
-
 #ifdef HAVE_OUTPUT_OPENGL
 #else
     //PL// sem_post(&video_play_lock);
 #endif
-
 #ifdef HAVE_FRAMEBUFFER
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
@@ -6852,7 +6844,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
                         sem_wait(&video_in_frame_copy_sem);
                         sem_post(&video_in_frame_copy_sem);
-
                         // zzzzzz
                         // yieldcpu(1);
                     }
@@ -7139,13 +7130,12 @@ void *thread_av(void *data)
 
             if (camera_res_high_wanted_prev != video_high)
             {
-                    fully_stop_cam();
-                    yieldcpu(50);
-                    dbg(9, "switching camera resolution to: %d %d\n", video_high, camera_res_high_wanted_prev);
-                    video_high = camera_res_high_wanted_prev;
-                    init_and_start_cam(0, using_h264_hw_accel);
+                fully_stop_cam();
+                yieldcpu(50);
+                dbg(9, "switching camera resolution to: %d %d\n", video_high, camera_res_high_wanted_prev);
+                video_high = camera_res_high_wanted_prev;
+                init_and_start_cam(0, using_h264_hw_accel);
             }
-
 
             // if we can use HW Accel. H264 encoder, switch to it now
             if (using_h264_encoder_in_toxcore == 1)
