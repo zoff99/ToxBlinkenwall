@@ -1400,13 +1400,26 @@ void button_d()
     global_update_opengl_status_text = 1;
 }
 
+// stuff to do when we end a call
+void on_end_call()
+{
+    if (omx_initialized == 1)
+    {
+        usleep(2000);
+        omx_display_disable(&omx);
+        usleep(10000);
+        omx_deinit(&omx);
+        usleep(2000);
+        omx_initialized = 0;
+    }
+}
 
 #ifdef HAVE_PORTAUDIO
 
 /* This routine will be called by the PortAudio engine when audio is needed */
 static int portaudio_data_callback(const void *inputBuffer,
                                    void *outputBuffer,
-                                   unsigned long framesPerBuffer,have_frame
+                                   unsigned long framesPerBuffer, have_frame
                                    const PaStreamCallbackTimeInfo *timeInfo,
                                    PaStreamCallbackFlags statusFlags,
                                    void *userData)
@@ -5484,6 +5497,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         reset_toxav_call_waiting();
         global_video_active = 0;
+        on_end_call();
 
         if (video_play_rb != NULL)
         {
@@ -5512,6 +5526,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         reset_toxav_call_waiting();
         global_video_active = 0;
+        on_end_call();
 
         if (video_play_rb != NULL)
         {
@@ -5791,7 +5806,6 @@ void *alsa_audio_play(void *data)
             if ((int)err == -11) // -> Resource temporarily unavailable
             {
                 dbg(0, "play_device:yield a bit (2)\n");
-                // zzzzzz
                 yieldcpu(1);
             }
 
@@ -5883,7 +5897,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 // initialize sound output ------------------
                 close_sound_play_device();
                 dbg(9, "incoming audio: ch:%d rate:%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                // zzzzzz
                 yieldcpu(20);
                 init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
                 // initialize sound output ------------------
@@ -5995,13 +6008,11 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 //if (err == -11) // -> Resource temporarily unavailable
                 //{
                 //  dbg(0, "play_device:Resource temporarily unavailable (1)\n");
-                //  // zzzzzz
                 //  yieldcpu(1);
                 //}
                 if (err == -EAGAIN)
                 {
                     // dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
-                    // zzzzzz
                     yieldcpu(2);
                     err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
                 }
@@ -6073,7 +6084,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                         dbg(0, "error detaching audio play thread\n");
                     }
 
-                    // zzzzzz
                     // yieldcpu(1);
                 }
             }
@@ -6123,7 +6133,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                             dbg(0, "error detaching audio play thread\n");
                         }
 
-                        // zzzzzz
                         yieldcpu(1);
                     }
                 }
@@ -6361,7 +6370,6 @@ static void *video_play(void *dummy)
     uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
-
     // dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
     memcpy(y, video__y, y_layer_size);
     // dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
@@ -6369,16 +6377,13 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
     memcpy(v, video__v, v_layer_size);
 #endif
-
     // dbg(9, "VP-DEBUG:008\n");
     //dbg(9, "VP-DEBUG:009\n");
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
-
 #ifndef HAVE_OUTPUT_OMX
     sem_post(&video_in_frame_copy_sem);
 #endif
-
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
     //incoming_video_height = (int)frame_height_px;
@@ -6441,8 +6446,8 @@ static void *video_play(void *dummy)
 #else
     //PL// sem_post(&video_play_lock);
 #endif
-
 #ifdef HAVE_OUTPUT_OMX
+
     if (!omx_initialized)
     {
         omx_init(&omx);
@@ -6453,44 +6458,39 @@ static void *video_play(void *dummy)
     {
         if ((omx_w != 0) && (omx_h != 0))
         {
-			usleep(10000);
+            usleep(10000);
             omx_display_disable(&omx);
-			usleep(10000);
+            usleep(10000);
             omx_deinit(&omx);
-			usleep(10000);
+            usleep(10000);
             omx_init(&omx);
-			usleep(10000);
+            usleep(10000);
             omx_initialized = 1;
         }
 
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
+
         if (err)
         {
             dbg(9, "omx_display_enable ERR=%d\n", err);
             sem_post(&video_in_frame_copy_sem);
             pthread_exit(0);
         }
+
         omx_w = frame_width_px;
         omx_h = frame_height_px;
     }
 
-
-    void* buf = NULL;
+    void *buf = NULL;
     uint32_t len = 0;
-
     omx_display_input_buffer(&omx, &buf, &len);
     // dbg(9, "omx plen=%d\n", (int)(len));
     memcpy(buf, video__y, y_layer_size);
     memcpy(buf + y_layer_size, video__u, u_layer_size);
     memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
     omx_display_flush_buffer(&omx);
-
     sem_post(&video_in_frame_copy_sem);
-
 #endif
-
-
-
 #ifdef HAVE_FRAMEBUFFER
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
@@ -6903,7 +6903,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
                         sem_wait(&video_in_frame_copy_sem);
                         sem_post(&video_in_frame_copy_sem);
-                        // zzzzzz
                         // yieldcpu(1);
                     }
                 }
@@ -7536,6 +7535,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
     global_video_active = 0;
+    on_end_call();
     dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
     global_send_first_frame = 0;
     friend_to_send_video_to = -1;
@@ -8453,13 +8453,11 @@ void *thread_record_alsa_audio(void *data)
                     if ((int)err == -11) // -> Resource temporarily unavailable
                     {
                         dbg(0, "play_device:yield a bit (2)\n");
-                        // zzzzzz
                         yieldcpu(2);
                     }
 
                     close_sound_device();
                     dbg(9, "record_device:close_sound_device\n");
-                    // zzzzzz
                     yieldcpu(2);
                     init_sound_device();
                 }
@@ -8967,11 +8965,9 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
         if (err < 0)
         {
             dbg(9, "play_device:underrun!: %s\n", snd_strerror(err));
-            // zzzzzz
             // yieldcpu(20);
             close_sound_play_device();
             // dbg(9, "play_device:close_sound_play_device\n");
-            // zzzzzz
             // yieldcpu(20);
             init_sound_play_device(channels, sample_rate);
             // dbg(9, "play_device:init_sound_play_device\n");
@@ -9006,11 +9002,9 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
             if (err < 0)
             {
                 dbg(9, "play_device:suspend!: %s\n", snd_strerror(err));
-                // zzzzzz
                 // yieldcpu(20);
                 close_sound_play_device();
                 // dbg(9, "play_device:close_sound_play_device\n");
-                // zzzzzz
                 // yieldcpu(20);
                 init_sound_play_device(channels, sample_rate);
                 // dbg(9, "play_device:init_sound_play_device\n");
