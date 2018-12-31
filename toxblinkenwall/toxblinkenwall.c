@@ -210,7 +210,8 @@ static const char global_version_string[] = "0.99.33";
 //
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
-#define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
+// #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
+#define HAVE_OUTPUT_OMX 1
 // --------- video output: choose only 1 of those! ---------
 //
 // --------- audio recording: choose only 1 of those! ---------
@@ -315,13 +316,18 @@ int hw_encoder_wanted_prev = 1;
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
 
+#include <linux/fb.h>
 
-#ifdef HAVE_FRAMEBUFFER
-    #include <linux/fb.h>
+#ifdef HAVE_OUTPUT_OMX
+    #include "omx.h"
+
+    struct omx_state omx;
+    uint8_t omx_initialized = 0;
+    uint32_t omx_w = 0;
+    uint32_t omx_h = 0;
 #endif
 
 #ifdef HAVE_OUTPUT_OPENGL
-#include <linux/fb.h>
 #include "openGL/esUtil.h"
 
 #define OPENGL_TEXT_FILTER_ GL_LINEAR
@@ -747,14 +753,8 @@ int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
 int64_t global_disconnect_friend_num = -1;
 
-#ifdef HAVE_FRAMEBUFFER
-    struct fb_var_screeninfo var_framebuffer_info;
-    struct fb_fix_screeninfo var_framebuffer_fix_info;
-#endif
-#ifdef HAVE_OUTPUT_OPENGL
-    struct fb_var_screeninfo var_framebuffer_info;
-    struct fb_fix_screeninfo var_framebuffer_fix_info;
-#endif
+struct fb_var_screeninfo var_framebuffer_info;
+struct fb_fix_screeninfo var_framebuffer_fix_info;
 
 struct opengl_video_frame_data
 {
@@ -1406,7 +1406,7 @@ void button_d()
 /* This routine will be called by the PortAudio engine when audio is needed */
 static int portaudio_data_callback(const void *inputBuffer,
                                    void *outputBuffer,
-                                   unsigned long framesPerBuffer,
+                                   unsigned long framesPerBuffer,have_frame
                                    const PaStreamCallbackTimeInfo *timeInfo,
                                    PaStreamCallbackFlags statusFlags,
                                    void *userData)
@@ -6357,20 +6357,28 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
     // dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
     // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
+#ifndef HAVE_OUTPUT_OMX
     uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
+
     // dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
     memcpy(y, video__y, y_layer_size);
     // dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
     memcpy(u, video__u, u_layer_size);
     // dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
     memcpy(v, video__v, v_layer_size);
+#endif
+
     // dbg(9, "VP-DEBUG:008\n");
     //dbg(9, "VP-DEBUG:009\n");
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
+
+#ifndef HAVE_OUTPUT_OMX
     sem_post(&video_in_frame_copy_sem);
+#endif
+
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
     //incoming_video_height = (int)frame_height_px;
@@ -6433,6 +6441,56 @@ static void *video_play(void *dummy)
 #else
     //PL// sem_post(&video_play_lock);
 #endif
+
+#ifdef HAVE_OUTPUT_OMX
+    if (!omx_initialized)
+    {
+        omx_init(&omx);
+        omx_initialized = 1;
+    }
+
+    if (frame_width_px != omx_w || frame_height_px != omx_h)
+    {
+        if ((omx_w != 0) && (omx_h != 0))
+        {
+			usleep(10000);
+            omx_display_disable(&omx);
+			usleep(10000);
+            omx_deinit(&omx);
+			usleep(10000);
+            omx_init(&omx);
+			usleep(10000);
+            omx_initialized = 1;
+        }
+
+        int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
+        if (err)
+        {
+            dbg(9, "omx_display_enable ERR=%d\n", err);
+            sem_post(&video_in_frame_copy_sem);
+            pthread_exit(0);
+        }
+        omx_w = frame_width_px;
+        omx_h = frame_height_px;
+    }
+
+
+    void* buf = NULL;
+    uint32_t len = 0;
+
+    omx_display_input_buffer(&omx, &buf, &len);
+    // dbg(9, "omx plen=%d\n", (int)(len));
+    memcpy(buf, video__y, y_layer_size);
+    memcpy(buf + y_layer_size, video__u, u_layer_size);
+    memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
+    omx_display_flush_buffer(&omx);
+
+    sem_post(&video_in_frame_copy_sem);
+
+#endif
+
+
+
 #ifdef HAVE_FRAMEBUFFER
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
@@ -6764,6 +6822,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
                 // dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
+                dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
             }
             else
             {
