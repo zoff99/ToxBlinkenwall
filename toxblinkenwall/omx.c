@@ -14,7 +14,7 @@
  * forward func declarations (acutal functions in toxblinkenwall.c)
  */
 void dbg(int level, const char *fmt, ...);
-void usleep_msec(uint64_t msec);
+void usleep_usec(uint64_t msec);
 
 
 #include <stdio.h>
@@ -163,7 +163,7 @@ static void block_until_state_changed(OMX_HANDLETYPE hComponent,
 
         if (eState != wanted_eState)
         {
-            usleep_msec(10000);
+            usleep_usec(10000);
         }
 
         loop_counter++;
@@ -196,7 +196,7 @@ void omx_deinit(struct omx_state *st)
 #if 0
     block_until_state_changed(st->video_render, OMX_StateLoaded);
 #else
-    usleep_msec(50000);
+    usleep_usec(50000);
 #endif
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
@@ -263,7 +263,7 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
 
         if (portdef.bEnabled != bEnabled)
         {
-            usleep_msec(10000);
+            usleep_usec(10000);
         }
 
         loop_counter++;
@@ -361,7 +361,7 @@ int omx_display_enable(struct omx_state *st,
     /* block_until_state_changed(st->video_render, OMX_StateIdle); */
     OMX_SendCommand(st->video_render, OMX_CommandStateSet,
                     OMX_StateIdle, NULL);
-    usleep_msec(50000);
+    usleep_usec(50000);
 
     if (!st->buffers)
     {

@@ -492,11 +492,11 @@ uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 
 
-void usleep_msec(uint64_t msec)
+void usleep_usec(uint64_t usec)
 {
     struct timespec ts;
-    ts.tv_sec = msec / 1000;
-    ts.tv_sec = (msec % 1000) * 1000000;
+    ts.tv_sec = usec / 1000000;
+    ts.tv_nsec = (usec % 1000000) * 1000;
     nanosleep(&ts, NULL);
 }
 
@@ -510,7 +510,7 @@ int default_fps_sleep_corrected;
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
-#define c_sleep(x) usleep_msec(1000*x)
+#define c_sleep(x) usleep_usec(1000*x)
 
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -1351,7 +1351,7 @@ time_t get_unix_time(void)
 
 void yieldcpu(uint32_t ms)
 {
-    usleep_msec(1000 * ms);
+    usleep_usec(1000 * ms);
 }
 
 int get_number_in_string(const char *str, int default_value)
@@ -1422,11 +1422,11 @@ void on_end_call()
 
     if (omx_initialized == 1)
     {
-        usleep_msec(2000);
+        usleep_usec(2000);
         omx_display_disable(&omx);
-        usleep_msec(10000);
+        usleep_usec(10000);
         omx_deinit(&omx);
-        usleep_msec(2000);
+        usleep_usec(2000);
         omx_initialized = 0;
     }
 
@@ -6556,13 +6556,13 @@ static void *video_play(void *dummy)
     {
         if ((omx_w != 0) && (omx_h != 0))
         {
-            usleep_msec(10000);
+            usleep_usec(10000);
             omx_display_disable(&omx);
-            usleep_msec(10000);
+            usleep_usec(10000);
             omx_deinit(&omx);
-            usleep_msec(10000);
+            usleep_usec(10000);
             omx_init(&omx);
-            usleep_msec(10000);
+            usleep_usec(10000);
             omx_initialized = 1;
         }
 
@@ -7537,11 +7537,11 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep_msec(4 * 1000);
+            usleep_usec(4 * 1000);
         }
         else
         {
-            usleep_msec(100 * 1000);
+            usleep_usec(100 * 1000);
         }
     }
 
@@ -7601,11 +7601,11 @@ void *thread_video_av(void *data)
         // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
-            usleep_msec((global_av_iterate_ms * 1000));
+            usleep_usec((global_av_iterate_ms * 1000));
         }
         else
         {
-            usleep_msec((toxav_iteration_interval(av) * 1000));
+            usleep_usec((toxav_iteration_interval(av) * 1000));
         }
     }
 
@@ -10122,7 +10122,7 @@ void *thread_opengl(void *data)
             }
             else
             {
-                usleep_msec(1000 * global_opengl_iterate_ms);
+                usleep_usec(1000 * global_opengl_iterate_ms);
             }
 
             // dbg(9, "openGL:cycle-END\n");
@@ -10502,7 +10502,7 @@ int main(int argc, char *argv[])
     while (1)
     {
         tox_iterate(tox, NULL);
-        usleep_msec(tox_iteration_interval(tox) * 1000);
+        usleep_usec(tox_iteration_interval(tox) * 1000);
 
         if (tox_self_get_connection_status(tox) && off)
         {
@@ -10686,11 +10686,11 @@ int main(int argc, char *argv[])
 
         if (global_video_active == 1)
         {
-            usleep_msec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
+            usleep_usec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
         }
         else
         {
-            usleep_msec(tox_iteration_interval(tox) * 1000);
+            usleep_usec(tox_iteration_interval(tox) * 1000);
         }
 
         if (global_want_restart == 1)
