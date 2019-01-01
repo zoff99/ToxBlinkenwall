@@ -171,7 +171,7 @@ else
 fi
 
 cd $_SRC_
-if [ "$CIRCLE_PROJECT_USERNAME""x" == "zoff99x"]; then
+if [ "$CIRCLE_PROJECT_USERNAME""x" == "zoff99x" ]; then
     git clone https://github.com/zoff99/c-toxcore
     cd c-toxcore
     git checkout "zoff99/zoxcore_local_fork"
