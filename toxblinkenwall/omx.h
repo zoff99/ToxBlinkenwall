@@ -5,6 +5,8 @@
  * Copyright (C) 2016 - 2017 Jonathan Sieber
  */
 
+#include <semaphore.h>
+
 #ifdef RASPBERRY_PI
     #include <IL/OMX_Core.h>
     #include <IL/OMX_Video.h>
@@ -22,9 +24,6 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <string.h>
-
-/* Needed for usleep to appear */
-#define _BSD_SOURCE
 #include <unistd.h>
 
 struct omx_state

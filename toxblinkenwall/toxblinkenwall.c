@@ -204,8 +204,8 @@ static const char global_version_string[] = "0.99.33";
 
 
 // --------- video recording: choose only 1 of those! ---------
-// #define USE_V4L2_H264 1         // use HW encoding with H264 directly if available
-#define USE_TC_ENCODING 1    // [* DEFAULT]
+#define USE_V4L2_H264 1         // use HW encoding with H264 directly if available
+// #define USE_TC_ENCODING 1    // [* DEFAULT]
 // --------- video recording: choose only 1 of those! ---------
 //
 // --------- video output: choose only 1 of those! ---------
@@ -491,6 +491,16 @@ uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 
+
+void usleep_msec(uint64_t msec)
+{
+    struct timespec ts;
+    ts.tv_sec = msec / 1000;
+    ts.tv_sec = (msec % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+}
+
+
 // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
 int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p software encoding
 #define PROXY_PORT_TOR_DEFAULT 9050
@@ -500,7 +510,7 @@ int default_fps_sleep_corrected;
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
-#define c_sleep(x) usleep(1000*x)
+#define c_sleep(x) usleep_msec(1000*x)
 
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -1052,6 +1062,7 @@ void dbg(int level, const char *fmt, ...)
     // dbg(9, "free:002\n");
 }
 
+
 static inline void __utimer_start(struct timeval *tm1)
 {
     gettimeofday(tm1, NULL);
@@ -1340,7 +1351,7 @@ time_t get_unix_time(void)
 
 void yieldcpu(uint32_t ms)
 {
-    usleep(1000 * ms);
+    usleep_msec(1000 * ms);
 }
 
 int get_number_in_string(const char *str, int default_value)
@@ -1411,11 +1422,11 @@ void on_end_call()
 
     if (omx_initialized == 1)
     {
-        usleep(2000);
+        usleep_msec(2000);
         omx_display_disable(&omx);
-        usleep(10000);
+        usleep_msec(10000);
         omx_deinit(&omx);
-        usleep(2000);
+        usleep_msec(2000);
         omx_initialized = 0;
     }
 
@@ -6545,13 +6556,13 @@ static void *video_play(void *dummy)
     {
         if ((omx_w != 0) && (omx_h != 0))
         {
-            usleep(10000);
+            usleep_msec(10000);
             omx_display_disable(&omx);
-            usleep(10000);
+            usleep_msec(10000);
             omx_deinit(&omx);
-            usleep(10000);
+            usleep_msec(10000);
             omx_init(&omx);
-            usleep(10000);
+            usleep_msec(10000);
             omx_initialized = 1;
         }
 
@@ -7526,11 +7537,11 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep(4 * 1000);
+            usleep_msec(4 * 1000);
         }
         else
         {
-            usleep(100 * 1000);
+            usleep_msec(100 * 1000);
         }
     }
 
@@ -7590,11 +7601,11 @@ void *thread_video_av(void *data)
         // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
-            usleep((global_av_iterate_ms * 1000));
+            usleep_msec((global_av_iterate_ms * 1000));
         }
         else
         {
-            usleep((toxav_iteration_interval(av) * 1000));
+            usleep_msec((toxav_iteration_interval(av) * 1000));
         }
     }
 
@@ -10111,7 +10122,7 @@ void *thread_opengl(void *data)
             }
             else
             {
-                usleep(1000 * global_opengl_iterate_ms);
+                usleep_msec(1000 * global_opengl_iterate_ms);
             }
 
             // dbg(9, "openGL:cycle-END\n");
@@ -10491,7 +10502,7 @@ int main(int argc, char *argv[])
     while (1)
     {
         tox_iterate(tox, NULL);
-        usleep(tox_iteration_interval(tox) * 1000);
+        usleep_msec(tox_iteration_interval(tox) * 1000);
 
         if (tox_self_get_connection_status(tox) && off)
         {
@@ -10675,11 +10686,11 @@ int main(int argc, char *argv[])
 
         if (global_video_active == 1)
         {
-            usleep(global_iterate_ms * 1000); // 3 ms while in a video/audio call
+            usleep_msec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
         }
         else
         {
-            usleep(tox_iteration_interval(tox) * 1000);
+            usleep_msec(tox_iteration_interval(tox) * 1000);
         }
 
         if (global_want_restart == 1)
