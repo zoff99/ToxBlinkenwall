@@ -211,7 +211,7 @@ static const char global_version_string[] = "0.99.33";
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
 // #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
-#define HAVE_OUTPUT_OMX 1
+#define HAVE_OUTPUT_OMX 1    // OMX HW accelerated output for the Pi3
 // --------- video output: choose only 1 of those! ---------
 //
 // --------- audio recording: choose only 1 of those! ---------

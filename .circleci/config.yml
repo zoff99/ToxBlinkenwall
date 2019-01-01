@@ -25,7 +25,7 @@ jobs:
 
       - checkout
       - restore_cache:
-          key: tbw-build-dependencies-v2-{{ .Branch }}
+          key: tbw-build-dependencies-v3-{{ .Branch }}
 
       - run: mkdir -p ~/work/deploy
       - run: if [ -e build_dir ]; then export oo="cache" ; else export oo="" ; fi ; mkdir -p build_dir ; cd build_dir ; bash ../circle_scripts/deps.sh "$oo"
@@ -33,7 +33,7 @@ jobs:
 
       - save_cache:
           paths: [ "~/work/build_dir" ]
-          key: tbw-build-dependencies-v2-{{ .Branch }}
+          key: tbw-build-dependencies-v3-{{ .Branch }}
 
       - store_artifacts:
           path: ~/work/deploy
