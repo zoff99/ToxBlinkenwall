@@ -299,7 +299,6 @@ static const char global_version_string[] = "0.99.33";
 
 
 
-
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
 #define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
@@ -325,6 +324,10 @@ int hw_encoder_wanted_prev = 1;
     uint8_t omx_initialized = 0;
     uint32_t omx_w = 0;
     uint32_t omx_h = 0;
+    uint8_t *omx_osd_y = NULL;
+    uint32_t omx_osd_w = 0;
+    uint32_t omx_osd_h = 0;
+    uint32_t update_omx_osd_counter = 999;
 #endif
 
 #ifdef HAVE_OUTPUT_OPENGL
@@ -707,7 +710,8 @@ void update_status_line_1_text_arg(int vbr_);
 int get_number_in_string(const char *str, int default_value);
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled);
 void reset_toxav_call_waiting();
-
+void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
+                              int w, int h);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -1403,6 +1407,8 @@ void button_d()
 // stuff to do when we end a call
 void on_end_call()
 {
+#ifdef HAVE_OUTPUT_OMX
+
     if (omx_initialized == 1)
     {
         usleep(2000);
@@ -1412,6 +1418,9 @@ void on_end_call()
         usleep(2000);
         omx_initialized = 0;
     }
+
+    update_omx_osd_counter = 999;
+#endif
 }
 
 #ifdef HAVE_PORTAUDIO
@@ -6321,6 +6330,84 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
 }
 
 
+void draw_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, uint8_t *dis_buf, int dw, int dh, int dstride)
+{
+    if (dh > (h + 1))
+    {
+        if (dstride >  stride + 8)
+        {
+            uint8_t *start_output_pos = dis_buf + (dstride * dh) - (dstride * h - 1);
+
+            for (int i = 0; i < h; i++)
+            {
+                // copy y plane
+                memcpy(start_output_pos, yuf_buf, w);
+                start_output_pos = start_output_pos + dstride;
+                yuf_buf = yuf_buf + stride;
+            }
+        }
+    }
+}
+
+void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int dh, int dstride, int fps)
+{
+    // init yuv area with white BG
+    memset(yuf_buf, 255, (size_t)(w * h));
+    // -------------------------
+    // HINT: calc max letters for the overlay text lines
+    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000        ")];
+    CLEAR(fps_str);
+    // -------------------------
+
+    if (speaker_out_num == 0)
+    {
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_0,
+                 global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
+                 (int)global_video_in_fps);
+    }
+    else
+    {
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_1,
+                 global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
+                 (int)global_video_in_fps);
+    }
+
+    text_on_yuf_frame_xy_ptr(0, 0, fps_str, yuf_buf, w, h);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d %dC",
+             (int)video_width,
+             (int)video_height,
+             (int)global_video_out_fps,
+             global_encoder_string,
+             (int)global_encoder_video_bitrate,
+             read_cpu_temp());
+    text_on_yuf_frame_xy_ptr(0, 11, fps_str, yuf_buf, w, h);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d",
+             (int)dw,
+             (int)dh,
+             (int)fps,
+             global_decoder_string,
+             (int)global_decoder_video_bitrate);
+    text_on_yuf_frame_xy_ptr(0, 22, fps_str, yuf_buf, w, h);
+}
+
+
+
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
@@ -6488,6 +6575,25 @@ static void *video_play(void *dummy)
     memcpy(buf, video__y, y_layer_size);
     memcpy(buf + y_layer_size, video__u, u_layer_size);
     memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
+
+    // OSD --------
+    if (omx_osd_y == NULL)
+    {
+        omx_osd_w = OVERLAY_WIDTH_PX;
+        omx_osd_h = OVERLAY_HEIGHT_PX;
+        omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
+    }
+
+    if (update_omx_osd_counter > 20)
+    {
+        prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                            global_video_in_fps);
+        update_omx_osd_counter = 0;
+    }
+
+    update_omx_osd_counter++;
+    draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+    // OSD --------
     omx_display_flush_buffer(&omx);
     sem_post(&video_in_frame_copy_sem);
 #endif
@@ -6822,7 +6928,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
                 // dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
-                dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
+                // dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
             }
             else
             {
