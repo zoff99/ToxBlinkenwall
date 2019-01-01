@@ -39,13 +39,13 @@ cp -a toxblinkenwall/ tbw2/
 cd tbw2/toxblinkenwall/
 
 "$astyle_bin" --suffix=none --options=../../astyle/astylerc \
-  rb.c rb.h ringbuf.c ringbuf.h \
+  rb.c rb.h omx.c omx.h ringbuf.c ringbuf.h \
   toxblinkenwall.c \
   openGL/esShader.c openGL/esUtil.c openGL/esUtil.h || exit 1
 
 rm -f tbw_formatted.tgz
 tar -czvf tbw_formatted.tgz \
-  rb.c rb.h ringbuf.c ringbuf.h \
+  rb.c rb.h omx.c omx.h ringbuf.c ringbuf.h \
   toxblinkenwall.c \
   openGL/esShader.c openGL/esUtil.c openGL/esUtil.h
 
@@ -56,7 +56,10 @@ cd ../../
 cd toxblinkenwall/
 
 sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+
 cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
+cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OMX'
 cat toxblinkenwall.c|grep '^#define HAVE_FRAMEBUFFER'
 
 # make certain warnings into errors!

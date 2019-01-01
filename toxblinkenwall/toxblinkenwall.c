@@ -25,6 +25,10 @@
 #   cat /proc/asound/cards
 # or:
 #   aplay -l | awk -F \: '/,/{print $2}' | awk '{print $1}' | uniq |grep 'U0'
+# or:
+#   cat /proc/asound/card1/id # for name of second sound card
+# or:
+#   cat /proc/asound/card1/usbid # usb id of second sound card
 
 # example usb audio: U0x4b40x309
 
@@ -155,8 +159,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 31
-static const char global_version_string[] = "0.99.31";
+#define VERSION_PATCH 33
+static const char global_version_string[] = "0.99.33";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -206,7 +210,8 @@ static const char global_version_string[] = "0.99.31";
 //
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
-#define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
+// #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
+#define HAVE_OUTPUT_OMX 1    // OMX HW accelerated output for the Pi3
 // --------- video output: choose only 1 of those! ---------
 //
 // --------- audio recording: choose only 1 of those! ---------
@@ -294,7 +299,6 @@ static const char global_version_string[] = "0.99.31";
 
 
 
-
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
 #define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
@@ -308,12 +312,25 @@ int using_h264_encoder_in_toxcore = 0;
 int hw_encoder_wanted = 1;
 int hw_encoder_wanted_prev = 1;
 
-#ifdef HAVE_FRAMEBUFFER
-    #include <linux/fb.h>
+#define PI_NORMAL_CAM_W 1280 // 896 // 1280;
+#define PI_NORMAL_CAM_H 720 // 512 // 720;
+
+#include <linux/fb.h>
+
+#ifdef HAVE_OUTPUT_OMX
+    #include "omx.h"
+
+    struct omx_state omx;
+    uint8_t omx_initialized = 0;
+    uint32_t omx_w = 0;
+    uint32_t omx_h = 0;
+    uint8_t *omx_osd_y = NULL;
+    uint32_t omx_osd_w = 0;
+    uint32_t omx_osd_h = 0;
+    uint32_t update_omx_osd_counter = 999;
 #endif
 
 #ifdef HAVE_OUTPUT_OPENGL
-#include <linux/fb.h>
 #include "openGL/esUtil.h"
 
 #define OPENGL_TEXT_FILTER_ GL_LINEAR
@@ -460,7 +477,7 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 
-#define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
+#define VIDEO_BUFFER_COUNT 2 // 3 is ok --> HINT: more buffer will cause more video delay!
 
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
 #define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
@@ -474,6 +491,16 @@ uint32_t DEFAULT_GLOBAL_VID_MAX_Q = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
 #define DEFAULT_GLOBAL_MIN_AUD_BITRATE 6 // kbit/sec
 // #define BLINKING_DOT_ON_OUTGOING_VIDEOFRAME 1
 
+
+void usleep_usec(uint64_t usec)
+{
+    struct timespec ts;
+    ts.tv_sec = usec / 1000000;
+    ts.tv_nsec = (usec % 1000000) * 1000;
+    nanosleep(&ts, NULL);
+}
+
+
 // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
 int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p software encoding
 #define PROXY_PORT_TOR_DEFAULT 9050
@@ -483,7 +510,7 @@ int default_fps_sleep_corrected;
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
-#define c_sleep(x) usleep(1000*x)
+#define c_sleep(x) usleep_usec(1000*x)
 
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -693,7 +720,8 @@ void update_status_line_1_text_arg(int vbr_);
 int get_number_in_string(const char *str, int default_value);
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled);
 void reset_toxav_call_waiting();
-
+void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
+                              int w, int h);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -739,14 +767,8 @@ int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
 int64_t global_disconnect_friend_num = -1;
 
-#ifdef HAVE_FRAMEBUFFER
-    struct fb_var_screeninfo var_framebuffer_info;
-    struct fb_fix_screeninfo var_framebuffer_fix_info;
-#endif
-#ifdef HAVE_OUTPUT_OPENGL
-    struct fb_var_screeninfo var_framebuffer_info;
-    struct fb_fix_screeninfo var_framebuffer_fix_info;
-#endif
+struct fb_var_screeninfo var_framebuffer_info;
+struct fb_fix_screeninfo var_framebuffer_fix_info;
 
 struct opengl_video_frame_data
 {
@@ -770,7 +792,8 @@ vpx_image_t input;
 int global_video_active = 0;
 int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
-int video_high = 0;
+int video_high = 1;
+int camera_res_high_wanted_prev = 1;
 int switch_tcponly = 0;
 int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
@@ -814,6 +837,8 @@ int vid_height = 144; // ------- blinkenwall resolution -------
     #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
+
+sem_t video_in_frame_copy_sem;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
@@ -1036,6 +1061,7 @@ void dbg(int level, const char *fmt, ...)
 
     // dbg(9, "free:002\n");
 }
+
 
 static inline void __utimer_start(struct timeval *tm1)
 {
@@ -1325,7 +1351,7 @@ time_t get_unix_time(void)
 
 void yieldcpu(uint32_t ms)
 {
-    usleep(1000 * ms);
+    usleep_usec(1000 * ms);
 }
 
 int get_number_in_string(const char *str, int default_value)
@@ -1385,23 +1411,35 @@ void button_c()
 
 void button_d()
 {
-    if (global_video_active == 0)
-    {
-        fully_stop_cam();
-        usleep(1000 * 10); // sleep 10ms
-        video_high = 1 - video_high; // toggle between 1 and 0
-        global_update_opengl_status_text = 1;
-        init_and_start_cam(0, false);
-    }
+    camera_res_high_wanted_prev = 1 - camera_res_high_wanted_prev; // toggle between 1 and 0
+    global_update_opengl_status_text = 1;
 }
 
+// stuff to do when we end a call
+void on_end_call()
+{
+#ifdef HAVE_OUTPUT_OMX
+
+    if (omx_initialized == 1)
+    {
+        usleep_usec(2000);
+        omx_display_disable(&omx);
+        usleep_usec(10000);
+        omx_deinit(&omx);
+        usleep_usec(2000);
+        omx_initialized = 0;
+    }
+
+    update_omx_osd_counter = 999;
+#endif
+}
 
 #ifdef HAVE_PORTAUDIO
 
 /* This routine will be called by the PortAudio engine when audio is needed */
 static int portaudio_data_callback(const void *inputBuffer,
                                    void *outputBuffer,
-                                   unsigned long framesPerBuffer,
+                                   unsigned long framesPerBuffer, have_frame
                                    const PaStreamCallbackTimeInfo *timeInfo,
                                    PaStreamCallbackFlags statusFlags,
                                    void *userData)
@@ -3500,10 +3538,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 #endif
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
-                if (accepting_calls == 1)
-                {
-                    button_d();
-                }
+                button_d();
             }
             else if (strncmp((char *)message, ".hwenc ", strlen((char *)".hwenc ")) == 0)
             {
@@ -4733,14 +4768,35 @@ int init_cam(int sleep_flag, bool h264_codec)
         dbg(0, "The device does not support streaming i/o.\n");
     }
 
+    struct v4l2_cropcap cropcap;
+
+    memset(&cropcap, 0, sizeof(cropcap));
+
+    cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+    if (-1 == ioctl(fd, VIDIOC_CROPCAP, &cropcap))
+    {
+        dbg(0, "VIDIOC_CROPCAP Error\n");
+    }
+
     camera_supports_h264 = detect_h264_on_camera(fd);
     v4lconvert_data = v4lconvert_create(fd);
     CLEAR(format);
     CLEAR(dest_format);
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
-    format.fmt.pix.width = 1280;
-    format.fmt.pix.height = 720;
+
+    if (video_high == 1)
+    {
+        format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
+        format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
+    }
+    else
+    {
+        format.fmt.pix.width = 640;
+        format.fmt.pix.height = 480;
+    }
+
     dest_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
     dest_format.fmt.pix.width = format.fmt.pix.width;
@@ -4750,8 +4806,8 @@ int init_cam(int sleep_flag, bool h264_codec)
     {
         format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
         dest_format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-        format.fmt.pix.width = PI_H264_CAM_W; // 1280;
-        format.fmt.pix.height = PI_H264_CAM_H; // 720;
+        // format.fmt.pix.width = PI_H264_CAM_W; // 1280;
+        // format.fmt.pix.height = PI_H264_CAM_H; // 720;
         format.fmt.pix.field = V4L2_FIELD_NONE;
         dest_format.fmt.pix.field = V4L2_FIELD_NONE;
     }
@@ -4803,8 +4859,8 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     if (video_high == 1)
     {
-        format.fmt.pix.width = 1280;
-        format.fmt.pix.height = 720;
+        format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
+        format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
     }
     else
     {
@@ -4812,12 +4868,13 @@ int init_cam(int sleep_flag, bool h264_codec)
         format.fmt.pix.height = 480;
     }
 
-    if (h264_codec)
-    {
-        format.fmt.pix.width = PI_H264_CAM_W;
-        format.fmt.pix.height = PI_H264_CAM_H;
-    }
-
+    /*
+        if (h264_codec)
+        {
+            format.fmt.pix.width = PI_H264_CAM_W;
+            format.fmt.pix.height = PI_H264_CAM_H;
+        }
+    */
     video_width             = format.fmt.pix.width;
     video_height            = format.fmt.pix.height;
     dbg(2, "Video size(wanted): %u %u\n", video_width, video_height);
@@ -4885,12 +4942,7 @@ int init_cam(int sleep_flag, bool h264_codec)
     }
 
     dbg(0, "VIDIOC_REQBUFS got type=%d\n", (int)bufrequest.type);
-
-    if (bufrequest.count < 2)
-    {
-        dbg(0, "Insufficient buffer memory on %s\n", v4l2_device);
-    }
-
+    dbg(0, "requested %d buffers from video input device\n", bufrequest.count);
     buffers = calloc(bufrequest.count, sizeof(*buffers));
     dbg(0, "VIDIOC_REQBUFS number of buffers[1]=%d\n", (int)bufrequest.count);
     dbg(0, "VIDIOC_REQBUFS number of buffers[2]=%d\n", (int)n_buffers);
@@ -5356,12 +5408,26 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
     {
         global_encoder_string = " H264";
-        //using_h264_encoder_in_toxcore = 1;
+#ifdef USE_V4L2_H264
+
+        if (camera_supports_h264 == 1)
+        {
+            using_h264_encoder_in_toxcore = 1;
+        }
+
+#endif
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
     {
         global_encoder_string = " H264.P";
-        //using_h264_encoder_in_toxcore = 1;
+#ifdef USE_V4L2_H264
+
+        if (camera_supports_h264 == 1)
+        {
+            using_h264_encoder_in_toxcore = 1;
+        }
+
+#endif
     }
     else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
     {
@@ -5451,6 +5517,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         reset_toxav_call_waiting();
         global_video_active = 0;
+        on_end_call();
 
         if (video_play_rb != NULL)
         {
@@ -5479,6 +5546,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         reset_toxav_call_waiting();
         global_video_active = 0;
+        on_end_call();
 
         if (video_play_rb != NULL)
         {
@@ -5758,7 +5826,6 @@ void *alsa_audio_play(void *data)
             if ((int)err == -11) // -> Resource temporarily unavailable
             {
                 dbg(0, "play_device:yield a bit (2)\n");
-                // zzzzzz
                 yieldcpu(1);
             }
 
@@ -5850,7 +5917,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 // initialize sound output ------------------
                 close_sound_play_device();
                 dbg(9, "incoming audio: ch:%d rate:%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                // zzzzzz
                 yieldcpu(20);
                 init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
                 // initialize sound output ------------------
@@ -5962,13 +6028,11 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 //if (err == -11) // -> Resource temporarily unavailable
                 //{
                 //  dbg(0, "play_device:Resource temporarily unavailable (1)\n");
-                //  // zzzzzz
                 //  yieldcpu(1);
                 //}
                 if (err == -EAGAIN)
                 {
                     // dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
-                    // zzzzzz
                     yieldcpu(2);
                     err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
                 }
@@ -6040,7 +6104,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                         dbg(0, "error detaching audio play thread\n");
                     }
 
-                    // zzzzzz
                     // yieldcpu(1);
                 }
             }
@@ -6090,7 +6153,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                             dbg(0, "error detaching audio play thread\n");
                         }
 
-                        // zzzzzz
                         yieldcpu(1);
                     }
                 }
@@ -6224,11 +6286,146 @@ void update_status_line_on_fb()
 #endif
 }
 
+/*
+ * crop_width and crop_height must be a multiple of 4
+ */
+void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height_px1, uint32_t ystride_,
+                    uint32_t ustride_, uint32_t vstride_, uint32_t crop_width, uint32_t crop_height)
+{
+    uint32_t remove_x_pixels = (frame_width_px1 - crop_width) / 4;
+    uint32_t remove_y_pixels = (frame_height_px1 - crop_height) / 4;
+    uint32_t result_width = crop_height;
+    uint32_t result_height = 512;
+    uint8_t *y_result = calloc(1, (result_width * result_height) * 1.5);
+    memset(y_result, 0, (result_width * result_height) * 1.5);
+    uint8_t *y_result_pos = y_result;
+    uint8_t *y_source_pos = *y;
+    // dbg(9, "ys=%d us=%d vs=%d\n", ystride_, ustride_, vstride_);
+    // dbg(9, "%d %d\n", remove_x_pixels, remove_y_pixels);
+    y_source_pos = *y + (2 * remove_x_pixels) + (2 * remove_y_pixels * ystride_);
+
+    for (uint32_t i = 0; i < result_height; i++)
+    {
+        memcpy(y_result_pos, y_source_pos, result_width);
+        y_result_pos = y_result_pos + result_width;
+        y_source_pos = y_source_pos + ystride_;
+    }
+
+#if 1
+    y_source_pos = *y + (ystride_ * frame_height_px1) + remove_x_pixels + (remove_y_pixels * ustride_);
+    y_result_pos = y_result + (result_width * result_height);
+
+    for (uint32_t i = 0; i < (result_height / 2); i++)
+    {
+        memcpy(y_result_pos, y_source_pos, (result_width / 2));
+        y_result_pos = y_result_pos + (result_width / 2);
+        y_source_pos = y_source_pos + ustride_;
+    }
+
+#endif
+#if 1
+    y_source_pos = *y + (ystride_ * frame_height_px1) + ((frame_height_px1 / 2) * ustride_) + remove_x_pixels +
+                   (remove_y_pixels * vstride_);
+    y_result_pos = y_result + (result_width * result_height) + ((result_width / 2) * (result_height / 2));
+
+    for (uint32_t i = 0; i < (result_height / 2); i++)
+    {
+        memcpy(y_result_pos, y_source_pos, (result_width / 2));
+        y_result_pos = y_result_pos + (result_width / 2);
+        y_source_pos = y_source_pos + vstride_;
+    }
+
+#endif
+    free(*y);
+    *y = y_result;
+}
+
+
+void draw_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, uint8_t *dis_buf, int dw, int dh, int dstride)
+{
+    if (dh > (h + 1))
+    {
+        if (dstride >  stride + 8)
+        {
+            uint8_t *start_output_pos = dis_buf + (dstride * dh) - (dstride * h - 1);
+
+            for (int i = 0; i < h; i++)
+            {
+                // copy y plane
+                memcpy(start_output_pos, yuf_buf, w);
+                start_output_pos = start_output_pos + dstride;
+                yuf_buf = yuf_buf + stride;
+            }
+        }
+    }
+}
+
+void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int dh, int dstride, int fps)
+{
+    // init yuv area with white BG
+    memset(yuf_buf, 255, (size_t)(w * h));
+    // -------------------------
+    // HINT: calc max letters for the overlay text lines
+    char fps_str[strlen("O:1920x1080 f:25 H264 R:50000        ")];
+    CLEAR(fps_str);
+    // -------------------------
+
+    if (speaker_out_num == 0)
+    {
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_0,
+                 global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
+                 (int)global_video_in_fps);
+    }
+    else
+    {
+        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+                 global_version_string,
+                 speaker_out_name_1,
+                 global_network_round_trip_ms,
+                 (int)global_remote_record_delay,
+                 (int)global_play_delay_ms,
+                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_video_play_buffer_entries,
+                 (int)global_tox_video_incoming_fps,
+                 (int)global_video_in_fps);
+    }
+
+    text_on_yuf_frame_xy_ptr(0, 0, fps_str, yuf_buf, w, h);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d %dC",
+             (int)video_width,
+             (int)video_height,
+             (int)global_video_out_fps,
+             global_encoder_string,
+             (int)global_encoder_video_bitrate,
+             read_cpu_temp());
+    text_on_yuf_frame_xy_ptr(0, 11, fps_str, yuf_buf, w, h);
+    CLEAR(fps_str);
+    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d",
+             (int)dw,
+             (int)dh,
+             (int)fps,
+             global_decoder_string,
+             (int)global_decoder_video_bitrate);
+    text_on_yuf_frame_xy_ptr(0, 22, fps_str, yuf_buf, w, h);
+}
+
+
 
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
-    sem_wait(&video_play_lock);
+#ifdef HAVE_OUTPUT_OPENGL
+#else
+    //PL// sem_wait(&video_play_lock);
+#endif
     // struct timeval tm_01;
     // __utimer_start(&tm_01);
     //dbg(9, "VP-DEBUG:002\n");
@@ -6267,6 +6464,7 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
     // dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
     // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
+#ifndef HAVE_OUTPUT_OMX
     uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
@@ -6276,10 +6474,14 @@ static void *video_play(void *dummy)
     memcpy(u, video__u, u_layer_size);
     // dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
     memcpy(v, video__v, v_layer_size);
+#endif
     // dbg(9, "VP-DEBUG:008\n");
     //dbg(9, "VP-DEBUG:009\n");
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
+#ifndef HAVE_OUTPUT_OMX
+    sem_post(&video_in_frame_copy_sem);
+#endif
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
     //incoming_video_height = (int)frame_height_px;
@@ -6303,12 +6505,27 @@ static void *video_play(void *dummy)
         }
         else
         {
-#if 1
             struct opengl_video_frame_data *fdata = calloc(1, sizeof(struct opengl_video_frame_data));
-            fdata->p = y;
-            fdata->timestamp = bw_current_time_actual();
-            fdata->y_stride = ystride_;
-            fdata->video_width = frame_width_px1;
+
+            // convert yuv frame from 1280x720 to 896x512 to gain some speed
+            if (1 == 2) // ((frame_width_px1 == 1280) && (frame_height_px1 == 720))
+            {
+                crop_yuv_frame(&y, frame_width_px1, frame_height_px1, ystride_, ustride_, vstride_, 896, 512);
+                fdata->p = y;
+                fdata->timestamp = bw_current_time_actual();
+                fdata->y_stride = 896;
+                fdata->video_width = 896;
+                frame_width_px = 896;
+                frame_height_px = 512;
+            }
+            else
+            {
+                fdata->p = y;
+                fdata->timestamp = bw_current_time_actual();
+                fdata->y_stride = ystride_;
+                fdata->video_width = frame_width_px1;
+            }
+
             void *res = bw_rb_write(video_play_rb, fdata, frame_width_px, frame_height_px);
 
             if (res != NULL)
@@ -6316,10 +6533,6 @@ static void *video_play(void *dummy)
                 free(((struct opengl_video_frame_data *)res)->p);
                 free(res);
             }
-
-#else
-            free((void *)y);
-#endif
         }
     }
 
@@ -6327,7 +6540,74 @@ static void *video_play(void *dummy)
     // timspan_in_ms = __utimer_stop(&tm_01, "video_play_stage_1:", 0);
     // dbg(9, "VP-DEBUG:021\n");
 #endif
-    sem_post(&video_play_lock);
+#ifdef HAVE_OUTPUT_OPENGL
+#else
+    //PL// sem_post(&video_play_lock);
+#endif
+#ifdef HAVE_OUTPUT_OMX
+
+    if (!omx_initialized)
+    {
+        omx_init(&omx);
+        omx_initialized = 1;
+    }
+
+    if (frame_width_px != omx_w || frame_height_px != omx_h)
+    {
+        if ((omx_w != 0) && (omx_h != 0))
+        {
+            usleep_usec(10000);
+            omx_display_disable(&omx);
+            usleep_usec(10000);
+            omx_deinit(&omx);
+            usleep_usec(10000);
+            omx_init(&omx);
+            usleep_usec(10000);
+            omx_initialized = 1;
+        }
+
+        int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
+
+        if (err)
+        {
+            dbg(9, "omx_display_enable ERR=%d\n", err);
+            sem_post(&video_in_frame_copy_sem);
+            pthread_exit(0);
+        }
+
+        omx_w = frame_width_px;
+        omx_h = frame_height_px;
+    }
+
+    void *buf = NULL;
+    uint32_t len = 0;
+    omx_display_input_buffer(&omx, &buf, &len);
+    // dbg(9, "omx plen=%d\n", (int)(len));
+    memcpy(buf, video__y, y_layer_size);
+    memcpy(buf + y_layer_size, video__u, u_layer_size);
+    memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
+
+    // OSD --------
+    if (omx_osd_y == NULL)
+    {
+        omx_osd_w = OVERLAY_WIDTH_PX;
+        omx_osd_h = OVERLAY_HEIGHT_PX;
+        omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
+    }
+
+    if (update_omx_osd_counter > 20)
+    {
+        prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                            global_video_in_fps);
+        update_omx_osd_counter = 0;
+    }
+
+    update_omx_osd_counter++;
+    draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+    // OSD --------
+    omx_display_flush_buffer(&omx);
+    sem_post(&video_in_frame_copy_sem);
+#endif
 #ifdef HAVE_FRAMEBUFFER
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
@@ -6622,6 +6902,7 @@ static void *video_play(void *dummy)
     pthread_exit(0);
 }
 
+
 // ---- DEBUG ----
 static struct timeval tm_incoming_video_frames;
 int first_incoming_video_frame = 1;
@@ -6658,6 +6939,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
                 // dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
+                // dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
             }
             else
             {
@@ -6704,7 +6986,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     toggle_display_frame = 0;
                 }
 
-                sem_wait(&video_play_lock);
+                //PL// sem_wait(&video_play_lock);
                 // dbg(9, "VP-DEBUG:F:002:w=%d s=%d\n", (int)video__width, (int)video__ystride);
                 video__width = width;
                 video__height = height;
@@ -6719,11 +7001,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
                 {
                     inc_video_t_counter();
+                    sem_wait(&video_in_frame_copy_sem);
                     int res_ = pthread_create(&video_play_thread, NULL, video_play, NULL);
 
                     if (res_ != 0)
                     {
                         dec_video_t_counter();
+                        sem_post(&video_in_frame_copy_sem);
                         dbg(0, "error creating video play thread ERRNO=%d\n", res_);
                     }
                     else
@@ -6734,7 +7018,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                             dbg(0, "error detaching video play thread\n");
                         }
 
-                        // zzzzzz
+                        sem_wait(&video_in_frame_copy_sem);
+                        sem_post(&video_in_frame_copy_sem);
                         // yieldcpu(1);
                     }
                 }
@@ -6743,7 +7028,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
                 }
 
-                sem_post(&video_play_lock);
+                //PL// sem_post(&video_play_lock);
             }
         }
         else
@@ -7018,6 +7303,15 @@ void *thread_av(void *data)
                 }
             }
 
+            if (camera_res_high_wanted_prev != video_high)
+            {
+                fully_stop_cam();
+                yieldcpu(50);
+                dbg(9, "switching camera resolution to: %d %d\n", video_high, camera_res_high_wanted_prev);
+                video_high = camera_res_high_wanted_prev;
+                init_and_start_cam(0, using_h264_hw_accel);
+            }
+
             // if we can use HW Accel. H264 encoder, switch to it now
             if (using_h264_encoder_in_toxcore == 1)
             {
@@ -7243,11 +7537,11 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep(4 * 1000);
+            usleep_usec(4 * 1000);
         }
         else
         {
-            usleep(100 * 1000);
+            usleep_usec(100 * 1000);
         }
     }
 
@@ -7307,11 +7601,11 @@ void *thread_video_av(void *data)
         // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
-            usleep((global_av_iterate_ms * 1000));
+            usleep_usec((global_av_iterate_ms * 1000));
         }
         else
         {
-            usleep((toxav_iteration_interval(av) * 1000));
+            usleep_usec((toxav_iteration_interval(av) * 1000));
         }
     }
 
@@ -7358,6 +7652,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
     global_video_active = 0;
+    on_end_call();
     dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
     global_send_first_frame = 0;
     friend_to_send_video_to = -1;
@@ -8275,13 +8570,11 @@ void *thread_record_alsa_audio(void *data)
                     if ((int)err == -11) // -> Resource temporarily unavailable
                     {
                         dbg(0, "play_device:yield a bit (2)\n");
-                        // zzzzzz
                         yieldcpu(2);
                     }
 
                     close_sound_device();
                     dbg(9, "record_device:close_sound_device\n");
-                    // zzzzzz
                     yieldcpu(2);
                     init_sound_device();
                 }
@@ -8789,11 +9082,9 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
         if (err < 0)
         {
             dbg(9, "play_device:underrun!: %s\n", snd_strerror(err));
-            // zzzzzz
             // yieldcpu(20);
             close_sound_play_device();
             // dbg(9, "play_device:close_sound_play_device\n");
-            // zzzzzz
             // yieldcpu(20);
             init_sound_play_device(channels, sample_rate);
             // dbg(9, "play_device:init_sound_play_device\n");
@@ -8828,11 +9119,9 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
             if (err < 0)
             {
                 dbg(9, "play_device:suspend!: %s\n", snd_strerror(err));
-                // zzzzzz
                 // yieldcpu(20);
                 close_sound_play_device();
                 // dbg(9, "play_device:close_sound_play_device\n");
-                // zzzzzz
                 // yieldcpu(20);
                 init_sound_play_device(channels, sample_rate);
                 // dbg(9, "play_device:init_sound_play_device\n");
@@ -9833,7 +10122,7 @@ void *thread_opengl(void *data)
             }
             else
             {
-                usleep(1000 * global_opengl_iterate_ms);
+                usleep_usec(1000 * global_opengl_iterate_ms);
             }
 
             // dbg(9, "openGL:cycle-END\n");
@@ -9876,7 +10165,8 @@ int main(int argc, char *argv[])
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
-    video_high = 0;
+    video_high = 1;
+    camera_res_high_wanted_prev = video_high;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
     v4l2_device = malloc(400);
@@ -10130,6 +10420,11 @@ int main(int argc, char *argv[])
         dbg(0, "Error in sem_init for count_video_play_threads\n");
     }
 
+    if (sem_init(&video_in_frame_copy_sem, 0, 1))
+    {
+        dbg(0, "Error in sem_init for video_in_frame_copy_sem\n");
+    }
+
     count_video_record_threads_int = 0;
 
     if (sem_init(&count_video_record_threads, 0, 1))
@@ -10207,7 +10502,7 @@ int main(int argc, char *argv[])
     while (1)
     {
         tox_iterate(tox, NULL);
-        usleep(tox_iteration_interval(tox) * 1000);
+        usleep_usec(tox_iteration_interval(tox) * 1000);
 
         if (tox_self_get_connection_status(tox) && off)
         {
@@ -10391,11 +10686,11 @@ int main(int argc, char *argv[])
 
         if (global_video_active == 1)
         {
-            usleep(global_iterate_ms * 1000); // 3 ms while in a video/audio call
+            usleep_usec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
         }
         else
         {
-            usleep(tox_iteration_interval(tox) * 1000);
+            usleep_usec(tox_iteration_interval(tox) * 1000);
         }
 
         if (global_want_restart == 1)
@@ -10455,6 +10750,7 @@ int main(int argc, char *argv[])
     sem_destroy(&count_audio_play_threads);
     sem_destroy(&audio_play_lock);
 #endif
+    sem_destroy(&video_in_frame_copy_sem);
     sem_destroy(&count_video_play_threads);
     sem_destroy(&video_play_lock);
 #ifdef HAVE_ALSA_PLAY

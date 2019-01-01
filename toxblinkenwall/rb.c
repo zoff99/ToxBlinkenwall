@@ -44,7 +44,7 @@ bool bw_rb_empty(const BWRingBuffer *b)
 
 /*
  * returns: NULL on success
-            start address of ?? on FAILURE
+            start address of element to delete on ringbuffer full, new element ist still written into buffer
  */
 void *bw_rb_write(BWRingBuffer *b, void *p, uint32_t w, uint32_t h)
 {

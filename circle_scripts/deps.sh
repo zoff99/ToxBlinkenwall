@@ -111,8 +111,8 @@ cd $_SRC_
 git clone git://git.videolan.org/x264.git
 cd x264
 git checkout 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
-./configure --prefix=$_INST_ --disable-opencl --enable-shared --enable-static \
---disable-avs --disable-cli
+./configure --prefix=$_INST_ --disable-opencl --enable-static \
+--disable-avs --disable-cli --enable-pic
 #make clean
 make -j$(nproc) || exit 1
 make install
@@ -171,9 +171,16 @@ else
 fi
 
 cd $_SRC_
-git clone https://github.com/Zoxcore/c-toxcore
-cd c-toxcore
-git checkout "master"
+if [ "$CIRCLE_PROJECT_USERNAME""x" == "zoff99x" ]; then
+    echo "using local build from zoff99 repo"
+    git clone https://github.com/zoff99/c-toxcore
+    cd c-toxcore
+    git checkout "zoff99/zoxcore_local_fork"
+else
+    git clone https://github.com/Zoxcore/c-toxcore
+    cd c-toxcore
+    git checkout "master"
+fi
 
 sed -i -e 'sm#define DISABLE_H264_ENCODER_FEATURE.*m#define DISABLE_H264_ENCODER_FEATURE 1m' toxav/rtp.c
 cat toxav/rtp.c |grep 'define DISABLE_H264_ENCODER_FEATURE'
