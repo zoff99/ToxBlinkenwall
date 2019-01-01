@@ -3,11 +3,14 @@
  *
  * Copyright (C) 2016 - 2017 Creytiv.com
  * Copyright (C) 2016 - 2017 Jonathan Sieber
+ * Copyright (C) 2018 - 2019 Zoff <zoff@zoff.cc>
  */
 
 #define _POSIX_C_SOURCE 199309L
 
 #include "omx.h"
+
+void dbg(int level, const char *fmt, ...);
 
 #include <stdio.h>
 #include <stdlib.h>
