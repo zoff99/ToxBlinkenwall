@@ -722,6 +722,7 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
 void reset_toxav_call_waiting();
 void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
                               int w, int h);
+float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -837,6 +838,10 @@ int vid_height = 144; // ------- blinkenwall resolution -------
     #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
+
+#define AUDIO_VU_MIN_VALUE -20
+float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
+float global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
 sem_t video_in_frame_copy_sem;
 
@@ -5879,6 +5884,24 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
+    global_audio_in_vu = AUDIO_VU_MIN_VALUE;
+
+    if (pcm)
+    {
+        if (sample_count > 0)
+        {
+            float vu_value = audio_vu(pcm, sample_count);
+
+            if (isfinite(vu_value))
+            {
+                if (vu_value > AUDIO_VU_MIN_VALUE)
+                {
+                    global_audio_in_vu = vu_value;
+                }
+            }
+        }
+    }
+
     if (global_video_active == 1)
     {
         if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
@@ -6340,6 +6363,26 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
     *y = y_result;
 }
 
+void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstride)
+{
+    uint8_t *dis_buf_save = dis_buf;
+
+    for (int lines = 0; lines < 3; lines++)
+    {
+        memset(dis_buf_save, 255, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
+        dis_buf_save = dis_buf_save + dstride;
+    }
+
+    dis_buf_save = dis_buf + (5 * dstride);
+
+    for (int lines = 0; lines < 3; lines++)
+    {
+        memset(dis_buf_save, 255, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
+        dis_buf_save = dis_buf_save + dstride;
+    }
+}
+
+
 
 void draw_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, uint8_t *dis_buf, int dw, int dh, int dstride)
 {
@@ -6604,6 +6647,7 @@ static void *video_play(void *dummy)
 
     update_omx_osd_counter++;
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+    prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
     omx_display_flush_buffer(&omx);
     sem_post(&video_in_frame_copy_sem);
@@ -8507,6 +8551,21 @@ void *audio_record__(void *buf_pointer)
         {
             // memcpy(audio_buf_, audio_buf_orig, audio_record_bytes_);
             size_t sample_count = (size_t)((audio_record_bytes_ / 2) / DEFAULT_AUDIO_CAPTURE_CHANNELS);
+            global_audio_out_vu = AUDIO_VU_MIN_VALUE;
+
+            if (sample_count > 0)
+            {
+                float vu_value = audio_vu(audio_buf_orig, sample_count);
+
+                if (isfinite(vu_value))
+                {
+                    if (vu_value > AUDIO_VU_MIN_VALUE)
+                    {
+                        global_audio_out_vu = vu_value;
+                    }
+                }
+            }
+
             TOXAV_ERR_SEND_FRAME error;
             bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                               sample_count,
@@ -8858,6 +8917,21 @@ void *thread_ext_keys(void *data)
 #endif
 
 #ifdef HAVE_ALSA_PLAY
+
+float audio_vu(const int16_t *pcm_data, uint32_t sample_count)
+{
+    float sum = 0.0;
+
+    for (uint32_t i = 0; i < sample_count; i++)
+    {
+        sum += abs(pcm_data[i]) / 32767.0;
+    }
+
+    float vu = 20.0 * logf(sum);
+    return vu;
+}
+
+
 void close_sound_play_device()
 {
     dbg(0, "ALSA:015\n");
