@@ -6367,17 +6367,33 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
 {
     uint8_t *dis_buf_save = dis_buf;
 
-    for (int lines = 0; lines < 3; lines++)
+    for (int lines = 0; lines < 4; lines++)
     {
-        memset(dis_buf_save, 255, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
+        if ((lines == 0) || (lines == 3))
+        {
+            memset(dis_buf_save, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
+        }
+        else
+        {
+            memset(dis_buf_save, 255, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
+        }
+
         dis_buf_save = dis_buf_save + dstride;
     }
 
-    dis_buf_save = dis_buf + (5 * dstride);
+    dis_buf_save = dis_buf + (6 * dstride);
 
-    for (int lines = 0; lines < 3; lines++)
+    for (int lines = 0; lines < 4; lines++)
     {
-        memset(dis_buf_save, 255, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
+        if ((lines == 0) || (lines == 3))
+        {
+            memset(dis_buf_save, 0, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
+        }
+        else
+        {
+            memset(dis_buf_save, 255, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
+        }
+
         dis_buf_save = dis_buf_save + dstride;
     }
 }
