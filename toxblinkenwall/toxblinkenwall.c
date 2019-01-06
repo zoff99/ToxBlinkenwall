@@ -159,8 +159,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 33
-static const char global_version_string[] = "0.99.33";
+#define VERSION_PATCH 34
+static const char global_version_string[] = "0.99.34";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -757,6 +757,11 @@ const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.s
 const char *shell_cmd__show_text_as_image =
     "./scripts/show_text_as_image.sh"; // needs text as parameter. Caution filter out any bad characters!!
 const char *shell_cmd__show_text_as_image_stop = "./scripts/show_text_as_image_stop.sh";
+const char *shell_cmd__onstart = "./scripts/on_start.sh 2> /dev/null";
+const char *shell_cmd__oncallstart = "./scripts/on_callstart.sh 2> /dev/null";
+const char *shell_cmd__oncallend = "./scripts/on_callend.sh 2> /dev/null";
+const char *shell_cmd__ononline = "./scripts/on_online.sh 2> /dev/null";
+const char *shell_cmd__onofflone = "./scripts/on_offline.sh 2> /dev/null";
 const char *cmd__image_filename_full_path = "./tmp/image.dat";
 const char *cmd__image_text_full_path = "./tmp/text.dat";
 int global_want_restart = 0;
@@ -1439,7 +1444,23 @@ void on_end_call()
 
     update_omx_osd_counter = 999;
 #endif
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallend);
+
+    if (system(cmd_str));
 }
+
+// stuff to do then we start a call
+void on_start_call()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallstart);
+
+    if (system(cmd_str));
+}
+
 
 #ifdef HAVE_PORTAUDIO
 
@@ -4365,16 +4386,19 @@ void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void 
         case TOX_CONNECTION_NONE:
             dbg(2, "Offline\n");
             my_connection_status = TOX_CONNECTION_NONE;
+            on_offline();
             break;
 
         case TOX_CONNECTION_TCP:
             dbg(2, "Online, using TCP\n");
             my_connection_status = TOX_CONNECTION_TCP;
+            on_online();
             break;
 
         case TOX_CONNECTION_UDP:
             dbg(2, "Online, using UDP\n");
             my_connection_status = TOX_CONNECTION_UDP;
+            on_online();
             break;
     }
 }
@@ -5332,6 +5356,7 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
         (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
     show_text_as_image_stop();
     toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+    on_start_call();
     // clear screen on CALL ANSWER
     stop_endless_image();
     fb_fill_black();
@@ -5635,6 +5660,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             dbg(9, "t_toxav_call_state_cb:004xx\n");
             global_video_active = 1;
             global_send_first_frame = 2;
+            on_start_call();
             dbg(9, "global_video_active=%d friend_to_send_video_to=%d\n", global_video_active, friend_to_send_video_to);
         }
     }
@@ -10291,8 +10317,36 @@ void *thread_opengl(void *data)
 }
 #endif
 
+void on_start()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onstart);
+
+    if (system(cmd_str));
+}
+
+void on_online()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__ononline);
+
+    if (system(cmd_str));
+}
+
+void on_offline()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onofflone);
+
+    if (system(cmd_str));
+}
+
 int main(int argc, char *argv[])
 {
+    on_start();
     // don't accept calls until video device is ready
     accepting_calls = 0;
     show_endless_loading();
@@ -10647,6 +10701,7 @@ int main(int argc, char *argv[])
         if (tox_self_get_connection_status(tox) && off)
         {
             dbg(2, "Tox online, took %llu seconds\n", time(NULL) - cur_time);
+            on_online();
             off = 0;
             break;
         }
