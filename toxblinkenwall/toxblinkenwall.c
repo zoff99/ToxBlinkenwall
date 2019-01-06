@@ -1392,8 +1392,32 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 }
 
 
+void on_start()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onstart);
 
+    if (system(cmd_str));
+}
 
+void on_online()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__ononline);
+
+    if (system(cmd_str));
+}
+
+void on_offline()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onofflone);
+
+    if (system(cmd_str));
+}
 
 void button_a()
 {
@@ -10316,33 +10340,6 @@ void *thread_opengl(void *data)
     }
 }
 #endif
-
-void on_start()
-{
-    char cmd_str[1000];
-    CLEAR(cmd_str);
-    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onstart);
-
-    if (system(cmd_str));
-}
-
-void on_online()
-{
-    char cmd_str[1000];
-    CLEAR(cmd_str);
-    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__ononline);
-
-    if (system(cmd_str));
-}
-
-void on_offline()
-{
-    char cmd_str[1000];
-    CLEAR(cmd_str);
-    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onofflone);
-
-    if (system(cmd_str));
-}
 
 int main(int argc, char *argv[])
 {
