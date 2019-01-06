@@ -196,7 +196,7 @@ void omx_deinit(struct omx_state *st)
 #if 0
     block_until_state_changed(st->video_render, OMX_StateLoaded);
 #else
-    usleep_usec(50000);
+    usleep_usec(150000);
 #endif
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
@@ -361,7 +361,7 @@ int omx_display_enable(struct omx_state *st,
     /* block_until_state_changed(st->video_render, OMX_StateIdle); */
     OMX_SendCommand(st->video_render, OMX_CommandStateSet,
                     OMX_StateIdle, NULL);
-    usleep_usec(50000);
+    usleep_usec(150000);
 
     if (!st->buffers)
     {

@@ -964,6 +964,8 @@ int64_t global_play_delay_ms = 0;
 int64_t global_remote_record_delay = 0;
 uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
+uint32_t global_video_h264_incoming_profile = 0;
+uint32_t global_video_h264_incoming_level = 0;
 uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
@@ -5462,6 +5464,14 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_video_play_buffer_entries = (uint32_t)comm_number;
     }
+    else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_PROFILE)
+    {
+        global_video_h264_incoming_profile = (uint32_t)comm_number;
+    }
+    else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_LEVEL)
+    {
+        global_video_h264_incoming_level = (uint32_t)comm_number;
+    }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
         global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
@@ -6467,12 +6477,52 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
              read_cpu_temp());
     text_on_yuf_frame_xy_ptr(0, 11, fps_str, yuf_buf, w, h);
     CLEAR(fps_str);
-    snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d",
-             (int)dw,
-             (int)dh,
-             (int)fps,
-             global_decoder_string,
-             (int)global_decoder_video_bitrate);
+
+    if (global_video_h264_incoming_profile == 66)
+    {
+        snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d %s/%d",
+                 (int)dw,
+                 (int)dh,
+                 (int)fps,
+                 global_decoder_string,
+                 (int)global_decoder_video_bitrate,
+                 "B",
+                 global_video_h264_incoming_level);
+    }
+    else if (global_video_h264_incoming_profile == 77)
+    {
+        snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d %s/%d",
+                 (int)dw,
+                 (int)dh,
+                 (int)fps,
+                 global_decoder_string,
+                 (int)global_decoder_video_bitrate,
+                 "M",
+                 global_video_h264_incoming_level);
+    }
+    else if (global_video_h264_incoming_profile == 100)
+    {
+        snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d %s/%d",
+                 (int)dw,
+                 (int)dh,
+                 (int)fps,
+                 global_decoder_string,
+                 (int)global_decoder_video_bitrate,
+                 "H",
+                 global_video_h264_incoming_level);
+    }
+    else
+    {
+        snprintf(fps_str, sizeof(fps_str), "I:%dx%d f:%d%s R:%d %d/%d",
+                 (int)dw,
+                 (int)dh,
+                 (int)fps,
+                 global_decoder_string,
+                 (int)global_decoder_video_bitrate,
+                 global_video_h264_incoming_profile,
+                 global_video_h264_incoming_level);
+    }
+
     text_on_yuf_frame_xy_ptr(0, 22, fps_str, yuf_buf, w, h);
 }
 
