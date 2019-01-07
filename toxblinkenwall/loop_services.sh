@@ -10,6 +10,8 @@ function clean_up
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
 	scripts/cleanup_fb.sh
+    scripts/on_callend.sh
+    scripts/on_offline.sh
 	exit
 }
 
@@ -42,6 +44,8 @@ fi
 trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 
 chmod u+x scripts/*.sh
+chmod u+x scripts/raspi/*.sh
+chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/ext_keys.py
 chmod a+x udev2.sh udev.sh toggle_alsa.sh
@@ -72,7 +76,9 @@ while [ 1 == 1 ]; do
     # ---- only for RASPI ----
 
 	setterm -cursor off
-	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device"
+	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
+    scripts/on_callend.sh
+    scripts/on_offline.sh
 	sleep 2
 
     # ---- only for RASPI ----
