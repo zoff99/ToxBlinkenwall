@@ -24,9 +24,9 @@ HD_FROM_CAM="" # set to "-f" for 720p video
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
 	# camera module is never loaded automatically, why is that?
-	sudo modprobe bcm2835_v4l2
+	sudo modprobe bcm2835_v4l2 # debug=5 # more debug info
 	# nice now the module suddenly has a new name?
-	sudo modprobe bcm2835-v4l2
+	sudo modprobe bcm2835-v4l2 # debug=5 # more debug info
 	# stop gfx UI
 	# sudo /etc/init.d/lightdm start
 	# sleep 2
@@ -48,7 +48,7 @@ chmod u+x scripts/raspi/*.sh
 chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/ext_keys.py
-chmod a+x udev2.sh udev.sh toggle_alsa.sh
+chmod a+x udev2.sh udev.sh toggle_alsa.sh detect_usb_audio.sh
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh
