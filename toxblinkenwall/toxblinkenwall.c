@@ -709,6 +709,7 @@ static void display_sched_attr(char *msg, int policy, struct sched_param *param)
     void init_sound_play_device(int channels, int sample_rate);
     static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate);
 #endif
+void reopen_sound_devices();
 int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin);
 void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str);
 void delete_entry_file(int entry_num);
@@ -897,6 +898,7 @@ int count_video_record_threads_int;
     #define AUDIO_RECORD_BUFFER_BYTES (AUDIO_RECORD_BUFFER_FRAMES * 2)
     sem_t count_audio_record_threads;
     int count_audio_record_threads_int;
+    sem_t audio_record_lock;
 #endif
 
 uint32_t global_audio_bit_rate;
@@ -8660,6 +8662,7 @@ void *thread_record_alsa_audio(void *data)
         {
             if (have_input_sound_device == 1)
             {
+                sem_wait(&audio_record_lock);
                 // snd_pcm_reset(audio_capture_handle);
                 int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
 
@@ -8713,6 +8716,8 @@ void *thread_record_alsa_audio(void *data)
                         free(audio_buf_l);
                     }
                 }
+
+                sem_post(&audio_record_lock);
             }
         }
         else
@@ -8963,6 +8968,7 @@ void *thread_ext_keys(void *data)
 }
 
 #endif
+
 void reopen_sound_devices()
 {
 #ifdef HAVE_ALSA_PLAY
@@ -8972,9 +8978,11 @@ void reopen_sound_devices()
     sem_post(&audio_play_lock);
 #endif
 #ifdef HAVE_ALSA_REC
+    sem_wait(&audio_record_lock);
     close_sound_device();
     init_sound_device();
-#ifdef HAVE_ALSA_REC
+    sem_post(&audio_record_lock);
+#endif
 }
 
 #ifdef HAVE_ALSA_PLAY
@@ -10742,6 +10750,11 @@ int main(int argc, char *argv[])
         dbg(0, "Error in sem_init for count_audio_record_threads\n");
     }
 
+    if (sem_init(&audio_record_lock, 0, 1))
+    {
+        dbg(0, "Error in sem_init for audio_record_lock\n");
+    }
+
     if (pthread_create(&(tid[2]), NULL, thread_record_alsa_audio, (void *)mytox_av) != 0)
     {
         dbg(0, "AV Audio Thread create failed\n");
@@ -10904,6 +10917,7 @@ int main(int argc, char *argv[])
 #endif
 #ifdef HAVE_ALSA_REC
     sem_destroy(&count_audio_record_threads);
+    sem_destroy(&audio_record_lock);
 #endif
     do_phonebook_invite = 0;
 #ifdef HAVE_EXTERNAL_KEYS
