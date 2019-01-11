@@ -1393,6 +1393,23 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
     dbg(9, "%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
 }
 
+void toggle_own_cam(int on_off)
+{
+    // TODO: make this better, and also select the correct camera device, if more than 1 camera
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+
+    if (on_off == 1)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "v4l2-ctl --overlay=1");
+    }
+    else
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "v4l2-ctl --overlay=0");
+    }
+
+    if (system(cmd_str));
+}
 
 void on_start()
 {
@@ -3266,11 +3283,12 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .skpf <num>    --> show only every n-th video frame");
     send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
+    send_text_message_to_friend(tox, friend_number, " .owncam <0|1>  --> show own video on/off");
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
     send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
-    send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>  --> use hw encoder");
+    send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>   --> use hw encoder");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
     // send_text_message_to_friend(tox, friend_number, " .kfmax <vpx KF max> -->");
     // send_text_message_to_friend(tox, friend_number, " .glag <vpx lag fr>  -->");
@@ -3593,6 +3611,19 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
                 button_d();
+            }
+            else if (strncmp((char *)message, ".owncam ", strlen((char *)".owncam ")) == 0) // own camera on/off
+            {
+                if (strlen(message) > 8) // require min. 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)1);
+
+                    if ((value_new == 0) || (value_new == 1))
+                    {
+                        dbg(0, "owmcam=%d\n", value_new);
+                        toggle_own_cam(value_new);
+                    }
+                }
             }
             else if (strncmp((char *)message, ".hwenc ", strlen((char *)".hwenc ")) == 0)
             {
