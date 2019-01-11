@@ -829,7 +829,7 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 #ifdef HAVE_ALSA_PLAY
     snd_pcm_t *audio_play_handle;
     const char *audio_play_device = "default";
-    int have_output_sound_device = 1;
+    int have_output_sound_device = 0;
     sem_t count_audio_play_threads;
     int count_audio_play_threads_int;
     long debug_alsa_play_001 = 0;
@@ -888,7 +888,7 @@ int count_video_record_threads_int;
     const char *audio_device = "default";
     // sysdefault:CARD
     int do_audio_recording = 1;
-    int have_input_sound_device = 1;
+    int have_input_sound_device = 0;
     #define MAX_ALSA_RECORD_THREADS 1
     #define AUDIO_RECORD_AUDIO_LENGTH (120)
     // frames = ((sample rate) * (audio length) / 1000)  -> audio length: [ 2.5, 5, 10, 20, 40 or 60 ] (120 seems to work also, 240 does NOT)
@@ -5863,50 +5863,6 @@ int get_video_trec_counter()
     return ret;
 }
 
-#ifdef HAVE_ALSA_PLAY
-void *alsa_audio_play(void *data)
-{
-    struct alsa_audio_play_data_block *adb = (struct alsa_audio_play_data_block *)data;
-    dbg(0, "ALSA:001\n");
-#if 0
-    // ------ thread priority ------
-    struct sched_param param;
-    int policy;
-    int s;
-    display_thread_sched_attr("Scheduler attributes of [1]: alsa_audio_play thread");
-#endif
-    // make a local copy
-    char *play_pcm_ = (char *)calloc(1, adb->block_size_in_bytes);
-
-    if (play_pcm_)
-    {
-        memcpy(play_pcm_, adb->pcm, adb->block_size_in_bytes);
-        sem_wait(&audio_play_lock);
-        int err;
-
-        if ((err = snd_pcm_writei(audio_play_handle, (char *)play_pcm_, adb->sample_count)) != (int)adb->sample_count)
-        {
-            dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
-
-            if ((int)err == -11) // -> Resource temporarily unavailable
-            {
-                dbg(0, "play_device:yield a bit (2)\n");
-                yieldcpu(1);
-            }
-
-            sound_play_xrun_recovery(audio_play_handle, err, (int)adb->channels, (int)adb->sampling_rate);
-        }
-
-        sem_post(&audio_play_lock);
-        free(play_pcm_);
-    }
-
-    free(adb);
-    dec_audio_t_counter();
-    pthread_exit(0);
-}
-#endif
-
 #ifdef HAVE_LIBAO
 void *audio_play(void *data)
 {
@@ -6070,133 +6026,101 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 
 #endif
 #ifdef HAVE_ALSA_PLAY
-#if 1
-            sem_wait(&audio_play_lock);
-            int err;
-            int has_error = 0;
-            snd_pcm_sframes_t avail_frames_in_play_buffer;
-            snd_pcm_sframes_t delay_in_samples;
-            snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
-            float ms_per_frame = (1000.0f / libao_sampling_rate);
-            debug_alsa_play_001++;
 
-            if (debug_alsa_play_001 > ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES)
+            if (have_output_sound_device == 1)
             {
-                debug_alsa_play_001 = 0;
-                //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
-                //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
-                // *// dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
-                // *//     (float)(avail_frames_in_play_buffer * ms_per_frame),
-                // *//     (float)((delay_in_samples / libao_channels) * ms_per_frame));
-            }
+                sem_wait(&audio_play_lock);
+                int err;
+                int has_error = 0;
+                snd_pcm_sframes_t avail_frames_in_play_buffer;
+                snd_pcm_sframes_t delay_in_samples;
+                snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+                float ms_per_frame = (1000.0f / libao_sampling_rate);
+                debug_alsa_play_001++;
 
-            // dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
-            //if ((int)avail_frames_in_play_buffer > (int)sample_count)
-            //{
-            err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-            has_error = 0;
-            //}
-            //else
-            //{
-            // err = (int)avail_frames_in_play_buffer;
-            // has_error = 1;
-            //}
+                if (debug_alsa_play_001 > ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES)
+                {
+                    debug_alsa_play_001 = 0;
+                    //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+                    //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
+                    // *// dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms\n",
+                    // *//     (float)(avail_frames_in_play_buffer * ms_per_frame),
+                    // *//     (float)((delay_in_samples / libao_channels) * ms_per_frame));
+                }
 
-            // if ((has_error == 1) || (err != (int)sample_count))
-            if (err != (int)sample_count)
-            {
-                // dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
-
-                // dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
-                //if (err == -11) // -> Resource temporarily unavailable
+                // dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
+                //if ((int)avail_frames_in_play_buffer > (int)sample_count)
                 //{
-                //  dbg(0, "play_device:Resource temporarily unavailable (1)\n");
-                //  yieldcpu(1);
+                err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                has_error = 0;
                 //}
-                if (err == -EAGAIN)
+                //else
+                //{
+                // err = (int)avail_frames_in_play_buffer;
+                // has_error = 1;
+                //}
+
+                // if ((has_error == 1) || (err != (int)sample_count))
+                if (err != (int)sample_count)
                 {
-                    // dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
-                    yieldcpu(2);
-                    err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-                }
-                else if (err < 0)
-                {
-                    if (err == -EPIPE)
+                    // dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+
+                    // dbg(0, "play_device:write to audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+                    //if (err == -11) // -> Resource temporarily unavailable
+                    //{
+                    //  dbg(0, "play_device:Resource temporarily unavailable (1)\n");
+                    //  yieldcpu(1);
+                    //}
+                    if (err == -EAGAIN)
                     {
-                        // *// dbg(0, "play_device:BUFFER UNDERRUN: trying to compensate ... \n");
-                        //snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
-                        //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
-                        //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
-                        //dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
-                        //    (float)(avail_frames_in_play_buffer * ms_per_frame),
-                        //    (float)((delay_in_samples / libao_channels) * ms_per_frame),
-                        //    snd_strerror(err));
-                        // *// dbg(9, "play_device: (2)opened device: %s | state: %s\n",
-                        // *//     snd_pcm_name(audio_play_handle),
-                        // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
-                        snd_pcm_prepare(audio_play_handle);
+                        // dbg(0, "play_device:EAGAIN errstr=%s\n", snd_strerror(err));
+                        yieldcpu(2);
                         err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-                        // *// dbg(9, "play_device: (3)opened device: %s | state: %s\n",
-                        // *//     snd_pcm_name(audio_play_handle),
-                        // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
                     }
-
-                    if (err < 0)
+                    else if (err < 0)
                     {
-                        snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
-                        dbg(0, "play_device:BUFFER UNDERRUN err=%d -EPIPE=%d, -ESTRIPE=%d\n", (int)err, (int) - EPIPE, (int) - ESTRPIPE);
-                        dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d errstr=%s\n",
-                            avail_frames_in_play_buffer, sample_count, delay_in_samples, snd_strerror(err));
-                        dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
-                            (float)(avail_frames_in_play_buffer * ms_per_frame),
-                            (float)((delay_in_samples / libao_channels) * ms_per_frame),
-                            snd_strerror(err));
-                        dbg(9, "play_device: opened device: %s | state: %s\n",
-                            snd_pcm_name(audio_play_handle),
-                            snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
-                        sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                        if (err == -EPIPE)
+                        {
+                            // *// dbg(0, "play_device:BUFFER UNDERRUN: trying to compensate ... \n");
+                            //snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+                            //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
+                            //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
+                            //dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
+                            //    (float)(avail_frames_in_play_buffer * ms_per_frame),
+                            //    (float)((delay_in_samples / libao_channels) * ms_per_frame),
+                            //    snd_strerror(err));
+                            // *// dbg(9, "play_device: (2)opened device: %s | state: %s\n",
+                            // *//     snd_pcm_name(audio_play_handle),
+                            // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+                            snd_pcm_prepare(audio_play_handle);
+                            err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                            // *// dbg(9, "play_device: (3)opened device: %s | state: %s\n",
+                            // *//     snd_pcm_name(audio_play_handle),
+                            // *//     snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+                        }
+
+                        if (err < 0)
+                        {
+                            snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+                            dbg(0, "play_device:BUFFER UNDERRUN err=%d -EPIPE=%d, -ESTRIPE=%d\n", (int)err, (int) - EPIPE, (int) - ESTRPIPE);
+                            dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d errstr=%s\n",
+                                avail_frames_in_play_buffer, sample_count, delay_in_samples, snd_strerror(err));
+                            dbg(9, "snd_pcm_avail avail_ms_p_buffer:%.1f ms delay_in_samples=%.1f ms errstr=%s\n",
+                                (float)(avail_frames_in_play_buffer * ms_per_frame),
+                                (float)((delay_in_samples / libao_channels) * ms_per_frame),
+                                snd_strerror(err));
+                            dbg(9, "play_device: opened device: %s | state: %s\n",
+                                snd_pcm_name(audio_play_handle),
+                                snd_pcm_state_name(snd_pcm_state(audio_play_handle)));
+                            sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                        }
                     }
                 }
+
+                sem_post(&audio_play_lock);
+                // dbg(0, "ALSA:014\n");
             }
 
-            sem_post(&audio_play_lock);
-            // dbg(0, "ALSA:014\n");
-#else
-            struct alsa_audio_play_data_block *adb = calloc(1, sizeof(struct alsa_audio_play_data_block));
-            adb->block_size_in_bytes = (size_t)(sample_count * libao_channels * 2);
-            adb->pcm = (char *)pcm;
-            adb->channels = libao_channels;
-            adb->sampling_rate = libao_sampling_rate;
-            adb->sample_count = sample_count;
-            pthread_t audio_play_thread;
-
-            if (get_audio_t_counter() < MAX_ALSA_AUDIO_PLAY_THREADS)
-            {
-                inc_audio_t_counter();
-
-                if (pthread_create(&audio_play_thread, NULL, alsa_audio_play, (void *)adb))
-                {
-                    dbg(0, "error creating audio play thread\n");
-                    free(adb);
-                    dec_audio_t_counter();
-                }
-                else
-                {
-                    if (pthread_detach(audio_play_thread))
-                    {
-                        dbg(0, "error detaching audio play thread\n");
-                    }
-
-                    // yieldcpu(1);
-                }
-            }
-            else
-            {
-                dbg(1, "more than %d alsa play threads already\n", (int)MAX_ALSA_AUDIO_PLAY_THREADS);
-                free(adb);
-            }
-
-#endif
 #endif
 #ifdef HAVE_LIBAO
 
@@ -8546,7 +8470,7 @@ void init_sound_device()
     int i;
     int err;
     snd_pcm_hw_params_t *hw_params;
-    have_input_sound_device = 1;
+    have_input_sound_device = 0;
 
     // open in blocking mode for recording !!
     if ((err = snd_pcm_open(&audio_capture_handle, audio_device, SND_PCM_STREAM_CAPTURE, 0)) < 0)
@@ -8558,6 +8482,8 @@ void init_sound_device()
         have_input_sound_device = 0;
         return;
     }
+
+    have_input_sound_device = 1;
 
     if ((err = snd_pcm_hw_params_malloc(&hw_params)) < 0)
     {
@@ -8726,7 +8652,7 @@ void *thread_record_alsa_audio(void *data)
 #endif
     // ------ thread priority ------
 
-    while ((do_audio_recording == 1) && (have_input_sound_device == 1))
+    while (do_audio_recording == 1)
     {
 #if 1
 
@@ -9003,6 +8929,11 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: TOGGLE SPEAKER:\n");
                 toggle_speaker();
             }
+            else if (strncmp((char *)buf, "reopen_snd_devices:", strlen((char *)"reopen_snd_devices:")) == 0)
+            {
+                dbg(2, "ExtKeys: REOPEN SOUND DEVICES:\n");
+                reopen_sound_devices();
+            }
             else if (strncmp((char *)buf, "BT-A:", strlen((char *)"BT-A:")) == 0)
             {
                 dbg(2, "ExtKeys: Button A:\n");
@@ -9030,10 +8961,23 @@ void *thread_ext_keys(void *data)
 
     close(ext_keys_fd);
 }
+
 #endif
+void reopen_sound_devices()
+{
+#ifdef HAVE_ALSA_PLAY
+    sem_wait(&audio_play_lock);
+    close_sound_play_device();
+    init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
+    sem_post(&audio_play_lock);
+#endif
+#ifdef HAVE_ALSA_REC
+    close_sound_device();
+    init_sound_device();
+#ifdef HAVE_ALSA_REC
+}
 
 #ifdef HAVE_ALSA_PLAY
-
 float audio_vu(const int16_t *pcm_data, uint32_t sample_count)
 {
     float sum = 0.0;
@@ -9046,7 +8990,6 @@ float audio_vu(const int16_t *pcm_data, uint32_t sample_count)
     float vu = 20.0 * logf(sum);
     return vu;
 }
-
 
 void close_sound_play_device()
 {
@@ -9067,7 +9010,7 @@ void init_sound_play_device(int channels, int sample_rate)
     int i;
     int err;
     snd_pcm_hw_params_t *hw_params;
-    have_output_sound_device = 1;
+    have_output_sound_device = 0;
 
     // open in NON blocking mode for playing
     if ((err = snd_pcm_open(&audio_play_handle, audio_play_device, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
@@ -9080,6 +9023,7 @@ void init_sound_play_device(int channels, int sample_rate)
         return;
     }
 
+    have_output_sound_device = 1;
     dbg(0, "ALSA:003\n");
 
     if ((err = snd_pcm_hw_params_malloc(&hw_params)) < 0)
@@ -9355,6 +9299,7 @@ void sigint_handler(int signo)
     }
 }
 
+
 #ifdef HAVE_OUTPUT_OPENGL
 /*
 float get_scale_factor(int dst_width, int dst_height, int src_width, int src_height)
@@ -9363,6 +9308,7 @@ float get_scale_factor(int dst_width, int dst_height, int src_width, int src_hei
     return scale;
 }
 */
+
 float get_aspect_ratio(int dst_width, int dst_height, int src_width, int src_height)
 {
     if (dst_height == 0)
@@ -9422,6 +9368,8 @@ float get_opengl_w_factor(float scale)
         return 1.0f;
     }
 }
+
+
 // Create a shader object, load the shader source, and
 // compile the shader.
 //
@@ -9463,6 +9411,7 @@ GLuint LoadShader(GLenum type, const char *shaderSrc)
 
     return shader;
 }
+
 #if 0
 void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
 {
@@ -9478,11 +9427,12 @@ void read_yuf_file(int filenum, uint8_t *buffer, size_t max_length)
     fclose(fileptr);
 }
 #endif
+
+
 // Initialize the shader and program object
 //
 // params: ww -> screen width, hh -> screen height
 //
-
 int Init(ESContext *esContext, int ww, int hh)
 {
     esContext->userData = malloc(sizeof(openGL_UserData));
@@ -9969,6 +9919,7 @@ void DrawOverlay(ESContext *esContext, int changed)
 /* debugging timing functions */
 /* debugging timing functions */
 uint64_t global_global_tt1 = 0;
+
 void __tt1()
 {
     global_global_tt1 = bw_current_time_actual();
@@ -10116,8 +10067,8 @@ void Draw(ESContext *esContext)
     // --------------
     DrawBlackRect(esContext);
 }
-//
 
+//
 void ShutDown(ESContext *esContext, int fb_screen_width, int fb_screen_height)
 {
     openGL_UserData *userData = esContext->userData;
@@ -10340,6 +10291,7 @@ void *thread_opengl(void *data)
     }
 }
 #endif
+
 
 int main(int argc, char *argv[])
 {
