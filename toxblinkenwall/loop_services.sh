@@ -86,5 +86,11 @@ while [ 1 == 1 ]; do
             sudo ./toggle_alsa.sh 1
     fi
     # ---- only for RASPI ----
+
+    if [ -e "OPTION_NOLOOP" ]; then
+        # do not loop/restart
+        clean_up
+        exit 1
+    fi
 done
 
