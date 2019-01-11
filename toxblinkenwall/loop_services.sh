@@ -63,7 +63,45 @@ while [ 1 == 1 ]; do
 	pkill -f ext_keys.py
 
     v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
+    v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
+    # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
+    v4l2-ctl -d "$video_device" --set-ctrl=h264_profile=1
+    v4l2-ctl -d "$video_device" --set-priority=3
+    v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
+
+    #        rotate (int)    : min=0 max=360 step=90 default=0 value=0 flags=00000400
+    #
+    #        white_balance_auto_preset (menu)   : min=0 max=9 default=1 value=1
+    #				0: Manual
+    #				1: Auto
+    #				2: Incandescent
+    #				3: Fluorescent
+    #				4: Fluorescent H
+    #				5: Horizon
+    #				6: Daylight
+    #				7: Flash
+    #				8: Cloudy
+    #				9: Shade
+    #
+    #        scene_mode (menu)   : min=0 max=13 default=0 value=0
+    #				0: None
+    #				8: Night
+    #				11: Sports
+    #
+    #
+    #        power_line_frequency (menu)   : min=0 max=3 default=1 value=1
+    #				0: Disabled
+    #				1: 50 Hz
+    #				2: 60 Hz
+    #				3: Auto
+    #
+    #        h264_profile (menu)   : min=0 max=4 default=4 value=4
+    #				0: Baseline
+    #				1: Constrained Baseline
+    #				2: Main
+    #				4: High
+    #
 
 	cd ext_keys_scripts
 	./ext_keys.py &
