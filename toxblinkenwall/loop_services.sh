@@ -66,7 +66,7 @@ while [ 1 == 1 ]; do
     v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
     # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
     v4l2-ctl -d "$video_device" --set-ctrl=h264_profile=1
-    v4l2-ctl -d "$video_device" --set-priority=3
+    # v4l2-ctl -d "$video_device" --set-priority=3
     v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
 
