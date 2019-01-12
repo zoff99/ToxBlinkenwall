@@ -99,6 +99,53 @@ defaults.pcm.!card ALSA
 	echo "using device ... READY"
 fi
 
+
+# detect USB PhoneReceiver ----------------
+cat /proc/asound/card*/usbid |grep '04b4:0306'
+res=$?
+if [ $res -eq 0 ]; then
+    echo "USB PhoneReceiver detected ..."
+
+	cp /usr/share/alsa/alsa.conf_ORIG /tmp/alsa.$$.cfg
+	echo '
+pcm.usb
+{
+    type hw
+    card U0x4b40x306
+}
+
+pcm.card_bcm {
+    type hw
+    card ALSA
+}
+
+pcm.!default {
+    type asym
+
+    playback.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+
+    capture.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+}
+
+defaults.pcm.!card ALSA
+' >> /tmp/alsa.$$.cfg
+
+
+	sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
+	rm -f /tmp/alsa.$$.cfg
+	echo "using device ... READY"
+fi
+
+
+
 # tell ToxBlinkenwall to reopen sound devices
 if [ -e /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo ]; then
     echo "reopen_snd_devices:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
