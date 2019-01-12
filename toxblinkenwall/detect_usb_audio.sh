@@ -100,5 +100,6 @@ defaults.pcm.!card ALSA
 fi
 
 # tell ToxBlinkenwall to reopen sound devices
-echo "reopen_snd_devices:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
-
+if [ -e /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo ]; then
+    echo "reopen_snd_devices:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+fi
