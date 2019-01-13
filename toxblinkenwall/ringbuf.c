@@ -1,3 +1,11 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 /*
  * ringbuf.c - C ring buffer (FIFO) implementation.
  *

@@ -1,3 +1,11 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 //
 // Book:      OpenGL(R) ES 2.0 Programming Guide
 // Authors:   Aaftab Munshi, Dan Ginsburg, Dave Shreiner
@@ -30,16 +38,16 @@
 #define RPI_NO_X 1 // use Framebuffer (not X)
 
 #ifdef RPI_NO_X
-#include  "bcm_host.h"
+    #include  "bcm_host.h"
 #else
-#include  <X11/Xlib.h>
-#include  <X11/Xatom.h>
-#include  <X11/Xutil.h>
+    #include  <X11/Xlib.h>
+    #include  <X11/Xatom.h>
+    #include  <X11/Xutil.h>
 #endif
 
 #ifndef RPI_NO_X
-// X11 related local variables
-static Display *x_display = NULL;
+    // X11 related local variables
+    static Display *x_display = NULL;
 #endif
 
 ///
@@ -47,82 +55,86 @@ static Display *x_display = NULL;
 //
 //    Creates an EGL rendering context and all associated elements
 //
-EGLBoolean CreateEGLContext ( EGLNativeWindowType hWnd, EGLDisplay* eglDisplay,
-                              EGLContext* eglContext, EGLSurface* eglSurface,
-                              EGLint attribList[])
+EGLBoolean CreateEGLContext(EGLNativeWindowType hWnd, EGLDisplay *eglDisplay,
+                            EGLContext *eglContext, EGLSurface *eglSurface,
+                            EGLint attribList[])
 {
-   EGLint numConfigs;
-   EGLint majorVersion;
-   EGLint minorVersion;
-   EGLDisplay display;
-   EGLContext context;
-   EGLSurface surface;
-   EGLConfig config;
-   #ifndef RPI_NO_X
-   EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE, EGL_NONE };
-   #else
-   EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-   #endif
-   
-   
-   // Get Display
-   #ifndef RPI_NO_X
-   display = eglGetDisplay((EGLNativeDisplayType)x_display);
-   if ( display == EGL_NO_DISPLAY )
-   {
-      return EGL_FALSE;
-   }
-   #else
-   display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-   if ( display == EGL_NO_DISPLAY )
-   {
-      return EGL_FALSE;
-   }
-   #endif
+    EGLint numConfigs;
+    EGLint majorVersion;
+    EGLint minorVersion;
+    EGLDisplay display;
+    EGLContext context;
+    EGLSurface surface;
+    EGLConfig config;
+#ifndef RPI_NO_X
+    EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE, EGL_NONE };
+#else
+    EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+#endif
+    // Get Display
+#ifndef RPI_NO_X
+    display = eglGetDisplay((EGLNativeDisplayType)x_display);
 
-   // Initialize EGL
-   if ( !eglInitialize(display, &majorVersion, &minorVersion) )
-   {
-      return EGL_FALSE;
-   }
+    if (display == EGL_NO_DISPLAY)
+    {
+        return EGL_FALSE;
+    }
 
-   // Get configs
-   if ( !eglGetConfigs(display, NULL, 0, &numConfigs) )
-   {
-      return EGL_FALSE;
-   }
+#else
+    display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 
-   // Choose config
-   if ( !eglChooseConfig(display, attribList, &config, 1, &numConfigs) )
-   {
-      return EGL_FALSE;
-   }
+    if (display == EGL_NO_DISPLAY)
+    {
+        return EGL_FALSE;
+    }
 
-   // Create a surface
-   surface = eglCreateWindowSurface(display, config, (EGLNativeWindowType)hWnd, NULL);
-   if ( surface == EGL_NO_SURFACE )
-   {
-      return EGL_FALSE;
-   }
+#endif
 
-   // Create a GL context
-   context = eglCreateContext(display, config, EGL_NO_CONTEXT, contextAttribs );
-   if ( context == EGL_NO_CONTEXT )
-   {
-      return EGL_FALSE;
-   }   
-   
-   // Make the context current
-   if ( !eglMakeCurrent(display, surface, surface, context) )
-   {
-      return EGL_FALSE;
-   }
-   
-   *eglDisplay = display;
-   *eglSurface = surface;
-   *eglContext = context;
-   return EGL_TRUE;
-} 
+    // Initialize EGL
+    if (!eglInitialize(display, &majorVersion, &minorVersion))
+    {
+        return EGL_FALSE;
+    }
+
+    // Get configs
+    if (!eglGetConfigs(display, NULL, 0, &numConfigs))
+    {
+        return EGL_FALSE;
+    }
+
+    // Choose config
+    if (!eglChooseConfig(display, attribList, &config, 1, &numConfigs))
+    {
+        return EGL_FALSE;
+    }
+
+    // Create a surface
+    surface = eglCreateWindowSurface(display, config, (EGLNativeWindowType)hWnd, NULL);
+
+    if (surface == EGL_NO_SURFACE)
+    {
+        return EGL_FALSE;
+    }
+
+    // Create a GL context
+    context = eglCreateContext(display, config, EGL_NO_CONTEXT, contextAttribs);
+
+    if (context == EGL_NO_CONTEXT)
+    {
+        return EGL_FALSE;
+    }
+
+    // Make the context current
+    if (!eglMakeCurrent(display, surface, surface, context))
+    {
+        return EGL_FALSE;
+    }
+
+    *eglDisplay = display;
+    *eglSurface = surface;
+    *eglContext = context;
+    return EGL_TRUE;
+}
 
 #ifdef RPI_NO_X
 ///
@@ -130,50 +142,43 @@ EGLBoolean CreateEGLContext ( EGLNativeWindowType hWnd, EGLDisplay* eglDisplay,
 //
 //      This function initialized the display and window for EGL
 //
-EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width, int display_height, int frame_width, int frame_height)
+EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width, int display_height, int frame_width,
+                     int frame_height)
 {
-   int32_t success = 0;
+    int32_t success = 0;
+    static EGL_DISPMANX_WINDOW_T nativewindow;
+    DISPMANX_ELEMENT_HANDLE_T dispman_element;
+    DISPMANX_DISPLAY_HANDLE_T dispman_display;
+    DISPMANX_UPDATE_HANDLE_T dispman_update;
+    VC_RECT_T dst_rect;
+    VC_RECT_T src_rect;
+    // create an EGL window surface, passing context width/height
+    success = graphics_get_display_size(0 /* LCD */, &display_width, &display_height);
 
-   static EGL_DISPMANX_WINDOW_T nativewindow;
+    if (success < 0)
+    {
+        return EGL_FALSE;
+    }
 
-   DISPMANX_ELEMENT_HANDLE_T dispman_element;
-   DISPMANX_DISPLAY_HANDLE_T dispman_display;
-   DISPMANX_UPDATE_HANDLE_T dispman_update;
-   VC_RECT_T dst_rect;
-   VC_RECT_T src_rect;
-   
-   // create an EGL window surface, passing context width/height
-   success = graphics_get_display_size(0 /* LCD */, &display_width, &display_height);
-   if ( success < 0 )
-   {
-      return EGL_FALSE;
-   }
-
-   dst_rect.x = 0;
-   dst_rect.y = 0;
-   dst_rect.width = display_width;
-   dst_rect.height = display_height;
-      
-   src_rect.x = 0;
-   src_rect.y = 0;
-   src_rect.width = frame_width;
-   src_rect.height = frame_height;   
-
-   dispman_display = vc_dispmanx_display_open( 0 /* LCD */);
-   dispman_update = vc_dispmanx_update_start( 0 );
-         
-   dispman_element = vc_dispmanx_element_add ( dispman_update, dispman_display,
-      0/*layer*/, &dst_rect, 0/*src*/,
-      &src_rect, DISPMANX_PROTECTION_NONE, 0 /*alpha*/, 0/*clamp*/, 0/*transform*/);
-      
-   nativewindow.element = dispman_element;
-   nativewindow.width = display_width;
-   nativewindow.height = display_height;
-   vc_dispmanx_update_submit_sync( dispman_update );
-   
-   esContext->hWnd = &nativewindow;
-
-	return EGL_TRUE;
+    dst_rect.x = 0;
+    dst_rect.y = 0;
+    dst_rect.width = display_width;
+    dst_rect.height = display_height;
+    src_rect.x = 0;
+    src_rect.y = 0;
+    src_rect.width = frame_width;
+    src_rect.height = frame_height;
+    dispman_display = vc_dispmanx_display_open(0 /* LCD */);
+    dispman_update = vc_dispmanx_update_start(0);
+    dispman_element = vc_dispmanx_element_add(dispman_update, dispman_display,
+                      0/*layer*/, &dst_rect, 0/*src*/,
+                      &src_rect, DISPMANX_PROTECTION_NONE, 0 /*alpha*/, 0/*clamp*/, 0/*transform*/);
+    nativewindow.element = dispman_element;
+    nativewindow.width = display_width;
+    nativewindow.height = display_height;
+    vc_dispmanx_update_submit_sync(dispman_update);
+    esContext->hWnd = &nativewindow;
+    return EGL_TRUE;
 }
 ///
 //  userInterrupt()
@@ -183,11 +188,9 @@ EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width,
 //
 GLboolean userInterrupt(ESContext *esContext)
 {
-	//GLboolean userinterrupt = GL_FALSE;
+    //GLboolean userinterrupt = GL_FALSE;
     //return userinterrupt;
-    
     // Ctrl-C for now to stop
-    
     return GL_FALSE;
 }
 #else
@@ -196,7 +199,8 @@ GLboolean userInterrupt(ESContext *esContext)
 //
 //      This function initialized the native X11 display and window for EGL
 //
-EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width, int display_height, int frame_width, int frame_height)
+EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width, int display_height, int frame_width,
+                     int frame_height)
 //EGLBoolean WinCreate(ESContext *esContext, const char *title, int, int, int, int)
 {
     Window root;
@@ -208,55 +212,47 @@ EGLBoolean WinCreate(ESContext *esContext, const char *title, int display_width,
     EGLConfig ecfg;
     EGLint num_config;
     Window win;
-
     /*
      * X11 native display initialization
      */
-
     x_display = XOpenDisplay(NULL);
-    if ( x_display == NULL )
+
+    if (x_display == NULL)
     {
         return EGL_FALSE;
     }
 
     root = DefaultRootWindow(x_display);
-
     swa.event_mask  =  ExposureMask | PointerMotionMask | KeyPressMask;
     win = XCreateWindow(
-               x_display, root,
-               0, 0, esContext->width, esContext->height, 0,
-               CopyFromParent, InputOutput,
-               CopyFromParent, CWEventMask,
-               &swa );
-
+              x_display, root,
+              0, 0, esContext->width, esContext->height, 0,
+              CopyFromParent, InputOutput,
+              CopyFromParent, CWEventMask,
+              &swa);
     xattr.override_redirect = FALSE;
-    XChangeWindowAttributes ( x_display, win, CWOverrideRedirect, &xattr );
-
+    XChangeWindowAttributes(x_display, win, CWOverrideRedirect, &xattr);
     hints.input = TRUE;
     hints.flags = InputHint;
     XSetWMHints(x_display, win, &hints);
-
     // make the window visible on the screen
-    XMapWindow (x_display, win);
-    XStoreName (x_display, win, title);
-
+    XMapWindow(x_display, win);
+    XStoreName(x_display, win, title);
     // get identifiers for the provided atom name strings
-    wm_state = XInternAtom (x_display, "_NET_WM_STATE", FALSE);
-
-    memset ( &xev, 0, sizeof(xev) );
+    wm_state = XInternAtom(x_display, "_NET_WM_STATE", FALSE);
+    memset(&xev, 0, sizeof(xev));
     xev.type                 = ClientMessage;
     xev.xclient.window       = win;
     xev.xclient.message_type = wm_state;
     xev.xclient.format       = 32;
     xev.xclient.data.l[0]    = 1;
     xev.xclient.data.l[1]    = FALSE;
-    XSendEvent (
-       x_display,
-       DefaultRootWindow ( x_display ),
-       FALSE,
-       SubstructureNotifyMask,
-       &xev );
-
+    XSendEvent(
+        x_display,
+        DefaultRootWindow(x_display),
+        FALSE,
+        SubstructureNotifyMask,
+        &xev);
     esContext->hWnd = (EGLNativeWindowType) win;
     return EGL_TRUE;
 }
@@ -276,20 +272,27 @@ GLboolean userInterrupt(ESContext *esContext)
     char text;
 
     // Pump all messages from X server. Keypresses are directed to keyfunc (if defined)
-    while ( XPending ( x_display ) )
+    while (XPending(x_display))
     {
-        XNextEvent( x_display, &xev );
-        if ( xev.type == KeyPress )
+        XNextEvent(x_display, &xev);
+
+        if (xev.type == KeyPress)
         {
-            if (XLookupString(&xev.xkey,&text,1,&key,0)==1)
+            if (XLookupString(&xev.xkey, &text, 1, &key, 0) == 1)
             {
                 if (esContext->keyFunc != NULL)
+                {
                     esContext->keyFunc(esContext, text, 0, 0);
+                }
             }
         }
-        if ( xev.type == DestroyNotify )
+
+        if (xev.type == DestroyNotify)
+        {
             userinterrupt = GL_TRUE;
+        }
     }
+
     return userinterrupt;
 }
 #endif
@@ -306,15 +309,16 @@ GLboolean userInterrupt(ESContext *esContext)
 //      Initialize ES utility context.  This must be called before calling any other
 //      functions.
 //
-void ESUTIL_API esInitContext ( ESContext *esContext )
+void ESUTIL_API esInitContext(ESContext *esContext)
 {
 #ifdef RPI_NO_X
-   bcm_host_init();
+    bcm_host_init();
 #endif
-   if ( esContext != NULL )
-   {
-      memset( esContext, 0, sizeof( ESContext) );
-   }
+
+    if (esContext != NULL)
+    {
+        memset(esContext, 0, sizeof(ESContext));
+    }
 }
 
 
@@ -324,51 +328,50 @@ void ESUTIL_API esInitContext ( ESContext *esContext )
 //      title - name for title bar of window
 //      width - width of window to create
 //      height - height of window to create
-//      flags  - bitwise or of window creation flags 
+//      flags  - bitwise or of window creation flags
 //          ES_WINDOW_ALPHA       - specifies that the framebuffer should have alpha
 //          ES_WINDOW_DEPTH       - specifies that a depth buffer should be created
 //          ES_WINDOW_STENCIL     - specifies that a stencil buffer should be created
 //          ES_WINDOW_MULTISAMPLE - specifies that a multi-sample buffer should be created
 //
-GLboolean ESUTIL_API esCreateWindow ( ESContext *esContext, const char* title, GLint width, GLint height, int frame_width, int frame_height, GLuint flags )
+GLboolean ESUTIL_API esCreateWindow(ESContext *esContext, const char *title, GLint width, GLint height, int frame_width,
+                                    int frame_height, GLuint flags)
 {
-   EGLint attribList[] =
-   {
-       EGL_RED_SIZE,       5,
-       EGL_GREEN_SIZE,     6,
-       EGL_BLUE_SIZE,      5,
-       EGL_ALPHA_SIZE,     (flags & ES_WINDOW_ALPHA) ? 8 : EGL_DONT_CARE,
-       EGL_DEPTH_SIZE,     (flags & ES_WINDOW_DEPTH) ? 8 : EGL_DONT_CARE,
-       EGL_STENCIL_SIZE,   (flags & ES_WINDOW_STENCIL) ? 8 : EGL_DONT_CARE,
-       EGL_SAMPLE_BUFFERS, (flags & ES_WINDOW_MULTISAMPLE) ? 1 : 0,
-       EGL_NONE
-   };
-   
-   if ( esContext == NULL )
-   {
-      return GL_FALSE;
-   }
+    EGLint attribList[] =
+    {
+        EGL_RED_SIZE,       5,
+        EGL_GREEN_SIZE,     6,
+        EGL_BLUE_SIZE,      5,
+        EGL_ALPHA_SIZE, (flags & ES_WINDOW_ALPHA) ? 8 : EGL_DONT_CARE,
+        EGL_DEPTH_SIZE, (flags & ES_WINDOW_DEPTH) ? 8 : EGL_DONT_CARE,
+        EGL_STENCIL_SIZE, (flags & ES_WINDOW_STENCIL) ? 8 : EGL_DONT_CARE,
+        EGL_SAMPLE_BUFFERS, (flags & ES_WINDOW_MULTISAMPLE) ? 1 : 0,
+        EGL_NONE
+    };
 
-   esContext->width = width;
-   esContext->height = height;
+    if (esContext == NULL)
+    {
+        return GL_FALSE;
+    }
 
-   if ( !WinCreate ( esContext, title, width, height, frame_width, frame_height) )
-   {
-      return GL_FALSE;
-   }
+    esContext->width = width;
+    esContext->height = height;
 
-  
-   if ( !CreateEGLContext ( esContext->hWnd,
-                            &esContext->eglDisplay,
-                            &esContext->eglContext,
-                            &esContext->eglSurface,
-                            attribList) )
-   {
-      return GL_FALSE;
-   }
-   
+    if (!WinCreate(esContext, title, width, height, frame_width, frame_height))
+    {
+        return GL_FALSE;
+    }
 
-   return GL_TRUE;
+    if (!CreateEGLContext(esContext->hWnd,
+                          &esContext->eglDisplay,
+                          &esContext->eglContext,
+                          &esContext->eglSurface,
+                          attribList))
+    {
+        return GL_FALSE;
+    }
+
+    return GL_TRUE;
 }
 
 
@@ -378,31 +381,35 @@ GLboolean ESUTIL_API esCreateWindow ( ESContext *esContext, const char* title, G
 //    Start the main loop for the OpenGL ES application
 //
 
-void ESUTIL_API esMainLoop ( ESContext *esContext )
+void ESUTIL_API esMainLoop(ESContext *esContext)
 {
     struct timeval t1, t2;
     struct timezone tz;
     float deltatime;
     float totaltime = 0.0f;
     unsigned int frames = 0;
+    gettimeofday(&t1, &tz);
 
-    gettimeofday ( &t1 , &tz );
-
-    while(userInterrupt(esContext) == GL_FALSE)
+    while (userInterrupt(esContext) == GL_FALSE)
     {
         gettimeofday(&t2, &tz);
         deltatime = (float)(t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6);
         t1 = t2;
 
         if (esContext->updateFunc != NULL)
+        {
             esContext->updateFunc(esContext, deltatime);
+        }
+
         if (esContext->drawFunc != NULL)
+        {
             esContext->drawFunc(esContext);
+        }
 
         eglSwapBuffers(esContext->eglDisplay, esContext->eglSurface);
-
         totaltime += deltatime;
         frames++;
+
         if (totaltime >  2.0f)
         {
             // printf("%4d frames rendered in %1.4f seconds -> FPS=%3.4f\n", frames, totaltime, frames/totaltime);
@@ -416,28 +423,28 @@ void ESUTIL_API esMainLoop ( ESContext *esContext )
 ///
 //  esRegisterDrawFunc()
 //
-void ESUTIL_API esRegisterDrawFunc ( ESContext *esContext, void (ESCALLBACK *drawFunc) (ESContext* ) )
+void ESUTIL_API esRegisterDrawFunc(ESContext *esContext, void (ESCALLBACK *drawFunc)(ESContext *))
 {
-   esContext->drawFunc = drawFunc;
+    esContext->drawFunc = drawFunc;
 }
 
 
 ///
 //  esRegisterUpdateFunc()
 //
-void ESUTIL_API esRegisterUpdateFunc ( ESContext *esContext, void (ESCALLBACK *updateFunc) ( ESContext*, float ) )
+void ESUTIL_API esRegisterUpdateFunc(ESContext *esContext, void (ESCALLBACK *updateFunc)(ESContext *, float))
 {
-   esContext->updateFunc = updateFunc;
+    esContext->updateFunc = updateFunc;
 }
 
 
 ///
 //  esRegisterKeyFunc()
 //
-void ESUTIL_API esRegisterKeyFunc ( ESContext *esContext,
-                                    void (ESCALLBACK *keyFunc) (ESContext*, unsigned char, int, int ) )
+void ESUTIL_API esRegisterKeyFunc(ESContext *esContext,
+                                  void (ESCALLBACK *keyFunc)(ESContext *, unsigned char, int, int))
 {
-   esContext->keyFunc = keyFunc;
+    esContext->keyFunc = keyFunc;
 }
 
 
@@ -446,17 +453,14 @@ void ESUTIL_API esRegisterKeyFunc ( ESContext *esContext,
 //
 //    Log an error message to the debug output for the platform
 //
-void ESUTIL_API esLogMessage ( const char *formatStr, ... )
+void ESUTIL_API esLogMessage(const char *formatStr, ...)
 {
     va_list params;
     char buf[BUFSIZ];
-
-    va_start ( params, formatStr );
-    vsprintf ( buf, formatStr, params );
-    
-    printf ( "%s", buf );
-    
-    va_end ( params );
+    va_start(params, formatStr);
+    vsprintf(buf, formatStr, params);
+    printf("%s", buf);
+    va_end(params);
 }
 
 
@@ -468,24 +472,27 @@ void ESUTIL_API esLogMessage ( const char *formatStr, ... )
 //    sake of the examples, this is sufficient.
 //
 
-char* ESUTIL_API esLoadTGA ( char *fileName, int *width, int *height )
+char *ESUTIL_API esLoadTGA(char *fileName, int *width, int *height)
 {
     char *buffer = NULL;
     FILE *f;
     unsigned char tgaheader[12];
     unsigned char attributes[6];
     unsigned int imagesize;
-
     f = fopen(fileName, "rb");
-    if(f == NULL) return NULL;
 
-    if(fread(&tgaheader, sizeof(tgaheader), 1, f) == 0)
+    if (f == NULL)
+    {
+        return NULL;
+    }
+
+    if (fread(&tgaheader, sizeof(tgaheader), 1, f) == 0)
     {
         fclose(f);
         return NULL;
     }
 
-    if(fread(attributes, sizeof(attributes), 1, f) == 0)
+    if (fread(attributes, sizeof(attributes), 1, f) == 0)
     {
         fclose(f);
         return 0;
@@ -495,17 +502,19 @@ char* ESUTIL_API esLoadTGA ( char *fileName, int *width, int *height )
     *height = attributes[3] * 256 + attributes[2];
     imagesize = attributes[4] / 8 * *width * *height;
     buffer = malloc(imagesize);
+
     if (buffer == NULL)
     {
         fclose(f);
         return 0;
     }
 
-    if(fread(buffer, 1, imagesize, f) != imagesize)
+    if (fread(buffer, 1, imagesize, f) != imagesize)
     {
         free(buffer);
         return NULL;
     }
+
     fclose(f);
     return buffer;
 }

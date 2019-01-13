@@ -1,3 +1,11 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 //
 // Book:      OpenGL(R) ES 2.0 Programming Guide
 // Authors:   Aaftab Munshi, Dan Ginsburg, Dave Shreiner
@@ -40,48 +48,43 @@
 /// \param shaderSrc Shader source string
 /// \return A new shader object on success, 0 on failure
 //
-GLuint ESUTIL_API esLoadShader ( GLenum type, const char *shaderSrc )
+GLuint ESUTIL_API esLoadShader(GLenum type, const char *shaderSrc)
 {
-   GLuint shader;
-   GLint compiled;
-   
-   // Create the shader object
-   shader = glCreateShader ( type );
+    GLuint shader;
+    GLint compiled;
+    // Create the shader object
+    shader = glCreateShader(type);
 
-   if ( shader == 0 )
-   	return 0;
+    if (shader == 0)
+    {
+        return 0;
+    }
 
-   // Load the shader source
-   glShaderSource ( shader, 1, &shaderSrc, NULL );
-   
-   // Compile the shader
-   glCompileShader ( shader );
+    // Load the shader source
+    glShaderSource(shader, 1, &shaderSrc, NULL);
+    // Compile the shader
+    glCompileShader(shader);
+    // Check the compile status
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
 
-   // Check the compile status
-   glGetShaderiv ( shader, GL_COMPILE_STATUS, &compiled );
+    if (!compiled)
+    {
+        GLint infoLen = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLen);
 
-   if ( !compiled ) 
-   {
-      GLint infoLen = 0;
+        if (infoLen > 1)
+        {
+            char *infoLog = malloc(sizeof(char) * infoLen);
+            glGetShaderInfoLog(shader, infoLen, NULL, infoLog);
+            esLogMessage("Error compiling shader:\n%s\n", infoLog);
+            free(infoLog);
+        }
 
-      glGetShaderiv ( shader, GL_INFO_LOG_LENGTH, &infoLen );
-      
-      if ( infoLen > 1 )
-      {
-         char* infoLog = malloc (sizeof(char) * infoLen );
+        glDeleteShader(shader);
+        return 0;
+    }
 
-         glGetShaderInfoLog ( shader, infoLen, NULL, infoLog );
-         esLogMessage ( "Error compiling shader:\n%s\n", infoLog );            
-         
-         free ( infoLog );
-      }
-
-      glDeleteShader ( shader );
-      return 0;
-   }
-
-   return shader;
-
+    return shader;
 }
 
 
@@ -97,75 +100,72 @@ void dbg(int level, const char *fmt, ...);
 /// \param fragShaderSrc Fragment shader source code
 /// \return A new program object linked with the vertex/fragment shader pair, 0 on failure
 //
-GLuint ESUTIL_API esLoadProgram ( const char *vertShaderSrc, const char *fragShaderSrc )
+GLuint ESUTIL_API esLoadProgram(const char *vertShaderSrc, const char *fragShaderSrc)
 {
-   GLuint vertexShader;
-   GLuint fragmentShader;
-   GLuint programObject;
-   GLint linked;
+    GLuint vertexShader;
+    GLuint fragmentShader;
+    GLuint programObject;
+    GLint linked;
+    // Load the vertex/fragment shaders
+    vertexShader = esLoadShader(GL_VERTEX_SHADER, vertShaderSrc);
 
-   // Load the vertex/fragment shaders
-   vertexShader = esLoadShader ( GL_VERTEX_SHADER, vertShaderSrc );
-   if ( vertexShader == 0 )
-      return 0;
+    if (vertexShader == 0)
+    {
+        return 0;
+    }
 
-   fragmentShader = esLoadShader ( GL_FRAGMENT_SHADER, fragShaderSrc );
-   if ( fragmentShader == 0 )
-   {
-      glDeleteShader( vertexShader );
-      return 0;
-   }
+    fragmentShader = esLoadShader(GL_FRAGMENT_SHADER, fragShaderSrc);
 
-   // Create the program object
-   programObject = glCreateProgram ( );
-   
-   if ( programObject == 0 )
-      return 0;
+    if (fragmentShader == 0)
+    {
+        glDeleteShader(vertexShader);
+        return 0;
+    }
 
-   glAttachShader ( programObject, vertexShader );
-   glAttachShader ( programObject, fragmentShader );
+    // Create the program object
+    programObject = glCreateProgram();
 
-   // Link the program
-   glLinkProgram ( programObject );
+    if (programObject == 0)
+    {
+        return 0;
+    }
 
-   // Check the link status
-   glGetProgramiv ( programObject, GL_LINK_STATUS, &linked );
+    glAttachShader(programObject, vertexShader);
+    glAttachShader(programObject, fragmentShader);
+    // Link the program
+    glLinkProgram(programObject);
+    // Check the link status
+    glGetProgramiv(programObject, GL_LINK_STATUS, &linked);
 
-   if ( !linked ) 
-   {
-      GLint infoLen = 0;
+    if (!linked)
+    {
+        GLint infoLen = 0;
+        glGetProgramiv(programObject, GL_INFO_LOG_LENGTH, &infoLen);
 
-      glGetProgramiv ( programObject, GL_INFO_LOG_LENGTH, &infoLen );
-      
-      if ( infoLen > 1 )
-      {
-         char* infoLog = malloc (sizeof(char) * infoLen );
+        if (infoLen > 1)
+        {
+            char *infoLog = malloc(sizeof(char) * infoLen);
+            glGetProgramInfoLog(programObject, infoLen, NULL, infoLog);
+            dbg(9, "============ openGL ============\n");
+            dbg(9, "============ openGL ============\n");
+            dbg(9, "Error linking program:\n%s\n", infoLog);
+            dbg(9, "============ openGL ============\n");
+            dbg(9, "============ openGL ============\n");
+            free(infoLog);
+        }
 
-         glGetProgramInfoLog ( programObject, infoLen, NULL, infoLog );
-         dbg(9, "============ openGL ============\n");            
-         dbg(9, "============ openGL ============\n");            
-         dbg(9, "Error linking program:\n%s\n", infoLog );            
-         dbg(9, "============ openGL ============\n");            
-         dbg(9, "============ openGL ============\n");            
-         
-         free ( infoLog );
-      }
+        glDeleteProgram(programObject);
+        return 0;
+    }
 
-      glDeleteProgram ( programObject );
-      return 0;
-   }
-
-   // Free up no longer needed shader resources
-   glDeleteShader ( vertexShader );
-   glDeleteShader ( fragmentShader );
-
-    dbg(9, "============ openGL ============\n");            
-    dbg(9, "============ openGL ============\n");            
-    dbg(9, "linking program: OK\n");            
-    dbg(9, "============ openGL ============\n");            
-    dbg(9, "============ openGL ============\n");            
-
-
-   return programObject;
+    // Free up no longer needed shader resources
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    dbg(9, "============ openGL ============\n");
+    dbg(9, "============ openGL ============\n");
+    dbg(9, "linking program: OK\n");
+    dbg(9, "============ openGL ============\n");
+    dbg(9, "============ openGL ============\n");
+    return programObject;
 }
 

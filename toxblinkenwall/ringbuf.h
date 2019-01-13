@@ -1,6 +1,14 @@
 #ifndef INCLUDED_RINGBUF_H
 #define INCLUDED_RINGBUF_H
 
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 /*
  * ringbuf.h - C ring buffer (FIFO) interface.
  *

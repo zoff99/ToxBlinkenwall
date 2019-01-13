@@ -1,5 +1,14 @@
 #! /usr/bin/env python
 
+#*********************************
+#
+# ToxBlinkenwall - keypad script
+# (C)Zoff in 2017 - 2019
+#
+# https://github.com/zoff99/ToxBlinkenwall
+#
+#*********************************
+
 import RPi.GPIO as GPIO
 from time import sleep     # this lets us have a time delay (see line 15)
 GPIO.setmode(GPIO.BCM)     # set up BCM GPIO numbering

@@ -3,7 +3,7 @@
 #*********************************
 #
 # ToxBlinkenwall - udev script - part 1
-# (C)Zoff in 2017
+# (C)Zoff in 2017 - 2019
 #
 # https://github.com/zoff99/ToxBlinkenwall
 #
@@ -27,10 +27,18 @@
 #  /etc/udev/rules.d/80-plug-usb-device.rules
 #
 # KERNEL=="sd*[!0-9]", ACTION=="add", RUN+="/home/pi/ToxBlinkenwall/toxblinkenwall/udev.sh '%E{DEVNAME}'"
+#
+# KERNEL=="pcmC[D0-9cp]*", DRIVERS=="usb", ACTION=="add", RUN+="/home/pi/ToxBlinkenwall/toxblinkenwall/udev.sh '%E{DEVNAME}'"
+# KERNEL=="pcmC[D0-9cp]*", DRIVERS=="usb", ACTION=="remove", RUN+="/home/pi/ToxBlinkenwall/toxblinkenwall/udev.sh '%E{DEVNAME}'"
 # as root
+#
+#
+# systemctl restart systemd-udevd
+# systemctl daemon-reload
+#
 #
 ###################################
 
-$(dirname "$0")/udev2.sh "$1" &
-
+$(dirname "$0")/detect_usb_audio.sh &
+$(dirname "$0")/process_usb_drive.sh "$1" &
 

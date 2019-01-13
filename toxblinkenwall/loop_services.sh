@@ -1,5 +1,14 @@
 #! /bin/bash
 
+#*********************************
+#
+# ToxBlinkenwall - loop script
+# (C)Zoff in 2017 - 2019
+#
+# https://github.com/zoff99/ToxBlinkenwall
+#
+#*********************************
+
 function clean_up
 {
 	pkill toxblinkenwall
@@ -7,9 +16,12 @@ function clean_up
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
 	pkill -f ext_keys.py
+    rm -f ext_keys.fifo
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
 	scripts/cleanup_fb.sh
+    scripts/on_callend.sh
+    scripts/on_offline.sh
 	exit
 }
 
@@ -22,9 +34,9 @@ HD_FROM_CAM="" # set to "-f" for 720p video
 # ---- only for RASPI ----
 if [ "$IS_ON""x" == "RASPI""x" ]; then
 	# camera module is never loaded automatically, why is that?
-	sudo modprobe bcm2835_v4l2
+	sudo modprobe bcm2835_v4l2 # debug=5 # more debug info
 	# nice now the module suddenly has a new name?
-	sudo modprobe bcm2835-v4l2
+	sudo modprobe bcm2835-v4l2 # debug=5 # more debug info
 	# stop gfx UI
 	# sudo /etc/init.d/lightdm start
 	# sleep 2
@@ -42,9 +54,11 @@ fi
 trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 
 chmod u+x scripts/*.sh
+chmod u+x scripts/raspi/*.sh
+chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/ext_keys.py
-chmod a+x udev2.sh udev.sh toggle_alsa.sh
+chmod a+x udev2.sh udev.sh toggle_alsa.sh detect_usb_audio.sh
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh
@@ -59,7 +73,45 @@ while [ 1 == 1 ]; do
 	pkill -f ext_keys.py
 
     v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
+    v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
+    # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
+    v4l2-ctl -d "$video_device" --set-ctrl=h264_profile=1
+    # v4l2-ctl -d "$video_device" --set-priority=3
+    v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
+
+    #        rotate (int)    : min=0 max=360 step=90 default=0 value=0 flags=00000400
+    #
+    #        white_balance_auto_preset (menu)   : min=0 max=9 default=1 value=1
+    #				0: Manual
+    #				1: Auto
+    #				2: Incandescent
+    #				3: Fluorescent
+    #				4: Fluorescent H
+    #				5: Horizon
+    #				6: Daylight
+    #				7: Flash
+    #				8: Cloudy
+    #				9: Shade
+    #
+    #        scene_mode (menu)   : min=0 max=13 default=0 value=0
+    #				0: None
+    #				8: Night
+    #				11: Sports
+    #
+    #
+    #        power_line_frequency (menu)   : min=0 max=3 default=1 value=1
+    #				0: Disabled
+    #				1: 50 Hz
+    #				2: 60 Hz
+    #				3: Auto
+    #
+    #        h264_profile (menu)   : min=0 max=4 default=4 value=4
+    #				0: Baseline
+    #				1: Constrained Baseline
+    #				2: Main
+    #				4: High
+    #
 
 	cd ext_keys_scripts
 	./ext_keys.py &
@@ -72,7 +124,10 @@ while [ 1 == 1 ]; do
     # ---- only for RASPI ----
 
 	setterm -cursor off
-	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device"
+	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
+    scripts/on_callend.sh
+    scripts/on_offline.sh
+    rm -f ext_keys.fifo
 	sleep 2
 
     # ---- only for RASPI ----
@@ -80,5 +135,11 @@ while [ 1 == 1 ]; do
             sudo ./toggle_alsa.sh 1
     fi
     # ---- only for RASPI ----
+
+    if [ -e "OPTION_NOLOOP" ]; then
+        # do not loop/restart
+        clean_up
+        exit 1
+    fi
 done
 

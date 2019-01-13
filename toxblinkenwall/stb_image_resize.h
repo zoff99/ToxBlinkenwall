@@ -1,3 +1,12 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
+
 /* stb_image_resize - v0.95 - public domain image resizing
    by Jorge L Rodriguez (@VinoBS) - 2014
    http://github.com/nothings/stb
