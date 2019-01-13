@@ -1,3 +1,11 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 /*
  * Copyright © 2016-2017 The TokTok team.
  * Copyright © 2013 Tox project.

@@ -2,8 +2,8 @@
 
 #*********************************
 #
-# ToxBlinkenwall - udev script - part 2
-# (C)Zoff in 2017
+# ToxBlinkenwall - udev script
+# (C)Zoff in 2017 - 2019
 #
 # https://github.com/zoff99/ToxBlinkenwall
 #

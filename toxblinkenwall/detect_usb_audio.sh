@@ -1,5 +1,14 @@
 #! /bin/bash
 
+#*********************************
+#
+# ToxBlinkenwall - udev script
+# (C)Zoff in 2017 - 2019
+#
+# https://github.com/zoff99/ToxBlinkenwall
+#
+#*********************************
+
 echo "restoring DEFAULT alsa config"
 rm -f /tmp/alsa.$$.cfg
 cp /usr/share/alsa/alsa.conf_ORIG /tmp/alsa.$$.cfg

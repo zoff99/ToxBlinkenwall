@@ -1,18 +1,11 @@
-/*
+/**
  *
- * Zoff <zoff@zoff.cc>
- * in 2017
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
  *
- * compile on linux (dynamic):
- *  gcc -O2 -fPIC -Iusr/include -o toxblinkenwall toxblinkenwall.c -std=gnu99 -lsodium -I/usr/local/include/ \
-        -Lusr/lib -ltoxcore -ltoxav -lpthread -lv4lconvert -lao -lasound
- *
- * run on linux (dynamic):
- * export LD_LIBRARY_PATH=usr/lib ; ./toxblinkenwall
+ * https://github.com/zoff99/ToxBlinkenwall
  *
  * dirty hack (echobot and toxic were used as blueprint)
- *
- *
  *
  */
 

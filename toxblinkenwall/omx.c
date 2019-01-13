@@ -1,4 +1,12 @@
 /**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
+/**
  * @file omx.c     Raspberry Pi VideoCoreIV OpenMAX interface
  *
  * Copyright (C) 2016 - 2017 Creytiv.com
