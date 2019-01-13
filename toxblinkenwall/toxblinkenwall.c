@@ -8686,7 +8686,7 @@ void *thread_record_alsa_audio(void *data)
         {
             if (have_input_sound_device == 1)
             {
-                sem_wait(&audio_record_lock);
+                //*record*lock*// sem_wait(&audio_record_lock);
                 // snd_pcm_reset(audio_capture_handle);
                 int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
 
@@ -8741,7 +8741,11 @@ void *thread_record_alsa_audio(void *data)
                     }
                 }
 
-                sem_post(&audio_record_lock);
+                //*record*lock*// sem_post(&audio_record_lock);
+            }
+            else
+            {
+                yieldcpu(500);
             }
         }
         else
@@ -9002,10 +9006,10 @@ void reopen_sound_devices()
     sem_post(&audio_play_lock);
 #endif
 #ifdef HAVE_ALSA_REC
-    sem_wait(&audio_record_lock);
+    //*record*lock*// sem_wait(&audio_record_lock);
     close_sound_device();
     init_sound_device();
-    sem_post(&audio_record_lock);
+    //*record*lock*// sem_post(&audio_record_lock);
 #endif
 }
 
