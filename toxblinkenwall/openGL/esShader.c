@@ -1,3 +1,11 @@
+/**
+ *
+ * ToxBlinkenwall
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ *
+ * https://github.com/zoff99/ToxBlinkenwall
+ *
+ */
 //
 // Book:      OpenGL(R) ES 2.0 Programming Guide
 // Authors:   Aaftab Munshi, Dan Ginsburg, Dave Shreiner
