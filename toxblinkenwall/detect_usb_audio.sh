@@ -156,6 +156,6 @@ fi
 
 
 # tell ToxBlinkenwall to reopen sound devices
-if [ -e /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo ]; then
-    echo "reopen_snd_devices:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
+    echo "reopen_snd_devices:" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
 fi

@@ -16,6 +16,7 @@ function clean_up
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
 	pkill -f ext_keys.py
+    rm -f ext_keys.fifo
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
 	scripts/cleanup_fb.sh
@@ -126,6 +127,7 @@ while [ 1 == 1 ]; do
 	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
+    rm -f ext_keys.fifo
 	sleep 2
 
     # ---- only for RASPI ----
