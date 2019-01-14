@@ -717,6 +717,7 @@ void reset_toxav_call_waiting();
 void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text, uint8_t *yy,
                               int w, int h);
 float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
+void set_restart_flag();
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -3149,6 +3150,11 @@ void cmd_friends(Tox *tox, uint32_t friend_number)
 void cmd_restart(Tox *tox, uint32_t friend_number)
 {
     send_text_message_to_friend(tox, friend_number, "toxblinkenwall services will restart ...");
+    set_restart_flag();
+}
+
+void set_restart_flag()
+{
     global_want_restart = 1;
 }
 
@@ -8966,6 +8972,11 @@ void *thread_ext_keys(void *data)
             {
                 dbg(2, "ExtKeys: REOPEN SOUND DEVICES:\n");
                 reopen_sound_devices();
+            }
+            else if (strncmp((char *)buf, "restart:", strlen((char *)"restart:")) == 0)
+            {
+                dbg(2, "ExtKeys: RESTART:\n");
+                set_restart_flag();
             }
             else if (strncmp((char *)buf, "BT-A:", strlen((char *)"BT-A:")) == 0)
             {

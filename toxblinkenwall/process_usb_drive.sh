@@ -24,7 +24,7 @@ touch "$logfile"
 chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 
 
-function import_data
+function import_data_phonebook_and_wlan
 {
     usb_device_to_use="$1"
 
@@ -130,6 +130,27 @@ network={
     return 0
 }
 
+function export_data_phonebook
+{
+    usb_device_to_use="$1"
+
+    mkdir -p "$mount_dir""/""backup/"
+
+    for num_entry in book_entry_1.txt \
+    book_entry_2.txt \
+    book_entry_3.txt \
+    book_entry_4.txt \
+    book_entry_5.txt \
+    book_entry_6.txt \
+    book_entry_7.txt \
+    book_entry_8.txt \
+    book_entry_9.txt ; do
+        cp -v "$dst_dir""/""$num_entry" "$mount_dir""/""backup/" >> "$logfile" 2>&1
+    done
+
+    return 0
+}
+
 function export_data_toxsave
 {
     usb_device_to_use="$1"
@@ -205,6 +226,22 @@ function pair_usb_device
     return 0
 }
 
+function import_data_toxsave
+{
+    # tell ToxBlinkenwall to restart
+    if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
+        echo "restart:" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+    fi
+
+    sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!
+
+    # overwrite toxsave with the backup
+    mv -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox__BCK >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
+    cp -v "$mount_dir""/"savedata.tox "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
+
+    return 0
+}
+
 #
 #
 #
@@ -252,17 +289,26 @@ else
 fi
 # --------- CHECK USB DEVICE PAIR HASH ---------
 
-# --------- IMPORT ---------
-echo "import data:$usb_device""1" >> "$logfile"
-import_data "$usb_device""1"
-# --------- IMPORT ---------
-
 # --------- EXPORT ---------
+
+echo "export data phonebook:$usb_device""1" >> "$logfile"
+export_data_phonebook "$usb_device""1"
+
 if [ "$usb_is_paired""x" == "1x" ]; then
-    echo "export data:$usb_device""1" >> "$logfile"
+    echo "export data toxsave:$usb_device""1" >> "$logfile"
     export_data_toxsave "$usb_device""1"
 fi
 # --------- EXPORT ---------
+
+# --------- IMPORT ---------
+echo "import data phonebook and wlan:$usb_device""1" >> "$logfile"
+import_data_phonebook_and_wlan "$usb_device""1"
+
+if [ "$usb_is_paired""x" == "1x" ]; then
+    echo "import data toxsave:$usb_device""1" >> "$logfile"
+    import_data_toxsave "$usb_device""1"
+fi
+# --------- IMPORT ---------
 
 echo "UNmounting $usb_device_to_use ..." >> "$logfile"
 umount -f "$mount_dir" >> "$logfile" 2>&1

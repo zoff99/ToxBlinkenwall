@@ -128,7 +128,7 @@ while [ 1 == 1 ]; do
     scripts/on_callend.sh
     scripts/on_offline.sh
     rm -f ext_keys.fifo
-	sleep 2
+	sleep 4
 
     # ---- only for RASPI ----
     if [ "$IS_ON""x" == "RASPI""x" ]; then
