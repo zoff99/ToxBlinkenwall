@@ -72,6 +72,10 @@ while [ 1 == 1 ]; do
 
 	pkill -f ext_keys.py
 
+    # just in case, so that udev scripts really really work
+    sudo systemctl daemon-reload
+    sudo systemctl restart systemd-udevd
+
     v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
     v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
     # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
