@@ -19,6 +19,11 @@ chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev s
 chown pi:pi "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 
 
+re=".*/video[0-9]"
+if [[ "$1" =~ $re ]]; then
+    echo "skipping sound devices detection" >> "$logfile" 2>&1
+else
+
 echo "restoring DEFAULT alsa config" >> "$logfile" 2>&1
 rm -f /tmp/alsa.$$.cfg
 cp -v /usr/share/alsa/alsa.conf_ORIG /tmp/alsa.$$.cfg >> "$logfile" 2>&1
@@ -37,7 +42,7 @@ if [ $res -eq 0 ]; then
 pcm.usb
 {
     type hw
-    card U0x14150x2000
+    card CameraB409241
 }
 
 pcm.card_bcm {
@@ -216,6 +221,7 @@ if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
     echo "reopen_snd_devices:" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
 fi
 
+fi
 
 ## --------------- VIDEO ---------------
 
