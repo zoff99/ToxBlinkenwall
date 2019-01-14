@@ -22,6 +22,7 @@ sleep 2
 
 touch "$logfile"
 chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
+chown pi:pi "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 
 
 function import_data_phonebook_and_wlan
@@ -41,6 +42,7 @@ function import_data_phonebook_and_wlan
         if [ -e "$mount_dir""/""$num_entry" ]; then
                 ls -al "$mount_dir""$num_entry" >> "$logfile"
                 cp -v "$mount_dir""$num_entry" "$dst_dir""/" >> "$logfile" 2>&1
+                chown pi:pi "$dst_dir""/""$num_entry" # file owned by root (since this is an udev script)
                 chmod a+rw "$dst_dir""/""$num_entry" # file owned by root (since this is an udev script)
         fi
 
@@ -208,6 +210,7 @@ function pair_usb_device
             echo "writing USB AUTH HASH" >> "$logfile"
             echo "$hash_" > "$dst_dir""/""usb_auth_hash.txt"
             chmod a+rw "$dst_dir""/""usb_auth_hash.txt" # file owned by root (since this is an udev script)
+            chown pi:pi "$dst_dir""/""usb_auth_hash.txt" # file owned by root (since this is an udev script)
             if [ ! -e "$mount_dir""/""usb_auth_hash.txt" ]; then
                 cp -v "$dst_dir""/""usb_auth_hash.txt" "$mount_dir""/""usb_auth_hash.txt" >> "$logfile" 2>&1
                 res1=$?
@@ -242,7 +245,8 @@ function import_data_toxsave
         cp -v "$dst_dir""/"savedata.tox.BCK.1 "$dst_dir""/"savedata.tox.BCK.2 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
         cp -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox.BCK.1 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
         cp -v "$mount_dir""/"savedata.tox "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
-
+        chown pi:pi "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
+        chown pi:pi "$dst_dir""/"savedata.tox.BCK* >> "$logfile" 2>&1
         return 0
     fi
 
