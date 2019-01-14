@@ -117,6 +117,7 @@ while [ 1 == 1 ]; do
     #				4: High
     #
 
+    rm -f ext_keys.fifo
 	cd ext_keys_scripts
 	./ext_keys.py &
 	cd ..
