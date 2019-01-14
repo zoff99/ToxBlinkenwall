@@ -7,7 +7,6 @@
 #
 # https://github.com/zoff99/ToxBlinkenwall
 #
-# TODO: cleanup and write nicer
 #
 #*********************************
 
@@ -28,19 +27,6 @@ chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev s
 function import_data
 {
     usb_device_to_use="$1"
-
-    rm -Rf "$mount_dir"/
-    mkdir -p "$mount_dir"
-    echo "mounting $usb_device_to_use ..." >> "$logfile"
-    mount "$usb_device_to_use" "$mount_dir" > /dev/null 2>&1
-    res=$?
-    
-    if [ $res -ne 0 ]; then
-        umount -f "$mount_dir" >> "$logfile" 2>&1
-        rm -Rf "$mount_dir"/
-        echo "error mounting $usb_device_to_use" >> "$logfile"
-        return 1
-    fi
 
     for num_entry in book_entry_1.txt \
     book_entry_2.txt \
@@ -141,38 +127,16 @@ network={
 
     fi
 
-
-    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-    umount -f "$mount_dir" >> "$logfile" 2>&1
-    rm -Rf "$mount_dir"/
-
     return 0
 }
 
-function export_data
+function export_data_toxsave
 {
     usb_device_to_use="$1"
-
-    rm -Rf "$mount_dir"/
-    mkdir -p "$mount_dir"
-    echo "mounting $usb_device_to_use ..." >> "$logfile"
-    mount "$usb_device_to_use" "$mount_dir" > /dev/null 2>&1
-    res=$?
-    
-    if [ $res -ne 0 ]; then
-        umount -f "$mount_dir" >> "$logfile" 2>&1
-        rm -Rf "$mount_dir"/
-        echo "error mounting $usb_device_to_use" >> "$logfile"
-        return 1
-    fi
 
     mkdir -p "$mount_dir""/""backup/"
     echo "backing up:Tox Privkey and Friends" >> "$logfile"
     cp -v "$dst_dir""/"savedata.tox "$mount_dir""/""backup/" >> "$logfile" 2>&1
-
-    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-    umount -f "$mount_dir" >> "$logfile" 2>&1
-    rm -Rf "$mount_dir"/
 
     return 0
 }
@@ -180,19 +144,6 @@ function export_data
 function check_if_paired_usb_device
 {
     usb_device_to_use="$1"
-
-    rm -Rf "$mount_dir"/
-    mkdir -p "$mount_dir"
-    echo "mounting $usb_device_to_use ..." >> "$logfile"
-    mount "$usb_device_to_use" "$mount_dir" > /dev/null 2>&1
-    res=$?
-    
-    if [ $res -ne 0 ]; then
-        umount -f "$mount_dir" >> "$logfile" 2>&1
-        rm -Rf "$mount_dir"/
-        echo "error mounting $usb_device_to_use" >> "$logfile"
-        return 1
-    fi
 
     # check if we have already generated our secret hash
     if [ -e "$dst_dir""/""usb_auth_hash.txt" ]; then
@@ -204,11 +155,8 @@ function check_if_paired_usb_device
             if [ "$hash_file_size""x" == "129x" ]; then
                 cmp "$dst_dir""/""usb_auth_hash.txt" "$mount_dir""/""usb_auth_hash.txt" >> "$logfile" 2>&1
                 res2=$?
-                if [ $res -eq 0 ]; then
+                if [ $res2 -eq 0 ]; then
                     echo "USB AUTH HASH equal to saved hash ... SUCCESS" >> "$logfile"
-                    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-                    umount -f "$mount_dir" >> "$logfile" 2>&1
-                    rm -Rf "$mount_dir"/
                     return 0
                 else
                     echo "USB AUTH HASH does not match" >> "$logfile"
@@ -219,28 +167,12 @@ function check_if_paired_usb_device
         fi
     fi
 
-    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-    umount -f "$mount_dir" >> "$logfile" 2>&1
-    rm -Rf "$mount_dir"/
     return 1
 }
 
 function pair_usb_device
 {
     usb_device_to_use="$1"
-
-    rm -Rf "$mount_dir"/
-    mkdir -p "$mount_dir"
-    echo "mounting $usb_device_to_use ..." >> "$logfile"
-    mount "$usb_device_to_use" "$mount_dir" > /dev/null 2>&1
-    res=$?
-    
-    if [ $res -ne 0 ]; then
-        umount -f "$mount_dir" >> "$logfile" 2>&1
-        rm -Rf "$mount_dir"/
-        echo "error mounting $usb_device_to_use" >> "$logfile"
-        return 1
-    fi
 
     # check if we have already generated our secret hash
     if [ -e "$dst_dir""/""usb_auth_hash.txt" ]; then
@@ -256,7 +188,7 @@ function pair_usb_device
             if [ ! -e "$mount_dir""/""usb_auth_hash.txt" ]; then
                 cp -v "$dst_dir""/""usb_auth_hash.txt" "$mount_dir""/""usb_auth_hash.txt" >> "$logfile" 2>&1
                 res1=$?
-                if [ $res -ne 0 ]; then
+                if [ $res1 -ne 0 ]; then
                     echo "writing USB AUTH HASH error" >> "$logfile"
                     rm -f "$dst_dir""/""usb_auth_hash.txt" >> "$logfile" 2>&1
                 else
@@ -270,40 +202,50 @@ function pair_usb_device
         fi
     fi
 
-    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-    umount -f "$mount_dir" >> "$logfile" 2>&1
-    rm -Rf "$mount_dir"/
-
     return 0
 }
 
+#
+#
+#
+#
+#
+#
+#
+#
 ## Main Program ------
 
-# --------- PAIR USB DEVICE ---------
-echo "pair usb device 1:$usb_device" >> "$logfile"
-pair_usb_device "$usb_device"
+usb_device_to_use="$usb_device""1"
+rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
+mkdir -p "$mount_dir" >> "$logfile" 2>&1
+echo "mounting $usb_device_to_use ..." >> "$logfile"
+echo mount "$usb_device_to_use" "$mount_dir" >> "$logfile"
+mount "$usb_device_to_use" "$mount_dir" >> "$logfile" 2>&1
 res=$?
+
 if [ $res -ne 0 ]; then
-    echo "pair usb device 2:$usb_device""1" >> "$logfile"
-    pair_usb_device "$usb_device""1"
+    echo "ERROR:mounting $usb_device_to_use" >> "$logfile"
+    echo "UNmounting $usb_device_to_use ..." >> "$logfile"
+    umount -f "$mount_dir" >> "$logfile" 2>&1
+    echo umount -f "$usb_device_to_use" >> "$logfile"
+    umount -f "$usb_device_to_use" >> "$logfile" 2>&1
+    rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
+    exit 1
 fi
+
+
+# --------- PAIR USB DEVICE ---------
+echo "pair usb device:$usb_device""1" >> "$logfile"
+pair_usb_device "$usb_device""1"
 # --------- PAIR USB DEVICE ---------
 
 # --------- CHECK USB DEVICE PAIR HASH ---------
 usb_is_paired=0
-echo "check pair usb device 1:$usb_device" >> "$logfile"
-check_if_paired_usb_device "$usb_device"
+echo "check pair usb device:$usb_device""1" >> "$logfile"
+check_if_paired_usb_device "$usb_device""1"
 res=$?
 if [ $res -ne 0 ]; then
-    echo "check pair usb device 2:$usb_device""1" >> "$logfile"
-    check_if_paired_usb_device "$usb_device""1"
-    res=$?
-    if [ $res -ne 0 ]; then
-        echo "++ USB Device NOT paired:""$usb_device""1"" ++" >> "$logfile"
-    else
-        echo "** USB Device is paired""$usb_device""1"" **" >> "$logfile"
-        usb_is_paired=1
-    fi
+    echo "++ USB Device NOT paired:""$usb_device""1"" ++" >> "$logfile"
 else
     echo "** USB Device is paired:""$usb_device""1"" **" >> "$logfile"
     usb_is_paired=1
@@ -311,23 +253,20 @@ fi
 # --------- CHECK USB DEVICE PAIR HASH ---------
 
 # --------- IMPORT ---------
-echo "import data 1:$usb_device" >> "$logfile"
-import_data "$usb_device"
-res=$?
-if [ $res -ne 0 ]; then
-    echo "import data 2:$usb_device""1" >> "$logfile"
-    import_data "$usb_device""1"
-fi
+echo "import data:$usb_device""1" >> "$logfile"
+import_data "$usb_device""1"
 # --------- IMPORT ---------
 
 # --------- EXPORT ---------
 if [ "$usb_is_paired""x" == "1x" ]; then
-    echo "export data 1:$usb_device" >> "$logfile"
-    export_data "$usb_device"
-    res=$?
-    if [ $res -ne 0 ]; then
-        echo "export data 2:$usb_device""1" >> "$logfile"
-        export_data "$usb_device""1"
-    fi
+    echo "export data:$usb_device""1" >> "$logfile"
+    export_data_toxsave "$usb_device""1"
 fi
 # --------- EXPORT ---------
+
+echo "UNmounting $usb_device_to_use ..." >> "$logfile"
+umount -f "$mount_dir" >> "$logfile" 2>&1
+echo umount -f "$usb_device_to_use" >> "$logfile"
+umount -f "$usb_device_to_use" >> "$logfile" 2>&1
+rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
+
