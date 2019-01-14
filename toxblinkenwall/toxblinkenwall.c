@@ -703,6 +703,7 @@ static void display_sched_attr(char *msg, int policy, struct sched_param *param)
     static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, int sample_rate);
 #endif
 void reopen_sound_devices();
+void reopen_video_devices(const char *video_device_filename);
 int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin);
 void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str);
 void delete_entry_file(int entry_num);
@@ -731,7 +732,7 @@ const char *my_toxid_filename_rgba = "toxid.rgba";
 const char *my_toxid_filename_txt = "toxid.txt";
 const char *image_createqr_touchfile = "./toxid_ready.txt";
 
-char *v4l2_device; // video device filename
+char *v4l2_device = NULL; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
 
 const char *shell_cmd__osupdatefull = "./scripts/osupdatefull.sh 2> /dev/null";
@@ -8979,7 +8980,20 @@ void *thread_ext_keys(void *data)
                 {
                     char *video_devices_wanted = (char *)buf;
                     video_devices_wanted = video_devices_wanted + strlen((char *)"reopen_vid_devices:");
-                    dbg(2, "ExtKeys: REOPEN VIDEO DEVICES:\[%s\]\n", video_devices_wanted);
+                    size_t ln = strlen(video_devices_wanted);
+
+                    if (ln > 2)
+                    {
+                        ln--;
+
+                        if (video_devices_wanted[ln] == '\n')
+                        {
+                            video_devices_wanted[ln] = '\0';
+                        }
+                    }
+
+                    dbg(2, "ExtKeys: REOPEN VIDEO DEVICES:[%s]\n", video_devices_wanted);
+                    reopen_video_devices(video_devices_wanted);
                 }
             }
             else if (strncmp((char *)buf, "restart:", strlen((char *)"restart:")) == 0)
@@ -9016,6 +9030,23 @@ void *thread_ext_keys(void *data)
 }
 
 #endif
+
+void reopen_video_devices(const char *video_device_filename)
+{
+    fully_stop_cam();
+
+    if (v4l2_device)
+    {
+        free(v4l2_device);
+        v4l2_device = NULL;
+    }
+
+    v4l2_device = malloc(400);
+    memset(v4l2_device, 0, 400);
+    snprintf(v4l2_device, 399, "%s", video_device_filename);
+    yieldcpu(50);
+    init_and_start_cam(0, using_h264_hw_accel);
+}
 
 void reopen_sound_devices()
 {
