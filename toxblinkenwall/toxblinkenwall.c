@@ -8973,6 +8973,15 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: REOPEN SOUND DEVICES:\n");
                 reopen_sound_devices();
             }
+            else if (strncmp((char *)buf, "reopen_vid_devices:", strlen((char *)"reopen_vid_devices:")) == 0)
+            {
+                if (strlen((char *)buf) > strlen((char *)"reopen_vid_devices:"))
+                {
+                    char *video_devices_wanted = (char *)buf;
+                    video_devices_wanted = video_devices_wanted + strlen((char *)"reopen_vid_devices:");
+                    dbg(2, "ExtKeys: REOPEN VIDEO DEVICES:\[%s\]\n", video_devices_wanted);
+                }
+            }
             else if (strncmp((char *)buf, "restart:", strlen((char *)"restart:")) == 0)
             {
                 dbg(2, "ExtKeys: RESTART:\n");
