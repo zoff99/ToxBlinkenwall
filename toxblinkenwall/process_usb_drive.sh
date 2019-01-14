@@ -236,7 +236,7 @@ function import_data_toxsave
     if [ -f "$mount_dir""/"savedata.tox ]; then
         # tell ToxBlinkenwall to restart
         if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
-            echo "restart:" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+            echo "restart:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
         fi
 
         sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!

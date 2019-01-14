@@ -218,7 +218,7 @@ fi
 # tell ToxBlinkenwall to reopen sound devices
 if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
     echo "reopen snd devices" >> "$logfile" 2>&1
-    echo "reopen_snd_devices:" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+    echo "reopen_snd_devices:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
 fi
 
 fi
@@ -239,7 +239,7 @@ if [[ "$1" =~ $re ]]; then
     # tell ToxBlinkenwall to reopen sound devices
     if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
         echo "reopen vid devices:$video_device_to_use" >> "$logfile" 2>&1
-        echo "reopen_vid_devices:""$video_device_to_use" >> /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+        echo "reopen_vid_devices:""$video_device_to_use" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
     fi
 
 fi
