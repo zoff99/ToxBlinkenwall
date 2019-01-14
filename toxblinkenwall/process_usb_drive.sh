@@ -157,7 +157,9 @@ function export_data_toxsave
 
     mkdir -p "$mount_dir""/""backup/"
     echo "backing up:Tox Privkey and Friends" >> "$logfile"
-    cp -v "$dst_dir""/"savedata.tox "$mount_dir""/""backup/" >> "$logfile" 2>&1
+    mv -v "$mount_dir""/""backup/"savedata.tox.1 "$mount_dir""/""backup/"savedata.tox.2 >> "$logfile" 2>&1
+    mv -v "$mount_dir""/""backup/"savedata.tox "$mount_dir""/""backup/"savedata.tox.1 >> "$logfile" 2>&1
+    cp -v "$dst_dir""/"savedata.tox "$mount_dir""/""backup/"savedata.tox >> "$logfile" 2>&1
 
     return 0
 }
@@ -236,7 +238,8 @@ function import_data_toxsave
     sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!
 
     # overwrite toxsave with the backup
-    mv -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox__BCK >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
+    mv -v "$dst_dir""/"savedata.tox.BCK.1 "$dst_dir""/"savedata.tox.BCK.2 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
+    mv -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox.BCK.1 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
     cp -v "$mount_dir""/"savedata.tox "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
 
     return 0
