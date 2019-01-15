@@ -719,6 +719,7 @@ void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text
                               int w, int h);
 float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
 void set_restart_flag();
+void reload_name_from_file(Tox *tox);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -731,6 +732,7 @@ const char *my_toxid_filename_png = "toxid.png";
 const char *my_toxid_filename_rgba = "toxid.rgba";
 const char *my_toxid_filename_txt = "toxid.txt";
 const char *image_createqr_touchfile = "./toxid_ready.txt";
+const char *tox_name_filename = "toxname.txt";
 
 char *v4l2_device = NULL; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
@@ -3157,6 +3159,100 @@ void cmd_restart(Tox *tox, uint32_t friend_number)
 void set_restart_flag()
 {
     global_want_restart = 1;
+}
+
+void reload_name_from_file(Tox *tox)
+{
+    // TODO: this is a potentially dangeros function. please check it more!!
+    FILE *file;
+    file = fopen(tox_name_filename, "r");
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    if (file)
+    {
+        while ((read = getline(&line, &len, file)) != -1)
+        {
+            if (line)
+            {
+                if (read > 1)
+                {
+                    if (line[read] == '\r')
+                    {
+                        line[read] = '\0';
+                    }
+
+                    if (line[read] == '\n')
+                    {
+                        line[read] = '\0';
+                    }
+
+                    if (line[read - 1] == '\r')
+                    {
+                        line[read - 1] = '\0';
+                    }
+
+                    if (line[read - 1] == '\n')
+                    {
+                        line[read - 1] = '\0';
+                    }
+                }
+
+                if (strlen(line) > 0)
+                {
+                    // set our name to read string
+                    uint32_t self_name_max_len = tox_max_name_length();
+                    char self_name[1000];
+                    CLEAR(self_name);
+                    snprintf(self_name, (self_name_max_len - 1), "%s", line);
+
+                    for (size_t i = 0; i < strlen(self_name); i++)
+                    {
+                        if (
+                            (self_name[i] >= '0' && self_name[i] <= '9')
+                            ||
+                            (self_name[i] >= 'a' && self_name[i] <= 'z')
+                            ||
+                            (self_name[i] >= 'A' && self_name[i] <= 'Z')
+                            ||
+                            (self_name[i] == '_')
+                            ||
+                            (self_name[i] == '-')
+                            ||
+                            (self_name[i] == ' ')
+                            ||
+                            (self_name[i] == '!')
+                            ||
+                            (self_name[i] == '?')
+                            ||
+                            (self_name[i] == '+')
+                            ||
+                            (self_name[i] == '#')
+                        )
+                        {
+                            // ok, allowed character
+                        }
+                        else
+                        {
+                            // we don't allow this character in imported names
+                            self_name[i] = '_';
+                        }
+                    }
+
+                    dbg(9, "setting new name to:%s\n", (uint8_t *)self_name);
+                    tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
+                    update_savedata_file(tox);
+                }
+
+                free(line);
+                line = NULL;
+                break;
+            }
+        }
+
+        fclose(file);
+    }
 }
 
 void cmd_osupdatefull(Tox *tox, uint32_t friend_number)
@@ -8995,6 +9091,11 @@ void *thread_ext_keys(void *data)
                     dbg(2, "ExtKeys: REOPEN VIDEO DEVICES:[%s]\n", video_devices_wanted);
                     reopen_video_devices(video_devices_wanted);
                 }
+            }
+            else if (strncmp((char *)buf, "reload_name:", strlen((char *)"reload_name:")) == 0)
+            {
+                dbg(2, "ExtKeys: RELOAD NAME:\n");
+                reload_name_from_file(tox);
             }
             else if (strncmp((char *)buf, "restart:", strlen((char *)"restart:")) == 0)
             {

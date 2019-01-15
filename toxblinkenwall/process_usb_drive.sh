@@ -153,6 +153,17 @@ function export_data_phonebook
     return 0
 }
 
+function export_data_toxid
+{
+    usb_device_to_use="$1"
+
+    mkdir -p "$mount_dir""/""backup/"
+    echo "backing up:ToxID" >> "$logfile"
+    cp -v "$dst_dir""/"toxid.txt "$mount_dir""/""backup/"toxid.txt >> "$logfile" 2>&1
+
+    return 0
+}
+
 function export_data_toxsave
 {
     usb_device_to_use="$1"
@@ -231,6 +242,25 @@ function pair_usb_device
     return 0
 }
 
+function import_data_name
+{
+    if [ -f "$mount_dir""/"toxname.txt ]; then
+        # overwrite toxsave with the backup
+        cp -v "$mount_dir""/"toxname.txt "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
+        chown pi:pi "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
+
+        # tell ToxBlinkenwall to reload the name
+        if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
+            echo "reload_name:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+        fi
+
+        return 0
+    fi
+
+    return 1
+}
+
+
 function import_data_toxsave
 {
     if [ -f "$mount_dir""/"savedata.tox ]; then
@@ -302,20 +332,26 @@ fi
 
 # --------- EXPORT ---------
 
-echo "export data phonebook:$usb_device""1" >> "$logfile"
-export_data_phonebook "$usb_device""1"
-
 if [ "$usb_is_paired""x" == "1x" ]; then
+    echo "export data phonebook:$usb_device""1" >> "$logfile"
+    export_data_phonebook "$usb_device""1"
+
+    echo "export data toxid:$usb_device""1" >> "$logfile"
+    export_data_toxid "$usb_device""1"
+
     echo "export data toxsave:$usb_device""1" >> "$logfile"
     export_data_toxsave "$usb_device""1"
 fi
 # --------- EXPORT ---------
 
 # --------- IMPORT ---------
-echo "import data phonebook and wlan:$usb_device""1" >> "$logfile"
-import_data_phonebook_and_wlan "$usb_device""1"
-
 if [ "$usb_is_paired""x" == "1x" ]; then
+    echo "import data phonebook and wlan:$usb_device""1" >> "$logfile"
+    import_data_phonebook_and_wlan "$usb_device""1"
+
+    echo "import data name:$usb_device""1" >> "$logfile"
+    import_data_name "$usb_device""1"
+
     echo "import data toxsave:$usb_device""1" >> "$logfile"
     import_data_toxsave "$usb_device""1"
 fi
