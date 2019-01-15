@@ -1116,6 +1116,24 @@ uint32_t generate_random_uint32()
     return r;
 }
 
+void randomish_string(char *str, size_t size)
+{
+    const char charset[] = "ABCDEF0123456789";
+
+    if (size)
+    {
+        --size;
+
+        for (size_t n = 0; n < size; n++)
+        {
+            int key = rand() % (int)(sizeof charset - 1);
+            str[n] = charset[key];
+        }
+
+        str[size] = '\0';
+    }
+}
+
 unsigned int char_to_int(char c)
 {
     if (c >= '0' && c <= '9')
@@ -10771,7 +10789,12 @@ int main(int argc, char *argv[])
         uint32_t self_name_max_len = tox_max_name_length();
         char self_name[1000];
         CLEAR(self_name);
-        snprintf(self_name, (self_name_max_len - 1), "%s", default_tox_name);
+        char self_name_random_part[8];
+        CLEAR(self_name_random_part);
+        randomish_string(self_name_random_part, 7);
+        dbg(9, "randomish_string=%s\n", self_name_random_part);
+        uint32_t random_num = generate_random_uint32();
+        snprintf(self_name, (self_name_max_len - 1), "%s-%s", default_tox_name, self_name_random_part);
         tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
     }
 
