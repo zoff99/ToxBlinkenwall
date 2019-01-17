@@ -3181,7 +3181,7 @@ void set_restart_flag()
 
 void reload_name_from_file(Tox *tox)
 {
-    // TODO: this is a potentially dangeros function. please check it more!!
+    // TODO: this is a potentially dangerous function. please check it more!!
     FILE *file;
     file = fopen(tox_name_filename, "r");
     char *line = NULL;
