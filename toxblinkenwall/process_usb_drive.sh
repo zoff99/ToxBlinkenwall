@@ -276,7 +276,7 @@ function pair_usb_device
 function import_data_name
 {
     if [ -f "$mount_dir""/"toxname.txt ]; then
-        # overwrite toxsave with the backup
+        # overwrite toxname
         cp -v "$mount_dir""/"toxname.txt "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
         chown pi:pi "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
 
@@ -302,7 +302,7 @@ function import_data_toxsave
 
         sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!
 
-        # overwrite toxsave with the backup
+        # overwrite toxsave
         cp -v "$dst_dir""/"savedata.tox.BCK.1 "$dst_dir""/"savedata.tox.BCK.2 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
         cp -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox.BCK.1 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
         cp -v "$mount_dir""/"savedata.tox "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
