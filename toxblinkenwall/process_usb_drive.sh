@@ -177,6 +177,8 @@ function export_data_toxid
     mkdir -p "$mount_dir""/""backup/"
     echo "backing up:ToxID" >> "$logfile"
     cp -v "$dst_dir""/"toxid.txt "$mount_dir""/""backup/"toxid.txt >> "$logfile" 2>&1
+    echo "backing up:ToxID QR Code" >> "$logfile"
+    cp -v "$dst_dir""/"toxid.png "$mount_dir""/""backup/"toxid.png >> "$logfile" 2>&1
 
     return 0
 }
@@ -203,7 +205,7 @@ function export_data_toxsave
     echo "backing up:Tox Privkey and Friends" >> "$logfile"
     cp -v "$mount_dir""/""backup/"savedata.tox.1 "$mount_dir""/""backup/"savedata.tox.2 >> "$logfile" 2>&1
     cp -v "$mount_dir""/""backup/"savedata.tox "$mount_dir""/""backup/"savedata.tox.1 >> "$logfile" 2>&1
-    cp -v "$dst_dir""/"savedata.tox "$mount_dir""/""backup/"savedata.tox >> "$logfile" 2>&1
+    cp -v "$dst_dir""/db/"savedata.tox "$mount_dir""/""backup/"savedata.tox >> "$logfile" 2>&1
 
     return 0
 }
@@ -303,11 +305,11 @@ function import_data_toxsave
         sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!
 
         # overwrite toxsave
-        cp -v "$dst_dir""/"savedata.tox.BCK.1 "$dst_dir""/"savedata.tox.BCK.2 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
-        cp -v "$dst_dir""/"savedata.tox "$dst_dir""/"savedata.tox.BCK.1 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
-        cp -v "$mount_dir""/"savedata.tox "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
-        chown pi:pi "$dst_dir""/"savedata.tox >> "$logfile" 2>&1
-        chown pi:pi "$dst_dir""/"savedata.tox.BCK* >> "$logfile" 2>&1
+        cp -v "$dst_dir""/db/"savedata.tox.BCK.1 "$dst_dir""/db/"savedata.tox.BCK.2 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
+        cp -v "$dst_dir""/db/"savedata.tox "$dst_dir""/db/"savedata.tox.BCK.1 >> "$logfile" 2>&1 # just in case, we make a copy. you never know :-)
+        cp -v "$mount_dir""/"savedata.tox "$dst_dir""/db/"savedata.tox >> "$logfile" 2>&1
+        chown pi:pi "$dst_dir""/db/"savedata.tox >> "$logfile" 2>&1
+        chown pi:pi "$dst_dir""/db/"savedata.tox.BCK* >> "$logfile" 2>&1
         return 0
     fi
 

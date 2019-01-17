@@ -724,8 +724,8 @@ void reload_name_from_file(Tox *tox);
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
 
-const char *savedata_filename = "savedata.tox";
-const char *savedata_tmp_filename = "savedata.tox.tmp";
+const char *savedata_filename = "./db/savedata.tox"; // it's inside the encrypted dir
+const char *savedata_tmp_filename = "./db/savedata.tox.tmp"; // it's inside the encrypted dir
 const char *log_filename = "toxblinkenwall.log";
 const char *my_avatar_filename = "avatar.png";
 const char *my_toxid_filename_png = "toxid.png";

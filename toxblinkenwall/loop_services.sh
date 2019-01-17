@@ -129,6 +129,7 @@ while [ 1 == 1 ]; do
     # ---- only for RASPI ----
 
 	setterm -cursor off
+    mkdir -p ./db/
 	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
