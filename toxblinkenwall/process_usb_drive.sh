@@ -25,6 +25,22 @@ chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev s
 chown pi:pi "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 
 
+if [ "$3""x" != "drivex" ]; then
+    # only process usb-drives in this script
+    exit 0
+fi
+
+if [ "$2""x" == "removex" ]; then
+    # drive was removed - do nothing
+    # just in case turn off the blinking red led
+    echo none | sudo tee /sys/class/leds/led1/trigger
+    exit 0
+elif [ "$2""x" == "addx" ]; then
+    # drive iinserted - start blinking the led
+    echo heartbeat | sudo tee /sys/class/leds/led1/trigger
+fi
+
+
 function import_data_phonebook_and_wlan
 {
     usb_device_to_use="$1"
@@ -379,4 +395,10 @@ umount -f "$mount_dir" >> "$logfile" 2>&1
 echo umount -f "$usb_device_to_use" >> "$logfile"
 umount -f "$usb_device_to_use" >> "$logfile" 2>&1
 rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
+
+
+# turn off blinking red led
+sleep 1
+echo none | sudo tee /sys/class/leds/led1/trigger
+
 

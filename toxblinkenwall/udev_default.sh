@@ -39,6 +39,6 @@
 #
 ###################################
 
-$(dirname "$0")/detect_usb_audio.sh "$1" &
-$(dirname "$0")/process_usb_drive.sh "$1" &
+$(dirname "$0")/detect_usb_audio.sh "$1" "$2" "$3" &
+$(dirname "$0")/process_usb_drive.sh "$1" "$2" "$3" &
 
