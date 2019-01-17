@@ -2,7 +2,7 @@
 
 #*********************************
 #
-# ToxBlinkenwall - udev script
+# ToxBlinkenwall - udev script to detect audio and video devices
 # (C)Zoff in 2017 - 2019
 #
 # https://github.com/zoff99/ToxBlinkenwall
@@ -17,6 +17,13 @@ export logfile="$dst_dir""/tox_usbmount.log"
 touch "$logfile"
 chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 chown pi:pi "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
+
+echo "UDEV-CALL:AV:$2:$3" >> "$logfile"
+
+if [ "$3""x" == "drivex" ]; then
+    # do not process usb-drives in this script
+    exit 0
+fi
 
 
 re=".*/video[0-9]"

@@ -2,7 +2,7 @@
 
 #*********************************
 #
-# ToxBlinkenwall - udev script
+# ToxBlinkenwall - udev script to process usb drives
 # (C)Zoff in 2017 - 2019
 #
 # https://github.com/zoff99/ToxBlinkenwall
@@ -24,6 +24,7 @@ touch "$logfile"
 chmod a+rw "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 chown pi:pi "$logfile" 2> /dev/null # file owned by root (since this is an udev script)
 
+echo "UDEV-CALL:DRIVE:$2:$3" >> "$logfile"
 
 if [ "$3""x" != "drivex" ]; then
     # only process usb-drives in this script
