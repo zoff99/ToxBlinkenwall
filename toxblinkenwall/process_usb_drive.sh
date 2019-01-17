@@ -164,6 +164,20 @@ function export_data_toxid
     return 0
 }
 
+function export_data_pipa
+{
+    usb_device_to_use="$1"
+
+    mkdir -p "$mount_dir""/""backup/"
+    echo "backing up:PIPA" >> "$logfile"
+    if [ -e /etc/pipa.txt ]; then
+        cp -v "/etc/pipa.txt" "$mount_dir""/""backup/"pipa.txt >> "$logfile" 2>&1
+        chmod a+r "$mount_dir""/""backup/"pipa.txt  >> "$logfile" 2>&1
+    fi
+
+    return 0
+}
+
 function export_data_toxsave
 {
     usb_device_to_use="$1"
@@ -341,6 +355,9 @@ if [ "$usb_is_paired""x" == "1x" ]; then
 
     echo "export data toxsave:$usb_device""1" >> "$logfile"
     export_data_toxsave "$usb_device""1"
+
+    echo "export data pipa:$usb_device""1" >> "$logfile"
+    export_data_pipa "$usb_device""1"
 fi
 # --------- EXPORT ---------
 
