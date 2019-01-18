@@ -1465,7 +1465,6 @@ void button_b()
 {
     if (global_video_active == 0)
     {
-        global_is_qrcode_showing_on_screen = 0;
         show_tox_client_application_download_links();
     }
 }
@@ -1474,7 +1473,6 @@ void button_c()
 {
     if (global_video_active == 0)
     {
-        global_is_qrcode_showing_on_screen = 0;
         show_help_image();
     }
 }
@@ -1512,6 +1510,7 @@ void on_end_call()
 // stuff to do then we start a call
 void on_start_call()
 {
+    global_is_qrcode_showing_on_screen = 0;
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallstart);
@@ -2092,6 +2091,7 @@ void show_video_calling(uint32_t fnum, bool with_delay)
 
 void show_text_as_image(const char *display_text)
 {
+    global_is_qrcode_showing_on_screen = 0;
     char cmd_str[1000];
     CLEAR(cmd_str);
     int MAX_TEXT_ON_IMAGE_LEN = 300;
@@ -2283,6 +2283,7 @@ void show_tox_id_qrcode()
 
 void show_tox_client_application_download_links()
 {
+    global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
     char cmd_str[1000];
     CLEAR(cmd_str);
@@ -2293,6 +2294,7 @@ void show_tox_client_application_download_links()
 
 void show_help_image()
 {
+    global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
     char cmd_str[1000];
     CLEAR(cmd_str);
@@ -3170,6 +3172,7 @@ void cmd_friends(Tox *tox, uint32_t friend_number)
 
 void cmd_restart(Tox *tox, uint32_t friend_number)
 {
+    global_is_qrcode_showing_on_screen = 0;
     send_text_message_to_friend(tox, friend_number, "toxblinkenwall services will restart ...");
     set_restart_flag();
 }
@@ -3672,7 +3675,6 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             }
             else if (strncmp((char *)message, ".showclients", strlen((char *)".showclients")) == 0)
             {
-                global_is_qrcode_showing_on_screen = 0;
                 show_tox_client_application_download_links();
             }
             else if (strncmp((char *)message, ".showqr", strlen((char *)".showqr")) == 0)
@@ -3686,7 +3688,6 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             {
                 if (accepting_calls == 1)
                 {
-                    global_is_qrcode_showing_on_screen = 0;
                     show_text_as_image(message);
                 }
             }
@@ -3697,7 +3698,6 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             else if (strncmp((char *)message, ".restart",
                              strlen((char *)".restart")) == 0) // restart toxblinkenwall processes (no reboot)
             {
-                global_is_qrcode_showing_on_screen = 0;
                 cmd_restart(tox, friend_number);
             }
             else if (strncmp((char *)message, ".vcm", strlen((char *)".vcm")) == 0) // video call me!
@@ -5819,8 +5819,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (send_video == 1)
     {
-        global_is_qrcode_showing_on_screen = 0;
-
         if (global_video_active == 0)
         {
             // clear screen on CALL START
