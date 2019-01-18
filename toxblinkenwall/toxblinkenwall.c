@@ -152,8 +152,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 34
-static const char global_version_string[] = "0.99.34";
+#define VERSION_PATCH 35
+static const char global_version_string[] = "0.99.35";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -229,6 +229,10 @@ static const char global_version_string[] = "0.99.34";
 // --------- change nospam ---------
 #define CHANGE_NOSPAM_REGULARLY 1
 // --------- change nospam ---------
+
+// --------- choose default home screen ---------
+#define QRCODE_AS_DEFAULT_SCREEN 2 // 1..QR Code, 2..Phonebook
+// --------- choose default home screen ---------
 
 
 // #define WANT_OS_UPDATE_FULL 1
@@ -689,7 +693,7 @@ void fb_fill_black();
 void fb_fill_xxx();
 void show_video_calling(uint32_t fnum, bool with_delay);
 void show_text_as_image_stop();
-void show_tox_id_qrcode();
+void show_tox_id_qrcode(Tox *tox);
 void show_tox_client_application_download_links();
 void show_help_image();
 void fully_stop_cam();
@@ -710,6 +714,8 @@ void delete_entry_file(int entry_num);
 void call_entry_num(Tox *tox, int entry_num);
 void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix,
                            int start_y_pix, const char *text);
+void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int bar_start_x_pix,
+                                  int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r, uint8_t g, uint8_t b);
 void update_status_line_1_text();
 void update_status_line_1_text_arg(int vbr_);
 int get_number_in_string(const char *str, int default_value);
@@ -720,6 +726,7 @@ void text_on_yuf_frame_xy_ptr(int start_x_pix, int start_y_pix, const char *text
 float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
 void set_restart_flag();
 void reload_name_from_file(Tox *tox);
+void read_pubkey_from_file(uint8_t **toxid_str, int entry_num);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -773,6 +780,7 @@ int64_t global_disconnect_friend_num = -1;
 
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
+uint8_t global_fb_device_stats_filled = 0;
 
 struct opengl_video_frame_data
 {
@@ -1457,7 +1465,14 @@ void button_a()
 {
     if (global_video_active == 0)
     {
-        show_tox_id_qrcode();
+        if (mytox_av)
+        {
+            show_tox_id_qrcode(toxav_get_tox(mytox_av));
+        }
+        else
+        {
+            show_tox_id_qrcode(NULL);
+        }
     }
 }
 
@@ -2268,16 +2283,201 @@ int is_qrcode_generated()
     return is_ready;
 }
 
-void show_tox_id_qrcode()
+void show_tox_id_qrcode(Tox *tox)
 {
-    show_text_as_image_stop();
-    char cmd_str[1000];
-    CLEAR(cmd_str);
-    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
+    if (QRCODE_AS_DEFAULT_SCREEN == 2)
+    {
+        if ((tox != NULL) && (global_fb_device_stats_filled == 1))
+        {
+            dbg(9, "Friends:A:000.0\n");
+            fb_fill_black();
+            unsigned char *bf_out_real_fb = framebuffer_mappedmem;
+            uint32_t line_position_y = 30;
+            const size_t max_screen_name_length = 150;
+            char text_line[max_screen_name_length];
+            uint8_t color_r;
+            uint8_t color_g;
+            uint8_t color_b;
+            uint32_t j = 0;
+            // ------------------------------------
+            // Display Phonebook first
+            int j3;
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  30, line_position_y, "Phonebook:");
+            line_position_y = line_position_y + 20;
 
-    if (system(cmd_str));
+            for (j3 = 1; j3 < 10; j3++)
+            {
+                uint8_t *entry_bin_toxid = NULL;
+                read_pubkey_from_file(&entry_bin_toxid, j3);
 
-    dbg(2, "show_tox_id_qrcode()\n");
+                if (entry_bin_toxid != NULL)
+                {
+                    int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+
+                    if (is_already_friendnum > -1)
+                    {
+                        int friendlistnum = find_friend_in_friendlist((uint32_t)is_already_friendnum);
+
+                        if (friendlistnum > -1)
+                        {
+                            if (Friends.list[friendlistnum].active == false)
+                            {
+                                continue;
+                            }
+
+                            CLEAR(text_line);
+                            // default to: RED
+                            color_r = 255;
+                            color_g = 0;
+                            color_b = 0;
+
+                            if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_NONE)
+                            {
+                            }
+                            else if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_TCP)
+                            {
+                                // orange like
+                                color_r = 255;
+                                color_g = 204;
+                                color_b = 0;
+                            }
+                            else if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_UDP)
+                            {
+                                // greenish
+                                color_r = 0;
+                                color_g = 128;
+                                color_b = 0;
+                            }
+                            else
+                            {
+                            }
+
+                            left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                                         var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                                         10, line_position_y, 12, 12,
+                                                         color_r, color_g, color_b);
+
+                            if (Friends.list[friendlistnum].namelength > 0)
+                            {
+                                size_t max_len = max_screen_name_length;
+
+                                if ((int64_t)Friends.list[friendlistnum].namelength < (int64_t)max_len)
+                                {
+                                    max_len = Friends.list[friendlistnum].namelength;
+                                }
+
+                                snprintf(text_line, sizeof(text_line), "P%d: %s", j3, Friends.list[friendlistnum].name);
+                            }
+                            else
+                            {
+                                snprintf(text_line, sizeof(text_line), "P%d: %s %d", j3, "Phonebook", j3);
+                            }
+
+                            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                                  30, line_position_y, text_line);
+                            line_position_y = line_position_y + 20;
+                        }
+                    }
+                }
+            }
+
+            //
+            // ------------------------------------
+            line_position_y = line_position_y + 20;
+            // ------------------------------------
+            //
+            // Display all Friends second
+            dbg(9, "Friends.max_idx=%d\n", Friends.max_idx);
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  30, line_position_y, "Friends:");
+            line_position_y = line_position_y + 20;
+
+            for (uint32_t j2 = 0; j2 < Friends.max_idx; j2++)
+            {
+                if (Friends.list[j2].active == false)
+                {
+                    continue;
+                }
+
+                if (j > 9)
+                {
+                    break;
+                }
+
+                CLEAR(text_line);
+                // default to: RED
+                color_r = 255;
+                color_g = 0;
+                color_b = 0;
+
+                if (Friends.list[j2].connection_status == TOX_CONNECTION_NONE)
+                {
+                }
+                else if (Friends.list[j2].connection_status == TOX_CONNECTION_TCP)
+                {
+                    // orange like
+                    color_r = 255;
+                    color_g = 204;
+                    color_b = 0;
+                }
+                else if (Friends.list[j2].connection_status == TOX_CONNECTION_UDP)
+                {
+                    // greenish
+                    color_r = 0;
+                    color_g = 128;
+                    color_b = 0;
+                }
+                else
+                {
+                }
+
+                left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                             var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                             10, line_position_y, 12, 12,
+                                             color_r, color_g, color_b);
+
+                if (Friends.list[j2].namelength > 0)
+                {
+                    size_t max_len = max_screen_name_length;
+
+                    if ((int64_t)Friends.list[j2].namelength < (int64_t)max_len)
+                    {
+                        max_len = Friends.list[j2].namelength;
+                    }
+
+                    snprintf(text_line, sizeof(text_line), "%d: %s", j, Friends.list[j2].name);
+                }
+                else
+                {
+                    snprintf(text_line, sizeof(text_line), "%d: %s %d", j, "Friend", j);
+                }
+
+                text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                      var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                      30, line_position_y, text_line);
+                line_position_y = line_position_y + 20;
+                j++;
+            }
+        }
+
+        dbg(9, "Friends:A:099\n");
+    }
+    else // if (QRCODE_AS_DEFAULT_SCREEN == 1)
+    {
+        show_text_as_image_stop();
+        char cmd_str[1000];
+        CLEAR(cmd_str);
+        snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
+
+        if (system(cmd_str));
+
+        dbg(2, "show_tox_id_qrcode()\n");
+    }
+
     global_is_qrcode_showing_on_screen = 1;
 }
 
@@ -2643,6 +2843,11 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         {
             av_local_disconnect(mytox_av, num);
         }
+    }
+
+    if (global_is_qrcode_showing_on_screen == 1)
+    {
+        show_tox_id_qrcode(m);
     }
 
     dbg(2, "friendlist_onConnectionChange:*READY*:friendnum=%d %d\n", (int)num, (int)connection_status);
@@ -3681,7 +3886,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             {
                 if (global_video_active == 0)
                 {
-                    show_tox_id_qrcode();
+                    show_tox_id_qrcode(tox);
                 }
             }
             else if (strncmp((char *)message, ".text", strlen((char *)".text")) == 0)
@@ -4571,6 +4776,11 @@ void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void 
             my_connection_status = TOX_CONNECTION_UDP;
             on_online();
             break;
+    }
+
+    if (global_is_qrcode_showing_on_screen == 1)
+    {
+        show_tox_id_qrcode(tox);
     }
 }
 
@@ -5750,7 +5960,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         dbg(9, "Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
         friend_to_send_video_to = -1;
         fb_fill_black();
-        show_tox_id_qrcode();
+        show_tox_id_qrcode(toxav_get_tox(av));
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
@@ -5779,7 +5989,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         dbg(9, "Call with friend %d errored, global_video_active=%d\n", friend_number, global_video_active);
         friend_to_send_video_to = -1;
         fb_fill_black();
-        show_tox_id_qrcode();
+        show_tox_id_qrcode(toxav_get_tox(av));
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -7415,6 +7625,10 @@ void *thread_av(void *data)
         {
             dbg(0, "Error reading Framebuffer info\n");
         }
+        else
+        {
+            global_fb_device_stats_filled = 1;
+        }
 
         dbg(2, "Framebuffer info %dx%d, %d bpp\n",  var_framebuffer_info.xres, var_framebuffer_info.yres,
             var_framebuffer_info.bits_per_pixel);
@@ -7499,7 +7713,7 @@ void *thread_av(void *data)
     // --- now show QR code
     stop_endless_loading();
     yieldcpu(700); // TODO: wait for qr-code file to be created (it is done in background!)
-    show_tox_id_qrcode();
+    show_tox_id_qrcode(toxav_get_tox(av));
     // only now start accepting calls
     accepting_calls = 1;
     dbg(2, "--- accepting calls NOW ---\n");
@@ -7889,7 +8103,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     if (really_in_call == 1)
     {
         fb_fill_black();
-        show_tox_id_qrcode();
+        show_tox_id_qrcode(toxav_get_tox(av));
     }
 }
 // ------------------ Tox AV stuff --------------------
@@ -11079,7 +11293,7 @@ int main(int argc, char *argv[])
                     if (global_video_active == 0)
                     {
                         fb_fill_black();
-                        show_tox_id_qrcode();
+                        show_tox_id_qrcode(tox);
                     }
                 }
             }
