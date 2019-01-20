@@ -6783,11 +6783,11 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     CLEAR(fps_str);
     // -------------------------
 
-    if (speaker_out_num == 0)
+    if (use_tor == 0)
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+        snprintf(fps_str, sizeof(fps_str), "v%s%s%d %d/%d/%d %d %d/%d",
                  global_version_string,
-                 speaker_out_name_0,
+                 " ",
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
@@ -6798,9 +6798,9 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     }
     else
     {
-        snprintf(fps_str, sizeof(fps_str), "v%s %s %d %d/%d/%d %d %d/%d",
+        snprintf(fps_str, sizeof(fps_str), "v%s%s%d %d/%d/%d %d %d/%d",
                  global_version_string,
-                 speaker_out_name_1,
+                 " TOR ",
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
