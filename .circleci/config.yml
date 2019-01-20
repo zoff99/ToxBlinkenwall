@@ -32,11 +32,11 @@ jobs:
       - run: ls -al; pwd
 
       # test python scripts
-      - run: python3.5 -m pip install evdev
+      - run: python3 -m pip install evdev
       - run: mkdir -p _test_python_/
       - run:
           name: test python keyboard input script
-          command: cd _test_python_/;../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
+          command: cd _test_python_/;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
           background: true
       - run: _test_python_/;sleep 3; ls -al ext_keys.fifo
 
