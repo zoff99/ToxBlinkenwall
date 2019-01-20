@@ -36,11 +36,11 @@ jobs:
       - run: mkdir -p _test_python_/
       - run:
           name: test-python-script
-          command: cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 5;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt;echo $? > result.txt
+          command: cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 5;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt
           background: true
       - run:
           name: test-python-script-reader
-          command: cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -e result.txt ]; then echo "python script ERROR"; cat log.txt;exit 1; fi ; ls -al
+          command: cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -e log.txt ]; then echo "python script ERROR"; cat log.txt;exit 1; fi
           background: false
 
       - run: mkdir -p ~/work/deploy
