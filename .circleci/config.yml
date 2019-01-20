@@ -35,8 +35,8 @@ jobs:
       - run: python3 -m pip install evdev
       - run: mkdir -p _test_python_/
       - run:
-          name: test python keyboard input script
-          command: cd _test_python_/;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
+          name: test-python-script
+          command: cd _test_python_/;pwd;ls -al;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
           background: true
       - run: cd _test_python_/;sleep 3; ls -al ext_keys.fifo
 
