@@ -17,8 +17,6 @@ import time
 import os
 import signal
 
-import XXYY
-
 fifo_path = '../ext_keys.fifo'
 cur_button = -1
 
