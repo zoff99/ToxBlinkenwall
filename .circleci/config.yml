@@ -22,6 +22,7 @@ jobs:
           zip grep file ca-certificates autotools-dev autoconf automake
           git bc wget rsync cmake make pkg-config yasm libtool
           libasound2-dev libv4l-dev ssh gzip tar
+          python3-pip
 
       - checkout
       - restore_cache:
@@ -29,6 +30,15 @@ jobs:
 
       - run: python3 --version
       - run: ls -al; pwd
+
+      # test python scripts
+      - run: python3.5 -m pip install evdev
+      - run: mkdir -p _test_python_/
+      - run:
+          name: test python keyboard input script
+          command: cd _test_python_/;../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
+          background: true
+      - run: _test_python_/;sleep 3; ls -al ext_keys.fifo
 
       - run: mkdir -p ~/work/deploy
       - run: if [ -e build_dir ]; then export oo="cache" ; else export oo="" ; fi ; mkdir -p build_dir ; cd build_dir ; bash ../circle_scripts/deps.sh "$oo"
