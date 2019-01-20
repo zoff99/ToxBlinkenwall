@@ -15,6 +15,7 @@ function clean_up
 	sleep 2
 	pkill -9 toxblinkenwall
 	pkill -9 toxblinkenwall
+	pkill -f ext_keys_evdev.py
 	pkill -f ext_keys.py
     rm -f ext_keys.fifo
 	# Perform program exit cleanup of framebuffer
@@ -57,7 +58,8 @@ chmod u+x scripts/*.sh
 chmod u+x scripts/raspi/*.sh
 chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
-chmod u+x ext_keys_scripts/ext_keys.py
+chmod u+x ext_keys_scripts/*.py
+chmod u+x ext_keys_scripts/*.sh
 chmod a+x udev2.sh udev.sh toggle_alsa.sh detect_usb_audio.sh
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
@@ -70,6 +72,7 @@ while [ 1 == 1 ]; do
 	scripts/stop_image_endless.sh
 	. scripts/vars.sh
 
+	pkill -f ext_keys_evdev.py
 	pkill -f ext_keys.py
 
     # just in case, so that udev scripts really really work
@@ -119,13 +122,14 @@ while [ 1 == 1 ]; do
 
     rm -f ext_keys.fifo
 	cd ext_keys_scripts
-	./ext_keys.py &
+	python3.5 ./ext_keys.py &
+    python3.5 ./ext_keys_evdev.py &
 	cd ..
 
     # ---- only for RASPI ----
-    if [ "$IS_ON""x" == "RASPI""x" ]; then
-            sudo ./toggle_alsa.sh 1
-    fi
+    #if [ "$IS_ON""x" == "RASPI""x" ]; then
+    #        sudo ./toggle_alsa.sh 1
+    #fi
     # ---- only for RASPI ----
 
 	setterm -cursor off
@@ -133,13 +137,12 @@ while [ 1 == 1 ]; do
 	./toxblinkenwall $HD_FROM_CAM -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
-    rm -f ext_keys.fifo
 	sleep 4
 
     # ---- only for RASPI ----
-    if [ "$IS_ON""x" == "RASPI""x" ]; then
-            sudo ./toggle_alsa.sh 1
-    fi
+    #if [ "$IS_ON""x" == "RASPI""x" ]; then
+    #        sudo ./toggle_alsa.sh 1
+    #fi
     # ---- only for RASPI ----
 
     if [ -e "OPTION_NOLOOP" ]; then
@@ -147,5 +150,6 @@ while [ 1 == 1 ]; do
         clean_up
         exit 1
     fi
+
 done
 
