@@ -2309,6 +2309,16 @@ void show_tox_id_qrcode(Tox *tox)
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
+            // ------------------------------------
+            CLEAR(text_line);
+            int v_1 = (int)tox_version_major();
+            int v_2 = (int)tox_version_minor();
+            int v_3 = (int)tox_version_patch();
+            snprintf(text_line, sizeof(text_line), "Zoxcore v%d.%d.%d", v_1, v_2, v_3);
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  line_position_x_header, line_position_y, text_line);
+            line_position_y = line_position_y + 20;
             //
             // ------------------------------------
             line_position_y = line_position_y + 20;
@@ -4025,7 +4035,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                 int v_1 = (int)tox_version_major();
                 int v_2 = (int)tox_version_minor();
                 int v_3 = (int)tox_version_patch();
-                send_text_message_to_friend(tox, friend_number, "c-toxcore version:%d.%d.%d", v_1, v_2, v_3);
+                send_text_message_to_friend(tox, friend_number, "zoxcore version:%d.%d.%d", v_1, v_2, v_3);
             }
             else if (strncmp((char *)message, ".kac", strlen((char *) ".kac")) == 0)
             {
