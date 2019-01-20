@@ -152,8 +152,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 35
-static const char global_version_string[] = "0.99.35";
+#define VERSION_PATCH 36
+static const char global_version_string[] = "0.99.36";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -2293,6 +2293,8 @@ void show_tox_id_qrcode(Tox *tox)
             fb_fill_black();
             unsigned char *bf_out_real_fb = framebuffer_mappedmem;
             uint32_t line_position_y = 30;
+            const uint32_t line_position_x = 30;
+            const uint32_t line_position_x_header = 10;
             const size_t max_screen_name_length = 150;
             char text_line[max_screen_name_length];
             uint8_t color_r;
@@ -2300,11 +2302,24 @@ void show_tox_id_qrcode(Tox *tox)
             uint8_t color_b;
             uint32_t j = 0;
             // ------------------------------------
+            // Display version
+            CLEAR(text_line);
+            snprintf(text_line, sizeof(text_line), "ToxBlinkenwall v%s", global_version_string);
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  line_position_x_header, line_position_y, text_line);
+            line_position_y = line_position_y + 20;
+            //
+            // ------------------------------------
+            line_position_y = line_position_y + 20;
+            // ------------------------------------
+            //
+            // ------------------------------------
             // Display Phonebook first
             int j3;
             text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                  30, line_position_y, "Phonebook:");
+                                  line_position_x_header, line_position_y, "Phonebook:");
             line_position_y = line_position_y + 20;
 
             for (j3 = 1; j3 < 10; j3++)
@@ -2356,7 +2371,7 @@ void show_tox_id_qrcode(Tox *tox)
 
                             left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                                         10, line_position_y, 12, 12,
+                                                         line_position_x_header, line_position_y, 12, 12,
                                                          color_r, color_g, color_b);
 
                             if (Friends.list[friendlistnum].namelength > 0)
@@ -2377,7 +2392,7 @@ void show_tox_id_qrcode(Tox *tox)
 
                             text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                                  30, line_position_y, text_line);
+                                                  line_position_x, line_position_y, text_line);
                             line_position_y = line_position_y + 20;
                         }
                     }
@@ -2393,7 +2408,7 @@ void show_tox_id_qrcode(Tox *tox)
             dbg(9, "Friends.max_idx=%d\n", Friends.max_idx);
             text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                  30, line_position_y, "Friends:");
+                                  line_position_x_header, line_position_y, "Friends:");
             line_position_y = line_position_y + 20;
 
             for (uint32_t j2 = 0; j2 < Friends.max_idx; j2++)
@@ -2437,7 +2452,7 @@ void show_tox_id_qrcode(Tox *tox)
 
                 left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                              var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                             10, line_position_y, 12, 12,
+                                             line_position_x_header, line_position_y, 12, 12,
                                              color_r, color_g, color_b);
 
                 if (Friends.list[j2].namelength > 0)
@@ -2458,7 +2473,7 @@ void show_tox_id_qrcode(Tox *tox)
 
                 text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                       var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                      30, line_position_y, text_line);
+                                      line_position_x, line_position_y, text_line);
                 line_position_y = line_position_y + 20;
                 j++;
             }

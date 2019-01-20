@@ -122,8 +122,8 @@ while [ 1 == 1 ]; do
 
     rm -f ext_keys.fifo
 	cd ext_keys_scripts
-	python3.5 ./ext_keys.py &
-    python3.5 ./ext_keys_evdev.py &
+	python3 ./ext_keys.py &
+    python3 ./ext_keys_evdev.py &
 	cd ..
 
     # ---- only for RASPI ----
