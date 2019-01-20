@@ -36,12 +36,12 @@ jobs:
       - run: mkdir -p _test_python_/
       - run:
           name: test-python-script
-          command: cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 3;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
-          background: false
+          command: cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 10;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py
+          background: true
       - run:
           name: test-python-script-reader
           command: cd _test_python_/; mkfifo ../ext_keys.fifo; tail -f ../ext_keys.fifo
-          background: true
+          background: false
 
       - run: mkdir -p ~/work/deploy
       - run: if [ -e build_dir ]; then export oo="cache" ; else export oo="" ; fi ; mkdir -p build_dir ; cd build_dir ; bash ../circle_scripts/deps.sh "$oo"
