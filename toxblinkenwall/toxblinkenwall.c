@@ -312,6 +312,9 @@ int hw_encoder_wanted_prev = 1;
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
 
+#define PI_NORMAL_CAM_W_1080 1920;
+#define PI_NORMAL_CAM_H_1080 1080;
+
 #include <linux/fb.h>
 
 #ifdef HAVE_OUTPUT_OMX
@@ -806,6 +809,7 @@ int global_send_first_frame = 0;
 int switch_nodelist_2 = 0;
 int video_high = 1;
 int camera_res_high_wanted_prev = 1;
+int camera_res_1080p_wanted = 0;
 int switch_tcponly = 0;
 int use_tor = 0;
 int full_width = 640; // gets set later, this is just as last resort
@@ -3634,6 +3638,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
+    send_text_message_to_friend(tox, friend_number, " .thr           --> toggle HD 720p / 1080p");
     send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
     send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>   --> use hw encoder");
     // send_text_message_to_friend(tox, friend_number, " .cpu <vpx cpu used> --> set VPX CPU_USED: -16 .. 16");
@@ -3954,6 +3959,13 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 #endif
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
+                button_d();
+            }
+            else if (strncmp((char *)message, ".thr", strlen((char *)".thr")) == 0) // toggle cam HD resolution
+            {
+                camera_res_high_wanted_prev = 1 - camera_res_high_wanted_prev; // toggle between 1 and 0
+                yieldcpu(200);
+                camera_res_1080p_wanted = 1 - camera_res_1080p_wanted; // toggle between 1080 and 720
                 button_d();
             }
             else if (strncmp((char *)message, ".owncam ", strlen((char *)".owncam ")) == 0) // own camera on/off
@@ -5225,8 +5237,16 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     if (video_high == 1)
     {
-        format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
-        format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
+        if (camera_res_1080p_wanted == 1)
+        {
+            format.fmt.pix.width = PI_NORMAL_CAM_W_1080; // 900 // 1280;
+            format.fmt.pix.height = PI_NORMAL_CAM_H_1080; // 508 // 720;
+        }
+        else
+        {
+            format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
+            format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
+        }
     }
     else
     {
@@ -5296,8 +5316,16 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     if (video_high == 1)
     {
-        format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
-        format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
+        if (camera_res_1080p_wanted == 1)
+        {
+            format.fmt.pix.width = PI_NORMAL_CAM_W_1080; // 900 // 1280;
+            format.fmt.pix.height = PI_NORMAL_CAM_H_1080; // 508 // 720;
+        }
+        else
+        {
+            format.fmt.pix.width = PI_NORMAL_CAM_W; // 900 // 1280;
+            format.fmt.pix.height = PI_NORMAL_CAM_H; // 508 // 720;
+        }
     }
     else
     {
