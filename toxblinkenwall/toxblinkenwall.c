@@ -432,7 +432,7 @@ BWRingBuffer *video_play_rb = NULL;
 
 #define UTF8_EXTENDED_OFFSET 64
 
-static struct v4lconvert_data *v4lconvert_data;
+static struct v4lconvert_data *v4lconvert_data = NULL;
 
 
 typedef struct DHT_node
@@ -744,7 +744,7 @@ const char *my_toxid_filename_txt = "toxid.txt";
 const char *image_createqr_touchfile = "./toxid_ready.txt";
 const char *tox_name_filename = "toxname.txt";
 
-char *v4l2_device = NULL; // video device filename
+static char *v4l2_device = NULL; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
 
 const char *shell_cmd__osupdatefull = "./scripts/osupdatefull.sh 2> /dev/null";
@@ -1022,7 +1022,7 @@ void dbg(int level, const char *fmt, ...)
         level = 0;
     }
 
-    level_and_format = malloc(strlen(fmt) + 3 + 1);
+    level_and_format = calloc(1, strlen(fmt) + 3 + 1);
 
     if (!level_and_format)
     {
@@ -1055,7 +1055,7 @@ void dbg(int level, const char *fmt, ...)
     level_and_format[(strlen(fmt) + 3)] = '\0';
     time_t t3 = time(NULL);
     struct tm tm3 = *localtime(&t3);
-    char *level_and_format_2 = malloc(strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 1);
+    char *level_and_format_2 = calloc(1, strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 1);
     level_and_format_2[0] = '\0';
     snprintf(level_and_format_2, (strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 1),
              "%04d-%02d-%02d %02d:%02d:%02d:%s",
@@ -1224,8 +1224,7 @@ void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_s
 uint8_t *hex_string_to_bin(const char *hex_string)
 {
     size_t len = TOX_ADDRESS_SIZE;
-    uint8_t *val = malloc(len);
-    memset(val, 0, (size_t) len);
+    uint8_t *val = calloc(1, len);
 
     // dbg(9, "hex_string_to_bin:len=%d\n", (int)len);
 
@@ -1283,7 +1282,7 @@ void ll_fill_val(void **val, size_t data_size, void *data)
         *val = NULL;
     }
 
-    *val = malloc(data_size);
+    *val = calloc(1, data_size);
     memcpy(*val, data, data_size);
 }
 
@@ -1666,7 +1665,7 @@ Tox *create_tox()
         fseek(f, 0, SEEK_END);
         long fsize = ftell(f);
         fseek(f, 0, SEEK_SET);
-        uint8_t *savedata = malloc(fsize);
+        uint8_t *savedata = calloc(1, fsize);
         size_t dummy = fread(savedata, fsize, 1, f);
 
         if (dummy < 1)
@@ -1723,7 +1722,7 @@ void replace_bad_char_from_string(char *str, const char replace_with)
 void update_savedata_file(const Tox *tox)
 {
     size_t size = tox_get_savedata_size(tox);
-    char *savedata = malloc(size);
+    char *savedata = calloc(1, size);
     tox_get_savedata(tox, (uint8_t *)savedata);
     FILE *f = fopen(savedata_tmp_filename, "wb");
     fwrite(savedata, size, 1, f);
@@ -2888,7 +2887,7 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
     if (Friends.max_idx == 0)
     {
         // dbg(9, "friendlist_onFriendAdded:001.a malloc 1 friend struct, max_id=%d, num=%d\n", (int)Friends.max_idx, (int)num);
-        Friends.list = malloc(sizeof(ToxicFriend));
+        Friends.list = calloc(1, sizeof(ToxicFriend));
     }
     else
     {
@@ -2961,7 +2960,7 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 uint32_t *load_friendlist_nums(Tox *m)
 {
     size_t numfriends = tox_self_get_friend_list_size(m);
-    uint32_t *friend_list = malloc(numfriends * sizeof(uint32_t));
+    uint32_t *friend_list = calloc(1, numfriends * sizeof(uint32_t));
     tox_self_get_friend_list(m, friend_list);
     return friend_list;
 }
@@ -5053,8 +5052,7 @@ char *get_current_time_date_formatted()
     time_t t;
     struct tm *tm = NULL;
     const int max_size_datetime_str = 100;
-    char *str_date_time = malloc(max_size_datetime_str);
-    memset(str_date_time, 0, 100);
+    char *str_date_time = calloc(1, max_size_datetime_str);
     t = time(NULL);
     tm = localtime(&t);
     strftime(str_date_time, max_size_datetime_str, global_overlay_timestamp_format, tm);
@@ -5230,6 +5228,7 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     camera_supports_h264 = detect_h264_on_camera(fd);
     v4lconvert_data = v4lconvert_create(fd);
+    dbg(9, "v4lconvert_create\n");
     CLEAR(format);
     CLEAR(dest_format);
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -5758,6 +5757,8 @@ void close_cam()
     Pa_Terminate();
 #endif
     v4lconvert_destroy(v4lconvert_data);
+    v4lconvert_data = NULL;
+    dbg(9, "v4lconvert_destroy:1\n");
     size_t i;
 
     for (i = 0; i < n_buffers; ++i)
@@ -6283,7 +6284,7 @@ void *audio_play(void *data)
     display_thread_sched_attr("Scheduler attributes of [1]: audio_play thread");
 #endif
     // make a local copy
-    char *ao_play_pcm_ = (char *)malloc(adb->block_size_in_bytes);
+    char *ao_play_pcm_ = (char *)calloc(1, adb->block_size_in_bytes);
     memcpy(ao_play_pcm_, adb->pcm, adb->block_size_in_bytes);
 
     // this is a blocking call
@@ -7608,8 +7609,23 @@ void fully_stop_cam()
         v4l_stream_off();
     }
 
-    v4lconvert_destroy(v4lconvert_data);
+    if (v4lconvert_data)
+    {
+        v4lconvert_destroy(v4lconvert_data);
+    }
+
+    dbg(9, "v4lconvert_destroy:2\n");
+    v4lconvert_data = NULL;
     free(av_video_frame.h264_buf);
+    av_video_frame.buf_len = 0;
+    av_video_frame.h264_buf = NULL;
+    av_video_frame.w = 0;
+    av_video_frame.h = 0;
+    av_video_frame.h264_w = 0;
+    av_video_frame.h264_h = 0;
+    av_video_frame.y = NULL;
+    av_video_frame.u = NULL;
+    av_video_frame.v = NULL;
     using_h264_hw_accel = 0;
     size_t i;
 
@@ -9418,15 +9434,19 @@ void *thread_ext_keys(void *data)
 void reopen_video_devices(const char *video_device_filename)
 {
     fully_stop_cam();
+    dbg(9, "v4l2_device:1=%p\n", v4l2_device);
 
     if (v4l2_device)
     {
+        dbg(9, "v4l2_device:2=%p\n", v4l2_device);
         free(v4l2_device);
+        dbg(9, "v4l2_device:3=%p\n", v4l2_device);
         v4l2_device = NULL;
+        dbg(9, "v4l2_device:4=%p\n", v4l2_device);
     }
 
-    v4l2_device = malloc(400);
-    memset(v4l2_device, 0, 400);
+    dbg(9, "v4l2_device:5=%p\n", v4l2_device);
+    v4l2_device = calloc(1, 400);
     snprintf(v4l2_device, 399, "%s", video_device_filename);
     yieldcpu(50);
     init_and_start_cam(0, using_h264_hw_accel);
@@ -10775,6 +10795,15 @@ int main(int argc, char *argv[])
     global_send_first_frame = 0;
     global_show_fps_on_video = 0;
     incoming_filetransfers = 0;
+    av_video_frame.h264_buf = NULL;
+    av_video_frame.w = 0;
+    av_video_frame.h = 0;
+    av_video_frame.h264_w = 0;
+    av_video_frame.h264_h = 0;
+    av_video_frame.buf_len = 0;
+    av_video_frame.y = NULL;
+    av_video_frame.u = NULL;
+    av_video_frame.v = NULL;
     // valid audio bitrates: [ bit_rate < 6 || bit_rate > 510 ]
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
@@ -10783,11 +10812,9 @@ int main(int argc, char *argv[])
     camera_res_high_wanted_prev = video_high;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
-    v4l2_device = malloc(400);
-    memset(v4l2_device, 0, 400);
+    v4l2_device = calloc(1, 400);
     snprintf(v4l2_device, 399, "%s", "/dev/video0");
-    framebuffer_device = malloc(400);
-    memset(framebuffer_device, 0, 400);
+    framebuffer_device = calloc(1, 400);
     snprintf(framebuffer_device, 399, "%s", "/dev/fb0");
     int aflag = 0;
     char *cvalue = NULL;
