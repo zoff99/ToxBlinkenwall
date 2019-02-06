@@ -139,7 +139,19 @@ while [ 1 == 1 ]; do
     if [ -e "OPTION_USETOR" ]; then
         tor_option=" -T "
     fi
-	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
+
+    if [ -e "OPTION_USE_ASAN" ]; then
+        export LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
+        export ASAN_OPTIONS=malloc_context_size=100:check_initialization_order=true # verbosity=2:
+    fi
+
+    if [ -e "OPTION_USE_STDLOG" ]; then
+        std_log=stdlog.log
+    else
+        std_log=/dev/null
+    fi
+
+	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > "$std_log" 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
 	sleep 4
