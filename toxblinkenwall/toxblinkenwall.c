@@ -837,7 +837,7 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 #endif
 
 #ifdef HAVE_ALSA_PLAY
-    snd_pcm_t *audio_play_handle;
+    snd_pcm_t *audio_play_handle = NULL;
     const char *audio_play_device = "default";
     int have_output_sound_device = 0;
     sem_t count_audio_play_threads;
@@ -892,7 +892,7 @@ int count_video_record_threads_int;
 #define DEFAULT_AUDIO_CAPTURE_CHANNELS (1)
 
 #ifdef HAVE_ALSA_REC
-    snd_pcm_t *audio_capture_handle;
+    snd_pcm_t *audio_capture_handle = NULL;
     // const char *audio_device = "plughw:0,0";
     // const char *audio_device = "hw:CARD=U0x46d0x933,DEV=0";
     const char *audio_device = "default";
@@ -8888,16 +8888,27 @@ void close_sound_device()
 {
     if (have_input_sound_device == 1)
     {
-        snd_pcm_drain(audio_capture_handle);
-        snd_pcm_close(audio_capture_handle);
+        if (audio_capture_handle)
+        {
+            // snd_pcm_drain(audio_capture_handle);
+        }
+
+        if (audio_capture_handle)
+        {
+            snd_pcm_close(audio_capture_handle);
+            audio_capture_handle = NULL;
+        }
+
+        have_input_sound_device = 0;
     }
 }
 
 void init_sound_device()
 {
+    // sem_wait(&audio_record_lock);
     int i;
     int err;
-    snd_pcm_hw_params_t *hw_params;
+    snd_pcm_hw_params_t *hw_params = NULL;
     have_input_sound_device = 0;
 
     // open in blocking mode for recording !!
@@ -8908,6 +8919,7 @@ void init_sound_device()
             snd_strerror(err));
         //exit (1);
         have_input_sound_device = 0;
+        // sem_post(&audio_record_lock);
         return;
     }
 
@@ -8976,6 +8988,8 @@ void init_sound_device()
             snd_strerror(err));
         //exit (1);
     }
+
+    // sem_post(&audio_record_lock);
 }
 
 void inc_audio_record_t_counter()
@@ -9082,8 +9096,6 @@ void *thread_record_alsa_audio(void *data)
 
     while (do_audio_recording == 1)
     {
-#if 1
-
         if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
         {
             if (have_input_sound_device == 1)
@@ -9103,10 +9115,12 @@ void *thread_record_alsa_audio(void *data)
                         yieldcpu(2);
                     }
 
+                    sem_wait(&audio_record_lock);
                     close_sound_device();
                     dbg(9, "record_device:close_sound_device\n");
                     yieldcpu(2);
                     init_sound_device();
+                    sem_post(&audio_record_lock);
                 }
                 else
                 {
@@ -9152,13 +9166,9 @@ void *thread_record_alsa_audio(void *data)
         }
         else
         {
-#endif
             // sleep 0.2 seconds
             yieldcpu(200);
-#if 1
         }
-
-#endif
     }
 
     close_sound_device();
@@ -9461,10 +9471,10 @@ void reopen_sound_devices()
     sem_post(&audio_play_lock);
 #endif
 #ifdef HAVE_ALSA_REC
-    //*record*lock*// sem_wait(&audio_record_lock);
+    sem_wait(&audio_record_lock);
     close_sound_device();
     init_sound_device();
-    //*record*lock*// sem_post(&audio_record_lock);
+    sem_post(&audio_record_lock);
 #endif
 }
 
@@ -9488,8 +9498,15 @@ void close_sound_play_device()
 
     if (have_output_sound_device == 1)
     {
-        snd_pcm_drain(audio_play_handle);
-        snd_pcm_close(audio_play_handle);
+        if (audio_play_handle)
+        {
+            snd_pcm_drain(audio_play_handle);
+        }
+
+        if (audio_play_handle)
+        {
+            snd_pcm_close(audio_play_handle);
+        }
     }
 
     dbg(0, "ALSA:016\n");
@@ -9500,7 +9517,7 @@ void init_sound_play_device(int channels, int sample_rate)
     dbg(0, "ALSA:002\n");
     int i;
     int err;
-    snd_pcm_hw_params_t *hw_params;
+    snd_pcm_hw_params_t *hw_params = NULL;
     have_output_sound_device = 0;
 
     // open in NON blocking mode for playing
