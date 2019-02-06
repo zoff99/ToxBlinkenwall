@@ -6849,7 +6849,7 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
                  (int)global_video_in_fps);
     }
 
-    text_on_yuf_frame_xy_ptr(0, 0, fps_str, yuf_buf, w, h);
+    text_on_yuf_frame_xy_ptr(8, 0, fps_str, yuf_buf, w, h);
     CLEAR(fps_str);
     snprintf(fps_str, sizeof(fps_str), "O:%dx%d f:%d%s R:%d %dC",
              (int)video_width,
@@ -6858,7 +6858,7 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
              global_encoder_string,
              (int)global_encoder_video_bitrate,
              read_cpu_temp());
-    text_on_yuf_frame_xy_ptr(0, 11, fps_str, yuf_buf, w, h);
+    text_on_yuf_frame_xy_ptr(8, 11, fps_str, yuf_buf, w, h);
     CLEAR(fps_str);
 
     if (global_video_h264_incoming_profile == 66)
@@ -6906,7 +6906,70 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
                  global_video_h264_incoming_level);
     }
 
-    text_on_yuf_frame_xy_ptr(0, 22, fps_str, yuf_buf, w, h);
+    text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
+    // draw the connection status of the friend we are in a video call with
+    //
+    // color black on some error
+    uint8_t color_r = 0;
+    uint8_t color_g = 0;
+    uint8_t color_b = 0;
+    int8_t conn_good = -1;
+
+    if (friend_to_send_video_to > -1)
+    {
+        int friendlistnum = find_friend_in_friendlist((uint32_t)friend_to_send_video_to);
+
+        if (friendlistnum > -1)
+        {
+            if (Friends.list[friendlistnum].active == false)
+            {
+                // strange, this should not happen
+            }
+            else
+            {
+                conn_good = 0;
+
+                if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_UDP)
+                {
+                    // greenish
+                    conn_good = 1;
+                }
+            }
+        }
+    }
+
+    for (int lines = 0; lines < h; lines++)
+    {
+        for (int pixels = 0; pixels < 5; pixels++)
+        {
+            if (conn_good == -1)
+            {
+            }
+            else if (conn_good == 0)
+            {
+                if (lines < (h / 2))
+                {
+                    color_r = 0;
+                    color_g = 255;
+                    color_b = 0;
+                }
+                else
+                {
+                    color_r = 255;
+                    color_g = 255;
+                    color_b = 255;
+                }
+            }
+            else if (conn_good == 1)
+            {
+                color_r = 0;
+                color_g = 255;
+                color_b = 0;
+            }
+
+            set_color_in_yuv_frame_xy(yuf_buf, pixels, lines, w, h, color_r, color_g, color_b);
+        }
+    }
 }
 
 
