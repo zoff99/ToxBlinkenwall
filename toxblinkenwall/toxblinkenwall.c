@@ -986,6 +986,13 @@ uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
 
+// ------- zoxcore debug settings !! ------------
+extern int global_h264_enc_profile_high_enabled;
+extern int global_h264_enc_profile_high_enabled_switch;
+// ------- zoxcore debug settings !! ------------
+int global_tbw_enc_profile_high_enabled = 0;
+
+
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
 FriendsList Friends;
@@ -3637,6 +3644,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
+    send_text_message_to_friend(tox, friend_number, " .tpr           --> toggle H264 profile base / high");
     send_text_message_to_friend(tox, friend_number, " .thr           --> toggle HD 720p / 1080p");
     send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
     send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>   --> use hw encoder");
@@ -3959,6 +3967,12 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
                 button_d();
+            }
+            else if (strncmp((char *)message, ".tpr", strlen((char *)".tpr")) == 0) // toggle H264 profile (base <-> high)
+            {
+                global_tbw_enc_profile_high_enabled = 1 - global_tbw_enc_profile_high_enabled;
+                global_h264_enc_profile_high_enabled = global_tbw_enc_profile_high_enabled;
+                global_h264_enc_profile_high_enabled_switch = 1;
             }
             else if (strncmp((char *)message, ".thr", strlen((char *)".thr")) == 0) // toggle cam HD resolution
             {
