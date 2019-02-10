@@ -82,7 +82,7 @@ while [ 1 == 1 ]; do
     v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
     v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
     # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
-    v4l2-ctl -d "$video_device" --set-ctrl=h264_profile=1
+    v4l2-ctl -d "$video_device" --set-ctrl=h264_profile=4
     # v4l2-ctl -d "$video_device" --set-priority=3
     v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
@@ -139,7 +139,19 @@ while [ 1 == 1 ]; do
     if [ -e "OPTION_USETOR" ]; then
         tor_option=" -T "
     fi
-	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > stdlog.log 2>&1
+
+    if [ -e "OPTION_USE_ASAN" ]; then
+        export LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
+        export ASAN_OPTIONS=malloc_context_size=100:check_initialization_order=true # verbosity=2:
+    fi
+
+    if [ -e "OPTION_USE_STDLOG" ]; then
+        std_log=stdlog.log
+    else
+        std_log=/dev/null
+    fi
+
+	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > "$std_log" 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
 	sleep 4

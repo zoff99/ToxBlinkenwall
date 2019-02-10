@@ -236,6 +236,8 @@ re=".*/video[0-9]"
 if [[ "$1" =~ $re ]]; then
 
     echo "processing video device $1 ..." >> "$logfile" 2>&1
+    
+    sleep 2
 
     video_device_to_use=$(ls -1r /dev/video[0-9]* 2>/dev/null|head -1 2> /dev/null|tr -d " " 2>/dev/null|tr -d '\n' 2>/dev/null | tr -d '\r' 2>/dev/null)
 
