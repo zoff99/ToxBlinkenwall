@@ -1638,9 +1638,9 @@ Tox *create_tox()
     }
 
     // ----------------------------------------------
-    options.ipv6_enabled = false;
+    options.ipv6_enabled = true;
     options.local_discovery_enabled = true;
-    options.hole_punching_enabled = false;
+    options.hole_punching_enabled = true;
     options.tcp_port = tcp_port;
 
     if (use_tor == 1)
