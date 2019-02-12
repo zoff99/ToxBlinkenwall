@@ -39,6 +39,8 @@ rm -f /tmp/alsa.$$.cfg
 echo "... READY" >> "$logfile" 2>&1
 
 
+detected_supported_device=0
+
 # detect Sony Playstation Eye ------------
 cat /proc/asound/card*/usbid |grep '1415:2000'
 res=$?
@@ -80,6 +82,7 @@ defaults.pcm.!card ALSA
 	sudo cp -v /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf >> "$logfile" 2>&1
 	rm -f /tmp/alsa.$$.cfg
 	echo "using device ... READY" >> "$logfile" 2>&1
+    detected_supported_device=1
 fi
 
 
@@ -126,6 +129,7 @@ defaults.pcm.!card ALSA
 	sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
 	rm -f /tmp/alsa.$$.cfg
 	echo "using device ... READY" >> "$logfile" 2>&1
+    detected_supported_device=1
 fi
 
 
@@ -173,6 +177,7 @@ defaults.pcm.!card ALSA
 	sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
 	rm -f /tmp/alsa.$$.cfg
 	echo "using device ... READY" >> "$logfile" 2>&1
+    detected_supported_device=1
 fi
 
 
@@ -218,8 +223,68 @@ defaults.pcm.!card ALSA
 	sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
 	rm -f /tmp/alsa.$$.cfg
 	echo "using device ... READY" >> "$logfile" 2>&1
+    detected_supported_device=1
 fi
 
+
+if [ "$detected_supported_device""x" == "0x" ]; then
+    some_usb_sound_device_dectect=0
+    # try to use the first USB sound device connected to the system
+    if [ -f /proc/asound/card0/usbid ]; then
+        usb_device_name=$(cat /proc/asound/card0/id)
+        some_usb_sound_device_dectect=1
+    elif [ -f /proc/asound/card1/usbid ]; then
+        usb_device_name=$(cat /proc/asound/card1/id)
+        some_usb_sound_device_dectect=1
+    elif [ -f /proc/asound/card2/usbid ]; then
+        usb_device_name=$(cat /proc/asound/card2/id)
+        some_usb_sound_device_dectect=1
+    elif [ -f /proc/asound/card3/usbid ]; then
+        usb_device_name=$(cat /proc/asound/card3/id)
+        some_usb_sound_device_dectect=1
+    fi
+
+    if [ "$some_usb_sound_device_dectect""x" == "1x" ]; then
+
+        echo "unknown USB sound device detected ..." >> "$logfile" 2>&1
+
+        cp /usr/share/alsa/alsa.conf_ORIG /tmp/alsa.$$.cfg
+        echo '
+pcm.usb
+{
+    type hw
+    card '"$usb_device_name"'
+}
+
+pcm.card_bcm {
+    type hw
+    card ALSA
+}
+
+pcm.!default {
+    type asym
+
+    playback.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+
+    capture.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+}
+
+defaults.pcm.!card ALSA
+' >> /tmp/alsa.$$.cfg
+
+        sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
+        rm -f /tmp/alsa.$$.cfg
+        echo "using device ... READY" >> "$logfile" 2>&1
+    fi
+fi
 
 
 # tell ToxBlinkenwall to reopen sound devices
