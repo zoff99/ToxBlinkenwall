@@ -140,7 +140,10 @@ while [ 1 == 1 ]; do
         tor_option=" -T "
     fi
 
-    if [ -e "OPTION_USE_ASAN" ]; then
+    ldd toxblinkenwall|grep -i libasan > /dev/null 2>&1
+    use_asan_lib=$?
+    if [ $use_asan_lib -eq 0 ]; then
+    # if [ -e "OPTION_USE_ASAN" ]; then
         export LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
         export ASAN_OPTIONS=malloc_context_size=100:check_initialization_order=true # verbosity=2:
     fi
@@ -151,9 +154,25 @@ while [ 1 == 1 ]; do
         std_log=/dev/null
     fi
 
+    ulimit -c 99999
 	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > "$std_log" 2>&1
     scripts/on_callend.sh
     scripts/on_offline.sh
+    #
+    # save debug info ---------------
+    mv ./toxblinkenwall.2 ./toxblinkenwall.3
+    mv ./core.2 ./core.3
+    mv ./stdlog.log.2 ./stdlog.log.3
+    # -------------------------------
+    mv ./toxblinkenwall.1 ./toxblinkenwall.2
+    mv ./core.1 ./core.2
+    mv ./stdlog.log.1 ./stdlog.log.2
+    # -------------------------------
+    mv ./toxblinkenwall ./toxblinkenwall.1
+    mv ./core ./core.1
+    mv ./stdlog.log ./stdlog.log.1
+    # save debug info ---------------
+    #
 	sleep 4
 
     # ---- only for RASPI ----
