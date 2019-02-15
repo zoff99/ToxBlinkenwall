@@ -9,8 +9,6 @@
 <img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/doc/images/wall_003.png" height="250" />
 <br><br>
 
-### Installation [Raspberry Pi or Linux]
-use files in this directory: [https://github.com/zoff99/ToxBlinkenwall/tree/master/__first_install_on_pi](https://github.com/zoff99/ToxBlinkenwall/tree/master/__first_install_on_pi)
 
 <img src="https://raw.githubusercontent.com/zoff99/ToxBlinkenwall/master/toxblinkenwall_001.png"
       alt="logo"
