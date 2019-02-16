@@ -86,6 +86,8 @@ while [ 1 == 1 ]; do
     # v4l2-ctl -d "$video_device" --set-priority=3
     v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
+    # set own camera preview size
+    v4l2-ctl -d "$video_device" --set-fmt-overlay=top=930,left=1658,width=250,height=141
 
     #        rotate (int)    : min=0 max=360 step=90 default=0 value=0 flags=00000400
     #
@@ -155,23 +157,27 @@ while [ 1 == 1 ]; do
     fi
 
     ulimit -c 99999
+    v4l2-ctl --overlay=0
 	./toxblinkenwall $HD_FROM_CAM $tor_option -u "$fb_device" -j "$BKWALL_WIDTH" -k "$BKWALL_HEIGHT" -d "$video_device" > "$std_log" 2>&1
+    v4l2-ctl --overlay=0
     scripts/on_callend.sh
     scripts/on_offline.sh
     #
-    # save debug info ---------------
-    mv ./toxblinkenwall.2 ./toxblinkenwall.3
-    mv ./core.2 ./core.3
-    mv ./stdlog.log.2 ./stdlog.log.3
-    # -------------------------------
-    mv ./toxblinkenwall.1 ./toxblinkenwall.2
-    mv ./core.1 ./core.2
-    mv ./stdlog.log.1 ./stdlog.log.2
-    # -------------------------------
-    mv ./toxblinkenwall ./toxblinkenwall.1
-    mv ./core ./core.1
-    mv ./stdlog.log ./stdlog.log.1
-    # save debug info ---------------
+    if [ -f "OPTION_USE_STDLOG" ]; then
+        # save debug info ---------------
+        mv ./toxblinkenwall.2 ./toxblinkenwall.3
+        mv ./core.2 ./core.3
+        mv ./stdlog.log.2 ./stdlog.log.3
+        # -------------------------------
+        mv ./toxblinkenwall.1 ./toxblinkenwall.2
+        mv ./core.1 ./core.2
+        mv ./stdlog.log.1 ./stdlog.log.2
+        # -------------------------------
+        cp ./toxblinkenwall ./toxblinkenwall.1
+        mv ./core ./core.1
+        mv ./stdlog.log ./stdlog.log.1
+        # save debug info ---------------
+    fi
     #
 	sleep 4
 

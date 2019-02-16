@@ -308,7 +308,7 @@ int using_h264_hw_accel = 0;
 int using_h264_encoder_in_toxcore = 0;
 int hw_encoder_wanted = 1;
 int hw_encoder_wanted_prev = 1;
-int show_own_cam = 0;
+int show_own_cam = 1;
 
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
@@ -1515,6 +1515,7 @@ void button_d()
 // stuff to do when we end a call
 void on_end_call()
 {
+    toggle_own_cam(0);
 #ifdef HAVE_OUTPUT_OMX
 
     if (omx_initialized == 1)
@@ -1545,6 +1546,8 @@ void on_start_call()
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallstart);
 
     if (system(cmd_str));
+
+    toggle_own_cam(1);
 }
 
 
@@ -10925,7 +10928,7 @@ int main(int argc, char *argv[])
     on_start();
     // don't accept calls until video device is ready
     accepting_calls = 0;
-    show_own_cam = 0;
+    show_own_cam = 1;
     show_endless_loading();
     global_want_restart = 0;
     global_video_active = 0;
