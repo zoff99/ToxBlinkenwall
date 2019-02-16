@@ -136,19 +136,19 @@ while [ 1 == 1 ]; do
     mkdir -p ./db/
 
     tor_option=" "
-    if [ -e "OPTION_USETOR" ]; then
+    if [ -f "OPTION_USETOR" ]; then
         tor_option=" -T "
     fi
 
     ldd toxblinkenwall|grep -i libasan > /dev/null 2>&1
     use_asan_lib=$?
     if [ $use_asan_lib -eq 0 ]; then
-    # if [ -e "OPTION_USE_ASAN" ]; then
+    # if [ -f "OPTION_USE_ASAN" ]; then
         export LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
         export ASAN_OPTIONS=malloc_context_size=100:check_initialization_order=true # verbosity=2:
     fi
 
-    if [ -e "OPTION_USE_STDLOG" ]; then
+    if [ -f "OPTION_USE_STDLOG" ]; then
         std_log=stdlog.log
     else
         std_log=/dev/null
@@ -181,7 +181,7 @@ while [ 1 == 1 ]; do
     #fi
     # ---- only for RASPI ----
 
-    if [ -e "OPTION_NOLOOP" ]; then
+    if [ -f "OPTION_NOLOOP" ]; then
         # do not loop/restart
         clean_up
         exit 1
