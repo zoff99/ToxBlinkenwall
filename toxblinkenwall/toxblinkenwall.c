@@ -3692,6 +3692,14 @@ void invite_toxid_as_friend(Tox *tox, uint8_t *tox_id_bin)
                                             (size_t) strlen(message_str),
                                             &error);
 
+        // -------- we can activate this if we run into problems --------
+        // -------- we can activate this if we run into problems --------
+        // just in case, add the friend no matter what
+        // TOX_ERR_FRIEND_ADD dummy_error;
+        // uint32_t dummy = tox_friend_add_norequest(tox, (uint8_t *) tox_id_bin, &dummy_error);
+        // -------- we can activate this if we run into problems --------
+        // -------- we can activate this if we run into problems --------
+
         if (error != 0)
         {
             if (error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
