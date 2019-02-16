@@ -308,6 +308,7 @@ int using_h264_hw_accel = 0;
 int using_h264_encoder_in_toxcore = 0;
 int hw_encoder_wanted = 1;
 int hw_encoder_wanted_prev = 1;
+int show_own_cam = 0;
 
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
@@ -1432,6 +1433,7 @@ void toggle_own_cam(int on_off)
     // TODO: make this better, and also select the correct camera device, if more than 1 camera
     char cmd_str[1000];
     CLEAR(cmd_str);
+    show_own_cam = on_off;
 
     if (on_off == 1)
     {
@@ -1489,9 +1491,10 @@ void button_a()
 
 void button_b()
 {
-    if (global_video_active == 0)
+    if (global_video_active == 1)
     {
-        show_tox_client_application_download_links();
+        show_own_cam = 1 - show_own_cam;
+        toggle_own_cam(show_own_cam);
     }
 }
 
@@ -9437,6 +9440,36 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: CALL:3\n");
                 call_entry_num(tox, 3);
             }
+            else if (strncmp((char *)buf, "call:4", strlen((char *)"call:4")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:4\n");
+                call_entry_num(tox, 4);
+            }
+            else if (strncmp((char *)buf, "call:5", strlen((char *)"call:5")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:5\n");
+                call_entry_num(tox, 5);
+            }
+            else if (strncmp((char *)buf, "call:6", strlen((char *)"call:6")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:6\n");
+                call_entry_num(tox, 6);
+            }
+            else if (strncmp((char *)buf, "call:7", strlen((char *)"call:7")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:7\n");
+                call_entry_num(tox, 7);
+            }
+            else if (strncmp((char *)buf, "call:8", strlen((char *)"call:8")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:8\n");
+                call_entry_num(tox, 8);
+            }
+            else if (strncmp((char *)buf, "call:9", strlen((char *)"call:9")) == 0)
+            {
+                dbg(2, "ExtKeys: CALL:9\n");
+                call_entry_num(tox, 9);
+            }
             else if (strncmp((char *)buf, "hangup:", strlen((char *)"hangup:")) == 0)
             {
                 dbg(2, "ExtKeys: HANGUP:\n");
@@ -10892,6 +10925,7 @@ int main(int argc, char *argv[])
     on_start();
     // don't accept calls until video device is ready
     accepting_calls = 0;
+    show_own_cam = 0;
     show_endless_loading();
     global_want_restart = 0;
     global_video_active = 0;

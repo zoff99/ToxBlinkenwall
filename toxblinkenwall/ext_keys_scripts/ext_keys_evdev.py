@@ -4,6 +4,7 @@
 #
 # ToxBlinkenwall - keyboard input script
 # (C)strfry in 2019
+# (C)Zoff in 2019
 #
 # https://github.com/Zoxcore/ToxBlinkenwall
 #
@@ -77,8 +78,8 @@ keymap = {
     ecodes.KEY_B: "BT-B:\n",
     ecodes.KEY_C: "BT-C:\n",
     ecodes.KEY_D: "BT-D:\n",
-    ecodes.KEY_S: "toggle_speaker:\n",
-    ecodes.KEY_Q: "toggle_quality:\n",
+    # ecodes.KEY_S: "toggle_speaker:\n",
+    # ecodes.KEY_Q: "toggle_quality:\n",
 }
 
 keyboards = []
