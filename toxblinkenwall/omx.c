@@ -226,11 +226,16 @@ void omx_display_disable(struct omx_state *st)
         return;
     }
 
+    //
+    // ------- disable this function ----------
+    // return;
+    // ------- disable this function ----------
+    //
     memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
     config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
     config.nVersion.nVersion = OMX_VERSION;
     config.nPortIndex = VIDEO_RENDER_PORT;
-    config.fullscreen = 0;
+    config.fullscreen = OMX_FALSE;
     config.set = OMX_DISPLAY_SET_FULLSCREEN;
     err = OMX_SetParameter(st->video_render,
                            OMX_IndexConfigDisplayRegion, &config);
@@ -300,10 +305,42 @@ int omx_display_enable(struct omx_state *st,
     config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
     config.nVersion.nVersion = OMX_VERSION;
     config.nPortIndex = VIDEO_RENDER_PORT;
-    config.fullscreen = 1;
-    config.set = OMX_DISPLAY_SET_FULLSCREEN;
+    //
+    //
+// #define DEBUG_VIDEO_IN_FRAME 1
+    //
+    //
+#ifdef DEBUG_VIDEO_IN_FRAME
+    config.dest_rect.x_offset  = 0;
+    config.dest_rect.y_offset  = 0;
+    config.dest_rect.width     = (int)(1920 / 2);
+    config.dest_rect.height    = (int)(1080 / 2);
+    // all zeros means use the whole source frame
+    // config.src_rect.x_offset   = 0;
+    // config.src_rect.y_offset   = 0;
+    // config.src_rect.width      = 0;
+    // config.src_rect.height     = 0;
+    // all zeros means use the whole source frame
+    config.mode = OMX_DISPLAY_MODE_LETTERBOX;
+    config.transform = OMX_DISPLAY_ROT0;
+    // config.transform = OMX_DISPLAY_ROT90;
+    config.fullscreen = OMX_FALSE;
+    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM | OMX_DISPLAY_SET_DEST_RECT |
+                                      OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
+#else
+    config.fullscreen = OMX_TRUE;
+    config.mode = OMX_DISPLAY_MODE_LETTERBOX;
+    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
+#endif
+    //
     err |= OMX_SetParameter(st->video_render,
                             OMX_IndexConfigDisplayRegion, &config);
+
+    if (err != 0)
+    {
+        dbg(9, "omx_display_enable: couldn't configure display region\n");
+    }
+
 #endif
     memset(&portdef, 0, sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
     portdef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
@@ -325,16 +362,19 @@ int omx_display_enable(struct omx_state *st,
         portdef.format.video.nFrameHeight,
         portdef.format.video.nStride,
         portdef.format.video.nSliceHeight);
+    //
     portdef.format.video.nFrameWidth = width;
     portdef.format.video.nFrameHeight = height;
     portdef.format.video.nStride = stride;
     portdef.format.video.nSliceHeight = height;
+    //
     portdef.bEnabled = 1;
     dbg(9, "omx port definition(after): h=%d w=%d s=%d sh=%d\n",
         portdef.format.video.nFrameWidth,
         portdef.format.video.nFrameHeight,
         portdef.format.video.nStride,
         portdef.format.video.nSliceHeight);
+    //
     err |= OMX_SetParameter(st->video_render,
                             OMX_IndexParamPortDefinition, &portdef);
 
