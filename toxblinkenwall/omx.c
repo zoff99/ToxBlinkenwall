@@ -176,7 +176,7 @@ static void block_until_state_changed(OMX_HANDLETYPE hComponent,
 
         loop_counter++;
 
-        if (loop_counter > 30)
+        if (loop_counter > 50)
         {
             // we don't want to get stuck here
             break;
@@ -204,7 +204,7 @@ void omx_deinit(struct omx_state *st)
 #if 0
     block_until_state_changed(st->video_render, OMX_StateLoaded);
 #else
-    usleep_usec(150000);
+    usleep_usec(250000);
 #endif
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
@@ -281,7 +281,7 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
 
         loop_counter++;
 
-        if (loop_counter > 30)
+        if (loop_counter > 50)
         {
             // we don't want to get stuck here
             break;
@@ -315,15 +315,9 @@ int omx_display_enable(struct omx_state *st,
     config.dest_rect.y_offset  = 0;
     config.dest_rect.width     = (int)(1920 / 2);
     config.dest_rect.height    = (int)(1080 / 2);
-    // all zeros means use the whole source frame
-    // config.src_rect.x_offset   = 0;
-    // config.src_rect.y_offset   = 0;
-    // config.src_rect.width      = 0;
-    // config.src_rect.height     = 0;
-    // all zeros means use the whole source frame
     config.mode = OMX_DISPLAY_MODE_LETTERBOX;
-    config.transform = OMX_DISPLAY_ROT0;
-    // config.transform = OMX_DISPLAY_ROT90;
+    // config.transform = OMX_DISPLAY_ROT0;
+    config.transform = OMX_DISPLAY_ROT90;
     config.fullscreen = OMX_FALSE;
     config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM | OMX_DISPLAY_SET_DEST_RECT |
                                       OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
@@ -357,6 +351,7 @@ int omx_display_enable(struct omx_state *st,
         goto exit;
     }
 
+    //
     dbg(9, "omx port definition(before): h=%d w=%d s=%d sh=%d\n",
         portdef.format.video.nFrameWidth,
         portdef.format.video.nFrameHeight,
@@ -369,6 +364,7 @@ int omx_display_enable(struct omx_state *st,
     portdef.format.video.nSliceHeight = height;
     //
     portdef.bEnabled = 1;
+    //
     dbg(9, "omx port definition(after): h=%d w=%d s=%d sh=%d\n",
         portdef.format.video.nFrameWidth,
         portdef.format.video.nFrameHeight,
