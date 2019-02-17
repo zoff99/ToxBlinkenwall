@@ -307,7 +307,7 @@ int omx_display_enable(struct omx_state *st,
     config.nPortIndex = VIDEO_RENDER_PORT;
     //
     //
-// #define DEBUG_VIDEO_IN_FRAME 1
+    // #define DEBUG_VIDEO_IN_FRAME 1
     //
     //
 #ifdef DEBUG_VIDEO_IN_FRAME

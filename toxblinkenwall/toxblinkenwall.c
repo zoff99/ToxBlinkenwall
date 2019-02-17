@@ -7064,7 +7064,7 @@ static void *video_play(void *dummy)
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
 #ifndef HAVE_OUTPUT_OMX
-    sem_post(&video_in_frame_copy_sem);
+    //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
@@ -7155,8 +7155,9 @@ static void *video_play(void *dummy)
         if (err)
         {
             dbg(9, "omx_display_enable ERR=%d\n", err);
-            sem_post(&video_in_frame_copy_sem);
-            pthread_exit(0);
+            //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
+            //*SINGLE*THREADED*// pthread_exit(0);
+            return;
         }
 
         omx_w = frame_width_px;
@@ -7191,7 +7192,7 @@ static void *video_play(void *dummy)
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
     omx_display_flush_buffer(&omx);
-    sem_post(&video_in_frame_copy_sem);
+    //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER
     full_width = var_framebuffer_info.xres;
@@ -7484,7 +7485,11 @@ static void *video_play(void *dummy)
 #endif
     dec_video_t_counter();
     // dbg(9, "VP-DEBUG:022-EXIT\n");
+#ifdef HAVE_OUTPUT_OMX
+    //*SINGLE*THREADED*// pthread_exit(0);
+#else
     pthread_exit(0);
+#endif
 }
 
 
@@ -7581,6 +7586,9 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 video__ystride = ystride;
                 video__ustride = ustride;
                 video__vstride = vstride;
+#ifdef HAVE_OUTPUT_OMX
+                video_play((void *)NULL);
+#else
                 pthread_t video_play_thread;
 
                 if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
@@ -7614,6 +7622,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 //PL// sem_post(&video_play_lock);
+#endif
             }
         }
         else
