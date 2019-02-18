@@ -7167,6 +7167,13 @@ static void *video_play(void *dummy)
     void *buf = NULL;
     uint32_t len = 0;
     omx_display_input_buffer(&omx, &buf, &len);
+
+    uint32_t yuf_data_buf_len = y_layer_size + u_layer_size + v_layer_size;
+    if (yuf_data_buf_len > len)
+    {
+        dbg(9, "OMX: Error buffer too small !!!!!!\n");
+    }
+
     // dbg(9, "omx plen=%d\n", (int)(len));
     memcpy(buf, video__y, y_layer_size);
     memcpy(buf + y_layer_size, video__u, u_layer_size);
@@ -7191,7 +7198,7 @@ static void *video_play(void *dummy)
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
-    omx_display_flush_buffer(&omx);
+    omx_display_flush_buffer(&omx, yuf_data_buf_len);
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER

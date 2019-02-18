@@ -14,7 +14,6 @@
  * Copyright (C) 2018 - 2019 Zoff <zoff@zoff.cc>
  */
 
-// #define _POSIX_C_SOURCE 199309L
 
 #include "omx.h"
 
@@ -33,10 +32,7 @@ void usleep_usec(uint64_t msec);
 #include <time.h>
 #include <sys/time.h>
 
-#ifdef RASPBERRY_PI
-    #include <bcm_host.h>
-#endif
-
+#include <bcm_host.h>
 
 /**
  * @defgroup omx omx
@@ -45,24 +41,7 @@ void usleep_usec(uint64_t msec);
  *  * Proper sync OMX events across threads, instead of busy waiting
  */
 
-#ifdef RASPBERRY_PI
-    static const int VIDEO_RENDER_PORT = 90;
-#else
-    static const int VIDEO_RENDER_PORT = 0;
-#endif
-
-/*
-static void setHeader(OMX_PTR header, OMX_U32 size) {
-  OMX_VERSIONTYPE* ver = (OMX_VERSIONTYPE*)(header + sizeof(OMX_U32));
-  *((OMX_U32*)header) = size;
-
-  ver->s.nVersionMajor = VERSIONMAJOR;
-  ver->s.nVersionMinor = VERSIONMINOR;
-  ver->s.nRevision = VERSIONREVISION;
-  ver->s.nStep = VERSIONSTEP;
-}
-* */
-
+static const int VIDEO_RENDER_PORT = 90;
 
 static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
                                   OMX_EVENTTYPE eEvent, OMX_U32 nData1, OMX_U32 nData2,
@@ -131,18 +110,12 @@ static struct OMX_CALLBACKTYPE callbacks =
 int omx_init(struct omx_state *st)
 {
     OMX_ERRORTYPE err;
-#ifdef RASPBERRY_PI
     bcm_host_init();
-#endif
+
     st->buffers = NULL;
     err = OMX_Init();
-#ifdef RASPBERRY_PI
     err |= OMX_GetHandle(&st->video_render,
                          "OMX.broadcom.video_render", 0, &callbacks);
-#else
-    err |= OMX_GetHandle(&st->video_render,
-                         "OMX.st.video.xvideosink", 0, &callbacks);
-#endif
 
     if (!st->video_render || err != 0)
     {
@@ -192,20 +165,16 @@ void omx_deinit(struct omx_state *st)
         return;
     }
 
-    dbg(9, "omx_deinit:001\n");
     OMX_SendCommand(st->video_render,
                     OMX_CommandStateSet, OMX_StateIdle, NULL);
-    dbg(9, "omx_deinit:002\n");
     block_until_state_changed(st->video_render, OMX_StateIdle);
     dbg(9, "omx_deinit:003\n");
     OMX_SendCommand(st->video_render,
                     OMX_CommandStateSet, OMX_StateLoaded, NULL);
     dbg(9, "omx_deinit:004\n");
-#if 0
-    block_until_state_changed(st->video_render, OMX_StateLoaded);
-#else
-    usleep_usec(250000);
-#endif
+
+    usleep_usec(150000);
+
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
     dbg(9, "omx_deinit:006\n");
@@ -217,7 +186,7 @@ void omx_deinit(struct omx_state *st)
 void omx_display_disable(struct omx_state *st)
 {
     dbg(9, "omx_display_disable\n");
-#ifdef RASPBERRY_PI
+
     OMX_ERRORTYPE err;
     OMX_CONFIG_DISPLAYREGIONTYPE config;
 
@@ -226,11 +195,6 @@ void omx_display_disable(struct omx_state *st)
         return;
     }
 
-    //
-    // ------- disable this function ----------
-    // return;
-    // ------- disable this function ----------
-    //
     memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
     config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
     config.nVersion.nVersion = OMX_VERSION;
@@ -245,9 +209,6 @@ void omx_display_disable(struct omx_state *st)
         dbg(9, "omx_display_disable command failed\n");
     }
 
-#else
-    (void)st;
-#endif
 }
 
 
@@ -295,19 +256,18 @@ int omx_display_enable(struct omx_state *st,
 {
     unsigned int i;
     OMX_PARAM_PORTDEFINITIONTYPE portdef;
-#ifdef RASPBERRY_PI
     OMX_CONFIG_DISPLAYREGIONTYPE config;
-#endif
+
     OMX_ERRORTYPE err = 0;
     dbg(9, "omx_update_size %d %d %d\n", width, height, stride);
-#ifdef RASPBERRY_PI
+
     memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
     config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
     config.nVersion.nVersion = OMX_VERSION;
     config.nPortIndex = VIDEO_RENDER_PORT;
     //
     //
-    // #define DEBUG_VIDEO_IN_FRAME 1
+// #define DEBUG_VIDEO_IN_FRAME 1
     //
     //
 #ifdef DEBUG_VIDEO_IN_FRAME
@@ -335,7 +295,6 @@ int omx_display_enable(struct omx_state *st,
         dbg(9, "omx_display_enable: couldn't configure display region\n");
     }
 
-#endif
     memset(&portdef, 0, sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
     portdef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
     portdef.nVersion.nVersion = OMX_VERSION;
@@ -455,8 +414,13 @@ int omx_display_input_buffer(struct omx_state *st,
 }
 
 
-int omx_display_flush_buffer(struct omx_state *st)
+int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
 {
+    st->buffers[0]->nFlags = OMX_BUFFERFLAG_STARTTIME;
+    st->buffers[0]->nOffset = 0;
+    st->buffers[0]->nFilledLen = data_len;
+    st->buffers[0]->nTimeStamp = omx_ticks_from_s64 (0);
+
     if (OMX_EmptyThisBuffer(st->video_render, st->buffers[0])
             != OMX_ErrorNone)
     {

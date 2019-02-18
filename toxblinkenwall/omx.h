@@ -15,19 +15,9 @@
 
 #include <semaphore.h>
 
-#ifdef RASPBERRY_PI
-    #include <IL/OMX_Core.h>
-    #include <IL/OMX_Video.h>
-    #include <IL/OMX_Broadcom.h>
-#else
-    #include <OMX_Core.h>
-    #include <OMX_Component.h>
-    #include <OMX_Video.h>
-
-    #undef OMX_VERSION
-    #define OMX_VERSION 0x01010101
-    #define OMX_ERROR_NONE 0
-#endif
+#include <IL/OMX_Core.h>
+#include <IL/OMX_Video.h>
+#include <IL/OMX_Broadcom.h>
 
 #include <pthread.h>
 #include <stdint.h>
@@ -47,7 +37,7 @@ void omx_deinit(struct omx_state *st);
 
 int omx_display_input_buffer(struct omx_state *st,
                              void **pbuf, uint32_t *plen);
-int omx_display_flush_buffer(struct omx_state *st);
+int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len);
 
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride);
