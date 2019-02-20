@@ -245,6 +245,8 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
     }
 }
 
+#ifdef DEBUG_OMX_TEST_PROGRAM
+
 int omx_display_xy(int flag, struct omx_state *st,
                    int width, int height, int stride)
 {
@@ -284,6 +286,7 @@ int omx_display_xy(int flag, struct omx_state *st,
                             OMX_IndexConfigDisplayRegion, &config);
 }
 
+#endif
 
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride)

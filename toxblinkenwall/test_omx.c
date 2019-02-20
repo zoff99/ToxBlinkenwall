@@ -10,6 +10,7 @@
  *
 
 gcc -O0 \
+-DDEBUG_OMX_TEST_PROGRAM \
 -DRASPBERRY_PI -DOMX_SKIP64BIT -DUSE_VCHIQ_ARM \
 -I/opt/vc/include -I/opt/vc/interface/vmcs_host/linux -I/opt/vc/interface/vcos/pthreads \
 -fPIC -export-dynamic -o test_omx \
