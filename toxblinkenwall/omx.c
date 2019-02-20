@@ -31,17 +31,23 @@ void usleep_usec(uint64_t msec);
 /* Avoids a VideoCore header warning about clock_gettime() */
 #include <time.h>
 #include <sys/time.h>
+#include <semaphore.h>
 
-#include <bcm_host.h>
+#ifdef RASPBERRY_PI
+    #include <bcm_host.h>
+#endif
 
-/**
- * @defgroup omx omx
- *
- * TODO:
- *  * Proper sync OMX events across threads, instead of busy waiting
- */
+#ifdef RASPBERRY_PI
+    static const int VIDEO_RENDER_PORT = 90;
+#else
+    static const int VIDEO_RENDER_PORT = 0;
+#endif
 
-static const int VIDEO_RENDER_PORT = 90;
+
+struct omx_buffer {
+    OMX_BUFFERHEADERTYPE* header;
+    sem_t semaphore;
+};
 
 static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
                                   OMX_EVENTTYPE eEvent, OMX_U32 nData1, OMX_U32 nData2,
@@ -82,11 +88,12 @@ static OMX_ERRORTYPE EmptyBufferDone(OMX_HANDLETYPE hComponent,
     (void) hComponent;
     (void) pAppData;
     (void) pBuffer;
-    /* TODO: Wrap every call that can generate an event,
-     * and panic if an unexpected event arrives */
+
+    struct omx_buffer* buffer = pBuffer->pAppPrivate;
+    sem_post(&buffer->semaphore);
+
     return 0;
 }
-
 
 static OMX_ERRORTYPE FillBufferDone(OMX_HANDLETYPE hComponent,
                                     OMX_PTR pAppData, OMX_BUFFERHEADERTYPE *pBuffer)
@@ -245,51 +252,6 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
     }
 }
 
-#ifdef DEBUG_OMX_TEST_PROGRAM
-
-int omx_display_xy(int flag, struct omx_state *st,
-                   int width, int height, int stride)
-{
-    unsigned int i;
-    OMX_PARAM_PORTDEFINITIONTYPE portdef;
-    OMX_CONFIG_DISPLAYREGIONTYPE config;
-    OMX_ERRORTYPE err = 0;
-    dbg(9, "omx_update_size %d %d %d\n", width, height, stride);
-    memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
-    config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
-    config.nVersion.nVersion = OMX_VERSION;
-    config.nPortIndex = VIDEO_RENDER_PORT;
-    //
-    //
-    //
-    //
-    config.dest_rect.x_offset  = 0;
-    config.dest_rect.y_offset  = 0;
-    config.dest_rect.width     = (int)(1920 / 2);
-    config.dest_rect.height    = (int)(1080 / 2);
-    config.mode = OMX_DISPLAY_MODE_LETTERBOX;
-
-    if (flag == 0)
-    {
-        config.transform = OMX_DISPLAY_ROT0;
-    }
-    else
-    {
-        config.transform = OMX_DISPLAY_ROT90;
-    }
-
-    config.fullscreen = OMX_FALSE;
-    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM | OMX_DISPLAY_SET_DEST_RECT |
-                                      OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
-    //
-    err |= OMX_SetParameter(st->video_render,
-                            OMX_IndexConfigDisplayRegion, &config);
-    return err;
-}
-
-#endif
-
-
 int omx_change_video_out_rotation(struct omx_state *st, int angle)
 {
     unsigned int i;
@@ -442,14 +404,14 @@ int omx_display_enable(struct omx_state *st,
     if (!st->buffers)
     {
         st->buffers =
-            malloc(portdef.nBufferCountActual * sizeof(void *));
+            malloc(portdef.nBufferCountActual * sizeof(struct omx_buffer));
         st->num_buffers = portdef.nBufferCountActual;
         st->current_buffer = 0;
 
         for (i = 0; i < portdef.nBufferCountActual; i++)
         {
             err = OMX_AllocateBuffer(st->video_render,
-                                     &st->buffers[i], VIDEO_RENDER_PORT,
+                                     &st->buffers[i].header, VIDEO_RENDER_PORT,
                                      st, portdef.nBufferSize);
 
             if (err)
@@ -459,6 +421,9 @@ int omx_display_enable(struct omx_state *st,
                 err = ENOMEM;
                 goto exit;
             }
+
+            st->buffers[i].header->pAppPrivate = &st->buffers[i];
+            sem_init(&st->buffers[i].semaphore, 0, 1);
         }
     }
 
@@ -473,35 +438,42 @@ exit:
 int omx_display_input_buffer(struct omx_state *st,
                              void **pbuf, uint32_t *plen)
 {
-    int buf_idx;
+    struct omx_buffer* cur_buf = &st->buffers[st->current_buffer];
 
     if (!st->buffers)
     {
         return EINVAL;
     }
 
-    buf_idx = st->current_buffer;
-    *pbuf = st->buffers[buf_idx]->pBuffer;
-    *plen = st->buffers[buf_idx]->nAllocLen;
-    st->buffers[buf_idx]->nFilledLen = *plen;
-    st->buffers[buf_idx]->nOffset = 0;
+    *pbuf = cur_buf->header->pBuffer;
+    *plen = cur_buf->header->nAllocLen;
+    cur_buf->header->nFilledLen = *plen;
+    cur_buf->header->nOffset = 0;
+
     return 0;
 }
 
 int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
 {
-    int buf_idx = st->current_buffer;
-    st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
-    st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME;
-    st->buffers[buf_idx]->nOffset = 0;
-    st->buffers[buf_idx]->nFilledLen = data_len;
-    st->buffers[buf_idx]->nTimeStamp = omx_ticks_from_s64(0);
+    struct timespec wait_time;
+    struct omx_buffer* cur_buf = &st->buffers[st->current_buffer];
 
-    if (OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx])
+    clock_gettime(CLOCK_REALTIME, &wait_time);
+    wait_time.tv_sec += 1;
+
+    if (sem_timedwait(&cur_buf->semaphore, &wait_time)) {
+        dbg(9, "omx_display_flush_buffer: buffer not empty after 1000 ms\n");
+        return -ETIMEDOUT;
+    }
+
+    if (OMX_EmptyThisBuffer(st->video_render, cur_buf->header)
             != OMX_ErrorNone)
     {
         dbg(9, "OMX_EmptyThisBuffer error\n");
+        return -EIO;
     }
+
+    st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
 
     return 0;
 }

@@ -1,0 +1,2 @@
+test_omx: omx.c omx.h test_omx.c
+	gcc test_omx.c omx.c  -DRASPBERRY_PI -D OMX_SKIP64BIT -I /opt/vc/include/ -L /opt/vc/lib/  -lopenmaxil -lbcm_host -DDEBUG_VIDEO_IN_FRAME -g -pthread -o test_omx

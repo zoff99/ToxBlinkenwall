@@ -13,7 +13,6 @@
  * Copyright (C) 2016 - 2017 Jonathan Sieber
  */
 
-#include <semaphore.h>
 
 #include <IL/OMX_Core.h>
 #include <IL/OMX_Video.h>
@@ -27,7 +26,7 @@
 struct omx_state
 {
     OMX_HANDLETYPE video_render;
-    OMX_BUFFERHEADERTYPE **buffers;
+    struct omx_buffer *buffers;
     int num_buffers;
     int current_buffer;
 };
@@ -37,7 +36,9 @@ void omx_deinit(struct omx_state *st);
 int omx_display_input_buffer(struct omx_state *st,
                              void **pbuf, uint32_t *plen);
 int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len);
+
 int omx_change_video_out_rotation(struct omx_state *st, int angle);
+
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride);
 void omx_display_disable(struct omx_state *st);

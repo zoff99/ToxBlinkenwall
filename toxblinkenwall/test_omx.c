@@ -1,32 +1,8 @@
-
 #include "omx.h"
 
 #include <time.h>
 #include <assert.h>
 #include <signal.h>
-
-/*
- * 
- *
-
-gcc -O0 \
--DDEBUG_OMX_TEST_PROGRAM \
--DRASPBERRY_PI -DOMX_SKIP64BIT -DUSE_VCHIQ_ARM \
--I/opt/vc/include -I/opt/vc/interface/vmcs_host/linux -I/opt/vc/interface/vcos/pthreads \
--fPIC -export-dynamic -o test_omx \
--lm \
-test_omx.c omx.c \
--I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads \
--I/opt/vc/include/interface/vmcs_host/linux -lbrcmEGL -lbrcmGLESv2 \
--lbcm_host -L/opt/vc/lib \
--std=gnu99 \
--lrt \
--lpthread -lv4lconvert \
--lmmal -lmmal_core -lmmal_vc_client -lmmal_components -lmmal_util \
--L/opt/vc/lib -lbcm_host -lvcos -lopenmaxil -ldl
-
- * 
- */
 
 void dbg(int level, const char *fmt, ...)
 {
@@ -89,7 +65,8 @@ int main()
     uint32_t buf_len, fill_len, i;
     int ret;
 
-    i = 1000;
+    int angle = 0;
+    i = 400;
 
     ret = omx_init(&omx);
     assert(ret == 0);
@@ -99,7 +76,16 @@ int main()
     ret = omx_display_enable(&omx, WIDTH, HEIGHT, STRIDE);
     assert(ret == 0);
 
-    while (i--) {
+    while (angle < 360) {
+        if (i-- == 0)
+        {
+             i = 400;
+             angle += 90;
+        }
+
+	ret = omx_change_video_out_rotation(&omx, angle);
+        assert(ret == 0);
+
         ret = omx_display_input_buffer(&omx, &pbuf, &buf_len);
         assert(ret == 0);
 
@@ -108,20 +94,7 @@ int main()
 
         ret = omx_display_flush_buffer(&omx, fill_len);
         assert(ret == 0);
-       
-        
-        if (i == 800)
-        {
-            omx_display_xy(1, &omx, WIDTH, HEIGHT, STRIDE);
-        }
-
-        if (i == 400)
-        {
-            omx_display_xy(0, &omx, WIDTH, HEIGHT, STRIDE);
-        }
-
     }
 
     deinit(0);
 }
-
