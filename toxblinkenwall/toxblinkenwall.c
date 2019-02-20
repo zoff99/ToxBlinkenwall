@@ -7186,7 +7186,7 @@ static void *video_play(void *dummy)
             dbg(9, "omx_display_enable ERR=%d\n", err);
             //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
             //*SINGLE*THREADED*// pthread_exit(0);
-            return;
+            return (void *)NULL;
         }
 
         omx_w = frame_width_px;
@@ -7233,9 +7233,9 @@ static void *video_play(void *dummy)
             ||
             (global_display_orientation_angle_prev != global_display_orientation_angle))
     {
-        uint32_t rotate_angle = global_video_incoming_orientation_angle - global_display_orientation_angle
+        uint32_t rotate_angle = global_video_incoming_orientation_angle - global_display_orientation_angle;
 
-                                if (rotate_angle < 0)
+        if (rotate_angle < 0)
         {
             rotate_angle = 360 - rotate_angle;
         }
