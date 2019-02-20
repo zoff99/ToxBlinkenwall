@@ -983,6 +983,8 @@ uint32_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_video_h264_incoming_profile = 0;
 uint32_t global_video_h264_incoming_level = 0;
+uint32_t global_video_incoming_orientation_angle = 0;
+uint32_t global_video_incoming_orientation_angle_prev = 0;
 uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
@@ -1530,6 +1532,8 @@ void on_end_call()
 
     update_omx_osd_counter = 999;
 #endif
+    global_video_incoming_orientation_angle_prev = 0;
+    global_video_incoming_orientation_angle = 0;
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallend);
@@ -5961,6 +5965,29 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_video_h264_incoming_level = (uint32_t)comm_number;
     }
+    else if (comm_value == TOXAV_CALL_COMM_PLAY_VIDEO_ORIENTATION)
+    {
+        if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
+        {
+            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+            global_video_incoming_orientation_angle = 0;
+        }
+        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_90)
+        {
+            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+            global_video_incoming_orientation_angle = 90;
+        }
+        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_180)
+        {
+            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+            global_video_incoming_orientation_angle = 180;
+        }
+        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270)
+        {
+            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+            global_video_incoming_orientation_angle = 270;
+        }
+    }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
     {
         global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
@@ -7199,6 +7226,13 @@ static void *video_play(void *dummy)
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
+
+    if (global_video_incoming_orientation_angle_prev != global_video_incoming_orientation_angle)
+    {
+        omx_change_video_out_rotation(&omx, global_video_incoming_orientation_angle);
+        global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+    }
+
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER

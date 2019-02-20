@@ -284,9 +284,48 @@ int omx_display_xy(int flag, struct omx_state *st,
     //
     err |= OMX_SetParameter(st->video_render,
                             OMX_IndexConfigDisplayRegion, &config);
+    return err;
 }
 
 #endif
+
+
+int omx_change_video_out_rotation(struct omx_state *st, int angle)
+{
+    unsigned int i;
+    OMX_PARAM_PORTDEFINITIONTYPE portdef;
+    OMX_CONFIG_DISPLAYREGIONTYPE config;
+    OMX_ERRORTYPE err = 0;
+    memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
+    config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
+    config.nVersion.nVersion = OMX_VERSION;
+    config.nPortIndex = VIDEO_RENDER_PORT;
+
+    if (angle == 90)
+    {
+        config.transform = OMX_DISPLAY_ROT90;
+    }
+    else if (angle == 180)
+    {
+        config.transform = OMX_DISPLAY_ROT180;
+    }
+    else if (angle == 270)
+    {
+        config.transform = OMX_DISPLAY_ROT270;
+    }
+    else
+    {
+        // for any other angle value just assume "0" degrees
+        config.transform = OMX_DISPLAY_ROT0;
+    }
+
+    //
+    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM);
+    //
+    err |= OMX_SetParameter(st->video_render,
+                            OMX_IndexConfigDisplayRegion, &config);
+    return err;
+}
 
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride)
@@ -312,7 +351,6 @@ int omx_display_enable(struct omx_state *st,
     config.dest_rect.height    = (int)(1080 / 2);
     config.mode = OMX_DISPLAY_MODE_LETTERBOX;
     config.transform = OMX_DISPLAY_ROT0;
-    // config.transform = OMX_DISPLAY_ROT90;
     config.fullscreen = OMX_FALSE;
     config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM | OMX_DISPLAY_SET_DEST_RECT |
                                       OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
@@ -431,7 +469,6 @@ int omx_display_enable(struct omx_state *st,
 exit:
     return err;
 }
-
 
 int omx_display_input_buffer(struct omx_state *st,
                              void **pbuf, uint32_t *plen)
