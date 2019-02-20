@@ -985,6 +985,8 @@ uint32_t global_video_h264_incoming_profile = 0;
 uint32_t global_video_h264_incoming_level = 0;
 uint32_t global_video_incoming_orientation_angle = 0;
 uint32_t global_video_incoming_orientation_angle_prev = 0;
+uint32_t global_display_orientation_angle = 0;
+uint32_t global_display_orientation_angle_prev = 0;
 uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
@@ -7227,10 +7229,20 @@ static void *video_play(void *dummy)
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
 
-    if (global_video_incoming_orientation_angle_prev != global_video_incoming_orientation_angle)
+    if ((global_video_incoming_orientation_angle_prev != global_video_incoming_orientation_angle)
+            ||
+            (global_display_orientation_angle_prev != global_display_orientation_angle))
     {
-        omx_change_video_out_rotation(&omx, global_video_incoming_orientation_angle);
+        uint32_t rotate_angle = global_video_incoming_orientation_angle - global_display_orientation_angle
+
+                                if (rotate_angle < 0)
+        {
+            rotate_angle = 360 - rotate_angle;
+        }
+
+        omx_change_video_out_rotation(&omx, rotate_angle);
         global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+        global_display_orientation_angle_prev = global_display_orientation_angle;
     }
 
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
