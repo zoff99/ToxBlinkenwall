@@ -7167,8 +7167,8 @@ static void *video_play(void *dummy)
     void *buf = NULL;
     uint32_t len = 0;
     omx_display_input_buffer(&omx, &buf, &len);
-
     uint32_t yuf_data_buf_len = y_layer_size + u_layer_size + v_layer_size;
+
     if (yuf_data_buf_len > len)
     {
         dbg(9, "OMX: Error buffer too small !!!!!!\n");
