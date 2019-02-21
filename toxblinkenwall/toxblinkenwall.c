@@ -152,8 +152,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 38
-static const char global_version_string[] = "0.99.38";
+#define VERSION_PATCH 39
+static const char global_version_string[] = "0.99.39";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -770,7 +770,9 @@ const char *shell_cmd__onstart = "./scripts/on_start.sh 2> /dev/null";
 const char *shell_cmd__oncallstart = "./scripts/on_callstart.sh 2> /dev/null";
 const char *shell_cmd__oncallend = "./scripts/on_callend.sh 2> /dev/null";
 const char *shell_cmd__ononline = "./scripts/on_online.sh 2> /dev/null";
-const char *shell_cmd__onofflone = "./scripts/on_offline.sh 2> /dev/null";
+const char *shell_cmd__onoffline = "./scripts/on_offline.sh 2> /dev/null";
+const char *shell_cmd__playback_volume_up = "./alsa_mixer_ctrl.sh 1 2> /dev/null";
+const char *shell_cmd__playback_volume_down = "./alsa_mixer_ctrl.sh 0 2> /dev/null";
 const char *cmd__image_filename_full_path = "./tmp/image.dat";
 const char *cmd__image_text_full_path = "./tmp/text.dat";
 int global_want_restart = 0;
@@ -1473,7 +1475,25 @@ void on_offline()
 {
     char cmd_str[1000];
     CLEAR(cmd_str);
-    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onofflone);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onoffline);
+
+    if (system(cmd_str));
+}
+
+void playback_volume_up()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_up);
+
+    if (system(cmd_str));
+}
+
+void playback_volume_down()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_down);
 
     if (system(cmd_str));
 }
@@ -9614,6 +9634,16 @@ void *thread_ext_keys(void *data)
             {
                 dbg(2, "ExtKeys: Button D:\n");
                 button_d();
+            }
+            else if (strncmp((char *)buf, "PLAY-VOL-UP:", strlen((char *)"PLAY-VOL-UP:")) == 0)
+            {
+                dbg(2, "ExtKeys: PLAY-VOL-UP:\n");
+                playback_volume_up();
+            }
+            else if (strncmp((char *)buf, "PLAY-VOL-DOWN:", strlen((char *)"PLAY-VOL-DOWN:")) == 0)
+            {
+                dbg(2, "ExtKeys: PLAY-VOL-DOWN:\n");
+                playback_volume_down();
             }
 
             CLEAR(buf);

@@ -60,7 +60,7 @@ chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/*.py
 chmod u+x ext_keys_scripts/*.sh
-chmod a+x udev2.sh udev.sh toggle_alsa.sh detect_usb_audio.sh
+chmod a+x udev2.sh udev.sh toggle_alsa.sh detect_usb_audio.sh alsa_mixer_ctrl.sh
 scripts/stop_loading_endless.sh
 scripts/stop_image_endless.sh
 scripts/init.sh

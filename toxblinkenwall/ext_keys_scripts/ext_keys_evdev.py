@@ -78,8 +78,8 @@ keymap = {
     ecodes.KEY_B: "BT-B:\n",
     ecodes.KEY_C: "BT-C:\n",
     ecodes.KEY_D: "BT-D:\n",
-    # ecodes.KEY_S: "toggle_speaker:\n",
-    # ecodes.KEY_Q: "toggle_quality:\n",
+    ecodes.KEY_L: "PLAY-VOL-UP:\n",
+    ecodes.KEY_K: "PLAY-VOL-DOWN:\n",
 }
 
 keyboards = []
