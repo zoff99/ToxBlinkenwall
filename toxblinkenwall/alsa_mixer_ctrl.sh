@@ -9,19 +9,23 @@ fi
 
 for device_num in 0 1; do
     # loop through all playback volumes
-    for ctrl in $(amixer -c"$device_num" scontrols |sed -e 's#Simple mixer control ##'); do
-        echo $ctrl
-        amixer -c"$device_num" sget "$ctrl"|grep -i 'pvolume'
-        is_playback=$?
-        echo $is_playback
-        if [ $is_playback -eq 0 ]; then
-            if [ "$want_up""x" == "1x" ]; then
-                amixer -c"$device_num" sset "$ctrl" "3dB+" unmute
-            else
-                amixer -c"$device_num" sset "$ctrl" "3dB-" unmute
+    amixer -c"$device_num" scontrols 2>&1|head -3|grep -i 'invalid card number'
+    device_valid=$?
+    if [ $device_valid -eq 1 ]; then
+        for ctrl in $(amixer -c"$device_num" scontrols |sed -e 's#Simple mixer control ##'); do
+            echo $ctrl
+            amixer -c"$device_num" sget "$ctrl"|grep -i 'pvolume'
+            is_playback=$?
+            echo $is_playback
+            if [ $is_playback -eq 0 ]; then
+                if [ "$want_up""x" == "1x" ]; then
+                    amixer -M -c"$device_num" sset "$ctrl" "3dB+" unmute
+                else
+                    amixer -M -c"$device_num" sset "$ctrl" "3dB-" unmute
+                fi
             fi
-        fi
-    done
+        done
+    fi
 done
 
 
