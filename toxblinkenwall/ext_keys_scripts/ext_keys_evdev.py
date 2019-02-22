@@ -61,6 +61,7 @@ keymap = {
     ecodes.KEY_7: "call:7\n",
     ecodes.KEY_8: "call:8\n",
     ecodes.KEY_9: "call:9\n",
+
     # keypad keys
     ecodes.KEY_KP0: "hangup:\n",
     ecodes.KEY_KP1: "call:1\n",
@@ -72,14 +73,18 @@ keymap = {
     ecodes.KEY_KP7: "call:7\n",
     ecodes.KEY_KP8: "call:8\n",
     ecodes.KEY_KP9: "call:9\n",
+    ecodes.KEY_KPPLUS: "play-vol:up\n",
+    ecodes.KEY_KPMINUS: "play-vol:down\n",
 
     # normal keys
     ecodes.KEY_A: "BT-A:\n",
     ecodes.KEY_B: "BT-B:\n",
     ecodes.KEY_C: "BT-C:\n",
     ecodes.KEY_D: "BT-D:\n",
-    ecodes.KEY_L: "PLAY-VOL-UP:\n",
-    ecodes.KEY_K: "PLAY-VOL-DOWN:\n",
+    ecodes.KEY_L: "play-vol:up\n",
+    ecodes.KEY_K: "play-vol:down\n",
+    ecodes.KEY_C: "camera-orient:turn-right\n",
+    ecodes.KEY_D: "display-orient:turn-right\n",
 }
 
 keyboards = []

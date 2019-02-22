@@ -990,6 +990,8 @@ uint32_t global_video_incoming_orientation_angle = 0;
 uint32_t global_video_incoming_orientation_angle_prev = 0;
 uint32_t global_display_orientation_angle = 0;
 uint32_t global_display_orientation_angle_prev = 0;
+uint32_t global_camera_orientation_angle = 0;
+uint32_t global_camera_orientation_angle_prev = 0;
 uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
@@ -1639,6 +1641,23 @@ void on_start_call()
     if (system(cmd_str));
 
     toggle_own_cam(1);
+
+    if (friend_to_send_video_to > -1)
+    {
+        if ((global_camera_orientation_angle >= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
+                || (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
+        {
+            TOXAV_ERR_OPTION_SET error;
+            toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to, TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION,
+                             (int32_t)global_camera_orientation_angle, &error);
+            dbg(9, "TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION set:res=%d\n", (int)error);
+
+            if (error == TOXAV_ERR_OPTION_SET_OK)
+            {
+                global_camera_orientation_angle_prev = global_camera_orientation_angle;
+            }
+        }
+    }
 }
 
 
@@ -3625,7 +3644,7 @@ void cmd_osupdatefull(Tox *tox, uint32_t friend_number)
 
 void pick_up_call()
 {
-    // pickup on the Call ----------
+    // pickup the Call ----------
     if (call_waiting_for_answer == 1)
     {
         if ((mytox_av != NULL) && (call_waiting_friend_num != -1))
@@ -3634,7 +3653,7 @@ void pick_up_call()
         }
     }
 
-    // pickup on the Call ----------
+    // pickup the Call ----------
 }
 
 void cmd_pickup(Tox *tox, uint32_t friend_number)
@@ -7270,6 +7289,8 @@ static void *video_play(void *dummy)
     {
         omx_init(&omx);
         omx_initialized = 1;
+        // force to check rotation
+        global_display_orientation_angle_prev = 99;
     }
 
     if (frame_width_px != omx_w || frame_height_px != omx_h)
@@ -7284,6 +7305,8 @@ static void *video_play(void *dummy)
             omx_init(&omx);
             usleep_usec(10000);
             omx_initialized = 1;
+            // force to check rotation
+            global_display_orientation_angle_prev = 99;
         }
 
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
@@ -7300,6 +7323,24 @@ static void *video_play(void *dummy)
         omx_h = frame_height_px;
     }
 
+    // --- check rotation ---
+    if ((global_video_incoming_orientation_angle_prev != global_video_incoming_orientation_angle)
+            ||
+            (global_display_orientation_angle_prev != global_display_orientation_angle))
+    {
+        int32_t rotate_angle = global_video_incoming_orientation_angle - global_display_orientation_angle;
+
+        if (rotate_angle < 0)
+        {
+            rotate_angle = 360 + rotate_angle;
+        }
+
+        omx_change_video_out_rotation(&omx, rotate_angle);
+        global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+        global_display_orientation_angle_prev = global_display_orientation_angle;
+    }
+
+    // --- check rotation ---
     void *buf = NULL;
     uint32_t len = 0;
     omx_display_input_buffer(&omx, &buf, &len);
@@ -7335,23 +7376,6 @@ static void *video_play(void *dummy)
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
-
-    if ((global_video_incoming_orientation_angle_prev != global_video_incoming_orientation_angle)
-            ||
-            (global_display_orientation_angle_prev != global_display_orientation_angle))
-    {
-        uint32_t rotate_angle = global_video_incoming_orientation_angle - global_display_orientation_angle;
-
-        if (rotate_angle < 0)
-        {
-            rotate_angle = 360 - rotate_angle;
-        }
-
-        omx_change_video_out_rotation(&omx, rotate_angle);
-        global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
-        global_display_orientation_angle_prev = global_display_orientation_angle;
-    }
-
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER
@@ -8140,6 +8164,23 @@ void *thread_av(void *data)
 
                 if (friend_to_send_video_to != -1)
                 {
+                    if (global_camera_orientation_angle_prev != global_camera_orientation_angle)
+                    {
+                        if ((global_camera_orientation_angle >= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
+                                || (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
+                        {
+                            TOXAV_ERR_OPTION_SET error_orientation;
+                            toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to, TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION,
+                                             (int32_t)global_camera_orientation_angle, &error_orientation);
+                            dbg(9, "TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION set(2):res=%d\n", (int)error_orientation);
+
+                            if (error_orientation == TOXAV_ERR_OPTION_SET_OK)
+                            {
+                                global_camera_orientation_angle_prev = global_camera_orientation_angle;
+                            }
+                        }
+                    }
+
                     // dbg(9, "AV Thread #%d:send frame to friend num=%d\n", (int) id, (int)friend_to_send_video_to);
                     // ---- DEBUG ----
                     long long timspan_in_ms = 99999;
@@ -9722,15 +9763,43 @@ void *thread_ext_keys(void *data)
                 dbg(2, "ExtKeys: Button D:\n");
                 button_d();
             }
-            else if (strncmp((char *)buf, "PLAY-VOL-UP:", strlen((char *)"PLAY-VOL-UP:")) == 0)
+            else if (strncmp((char *)buf, "play-vol:up", strlen((char *)"play-vol:up")) == 0)
             {
-                dbg(2, "ExtKeys: PLAY-VOL-UP:\n");
+                dbg(2, "ExtKeys: play-vol:up\n");
                 playback_volume_up();
             }
-            else if (strncmp((char *)buf, "PLAY-VOL-DOWN:", strlen((char *)"PLAY-VOL-DOWN:")) == 0)
+            else if (strncmp((char *)buf, "play-vol:down", strlen((char *)"play-vol:down")) == 0)
             {
-                dbg(2, "ExtKeys: PLAY-VOL-DOWN:\n");
+                dbg(2, "ExtKeys: play-vol:down\n");
                 playback_volume_down();
+            }
+            else if (strncmp((char *)buf, "camera-orient:turn-right", strlen((char *)"camera-orient:turn-right")) == 0)
+            {
+                dbg(2, "ExtKeys: camera-orient:turn-right\n");
+
+                if (global_camera_orientation_angle >= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270)
+                {
+                    global_camera_orientation_angle = TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0;
+                }
+                else
+                {
+                    global_camera_orientation_angle++;
+                }
+            }
+            else if (strncmp((char *)buf, "display-orient:turn-right", strlen((char *)"display-orient:turn-right")) == 0)
+            {
+                dbg(2, "ExtKeys: display-orient:turn-right:old=%d\n", (int)global_display_orientation_angle);
+
+                if (global_display_orientation_angle >= 270)
+                {
+                    global_display_orientation_angle = 0;
+                }
+                else
+                {
+                    global_display_orientation_angle = global_display_orientation_angle + 90;
+                }
+
+                dbg(2, "ExtKeys: display-orient:turn-right:new=%d\n", (int)global_display_orientation_angle);
             }
 
             CLEAR(buf);
