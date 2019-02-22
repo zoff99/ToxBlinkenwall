@@ -773,6 +773,7 @@ const char *shell_cmd__ononline = "./scripts/on_online.sh 2> /dev/null";
 const char *shell_cmd__onoffline = "./scripts/on_offline.sh 2> /dev/null";
 const char *shell_cmd__playback_volume_up = "./alsa_mixer_ctrl.sh 1 2> /dev/null";
 const char *shell_cmd__playback_volume_down = "./alsa_mixer_ctrl.sh 0 2> /dev/null";
+const char *shell_cmd__playback_volume_get_current = "./alsa_mixer_ctrl.sh 2 2> /dev/null";
 const char *cmd__image_filename_full_path = "./tmp/image.dat";
 const char *cmd__image_text_full_path = "./tmp/text.dat";
 int global_want_restart = 0;
@@ -992,6 +993,7 @@ uint32_t global_display_orientation_angle_prev = 0;
 uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
+uint32_t global_playback_volume_in_percent = 50;
 
 // ------- zoxcore debug settings !! ------------
 extern int global_h264_enc_profile_high_enabled;
@@ -1480,13 +1482,58 @@ void on_offline()
     if (system(cmd_str));
 }
 
+void playback_volume_get_current()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_get_current);
+    char output_str[1000];
+    CLEAR(output_str);
+    run_cmd_return_output(cmd_str, output_str, 1);
+
+    if (strlen(output_str) > 9)
+    {
+        // dbg(9, "playback_volume get:%s\n", (output_str + 9));
+        long int tempnum = strtol((output_str + 9), NULL, 10);
+
+        if (errno != ERANGE)
+        {
+            if ((tempnum >= 0) && (tempnum <= 100))
+            {
+                global_playback_volume_in_percent = (uint32_t)tempnum;
+            }
+        }
+    }
+    else
+    {
+    }
+}
+
 void playback_volume_up()
 {
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_up);
+    char output_str[1000];
+    CLEAR(output_str);
+    run_cmd_return_output(cmd_str, output_str, 1);
 
-    if (system(cmd_str));
+    if (strlen(output_str) > 9)
+    {
+        // dbg(9, "playback_volume:%s\n", (output_str + 9));
+        long int tempnum = strtol((output_str + 9), NULL, 10);
+
+        if (errno != ERANGE)
+        {
+            if ((tempnum >= 0) && (tempnum <= 100))
+            {
+                global_playback_volume_in_percent = (uint32_t)tempnum;
+            }
+        }
+    }
+    else
+    {
+    }
 }
 
 void playback_volume_down()
@@ -1494,8 +1541,26 @@ void playback_volume_down()
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_down);
+    char output_str[1000];
+    CLEAR(output_str);
+    run_cmd_return_output(cmd_str, output_str, 1);
 
-    if (system(cmd_str));
+    if (strlen(output_str) > 9)
+    {
+        // dbg(9, "playback_volume:%s\n", (output_str + 9));
+        long int tempnum = strtol((output_str + 9), NULL, 10);
+
+        if (errno != ERANGE)
+        {
+            if ((tempnum >= 0) && (tempnum <= 100))
+            {
+                global_playback_volume_in_percent = (uint32_t)tempnum;
+            }
+        }
+    }
+    else
+    {
+    }
 }
 
 void button_a()
@@ -6837,10 +6902,14 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
 void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstride)
 {
     uint8_t *dis_buf_save = dis_buf;
+    const int lines_down = 6;
+    const int lines_height = 3;
+    const int factor = 4;
+    const int volume_right_bar_width = 10;
 
-    for (int lines = 0; lines < 4; lines++)
+    for (int lines = 0; lines < (lines_height + 1); lines++)
     {
-        if ((lines == 0) || (lines == 3))
+        if ((lines == 0) || (lines == lines_height))
         {
             memset(dis_buf_save, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
         }
@@ -6852,17 +6921,34 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
         dis_buf_save = dis_buf_save + dstride;
     }
 
-    dis_buf_save = dis_buf + (6 * dstride);
+    dis_buf_save = dis_buf + (lines_down * dstride);
 
-    for (int lines = 0; lines < 4; lines++)
+    for (int lines = 0; lines < (lines_height + 1); lines++)
     {
-        if ((lines == 0) || (lines == 3))
+        if ((lines == 0) || (lines == lines_height))
         {
             memset(dis_buf_save, 0, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
         }
         else
         {
             memset(dis_buf_save, 255, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
+        }
+
+        dis_buf_save = dis_buf_save + dstride;
+    }
+
+    dis_buf_save = dis_buf + ((2 * lines_down) * dstride);
+
+    for (int lines = 0; lines < (lines_height + 1); lines++)
+    {
+        if ((lines == 0) || (lines == lines_height))
+        {
+            memset(dis_buf_save, 0, (int)(global_playback_volume_in_percent * factor));
+        }
+        else
+        {
+            memset(dis_buf_save, 255, (int)(global_playback_volume_in_percent * factor));
+            memset(dis_buf_save + (100 * factor), 255, volume_right_bar_width);
         }
 
         dis_buf_save = dis_buf_save + dstride;
@@ -9690,6 +9776,7 @@ void reopen_sound_devices()
     init_sound_device();
     sem_post(&audio_record_lock);
 #endif
+    playback_volume_get_current();
 }
 
 #ifdef HAVE_ALSA_PLAY
@@ -11268,6 +11355,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_ALSA_PLAY
     init_sound_play_device(1, 48000);
     count_audio_play_threads_int = 0;
+    playback_volume_get_current();
 
     if (sem_init(&count_audio_play_threads, 0, 1))
     {
