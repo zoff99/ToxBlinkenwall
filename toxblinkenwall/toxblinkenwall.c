@@ -6944,6 +6944,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
         if ((lines == 0) || (lines == lines_height))
         {
             memset(dis_buf_save, 0, (int)(global_playback_volume_in_percent * factor));
+            memset(dis_buf_save + (100 * factor), 0, volume_right_bar_width);
         }
         else
         {
