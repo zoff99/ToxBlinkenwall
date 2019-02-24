@@ -685,6 +685,9 @@ void save_resumable_fts(Tox *m, uint32_t friendnum);
 void resume_resumable_fts(Tox *m, uint32_t friendnum);
 void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
                                  uint8_t g, uint8_t b);
+void left_top_bar_into_yuv_frame_ptr(uint8_t *yuv_frame, int frame_w, int frame_h,
+                                     int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix,
+                                     uint8_t r, uint8_t g, uint8_t b);
 void print_font_char(int start_x_pix, int start_y_pix, int font_char_num, uint8_t col_value);
 void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text);
 void blinking_dot_on_frame_xy(int start_x_pix, int start_y_pix, int *state);
@@ -859,6 +862,8 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 
 
 #define AUDIO_VU_MIN_VALUE -20
+#define AUDIO_VU_MED_VALUE 80
+#define AUDIO_VU_RED_VALUE 80
 float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 float global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
@@ -6923,39 +6928,78 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
     uint8_t *dis_buf_save = dis_buf;
     const int lines_down = 6;
     const int lines_height = 3;
-    const int factor = 4;
+    const int factor = 3;
     const int volume_right_bar_width = 10;
+    //
+    // --- audio out level ---
+    left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                    0, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 4,
+                                    0, 0, 0);
+    left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                    0, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, 255, 0);
 
-    for (int lines = 0; lines < (lines_height + 1); lines++)
+    if ((int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
     {
-        if ((lines == 0) || (lines == lines_height))
-        {
-            memset(dis_buf_save, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
-        }
-        else
-        {
-            memset(dis_buf_save, 255, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE));
-        }
-
-        dis_buf_save = dis_buf_save + dstride;
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_MED_VALUE, 0,
+                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
+                                        0, 0, 0);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_MED_VALUE, 0,
+                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
+                                        255, 255, 0);
+    }
+    else if ((int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
+    {
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_RED_VALUE, 0,
+                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
+                                        0, 0, 0);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_RED_VALUE, 0,
+                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
+                                        255, 0, 0);
     }
 
-    dis_buf_save = dis_buf + (lines_down * dstride);
+    // --- audio out level ---
+    //
+    // --- audio in level ---
+    // dbg(9, "global_audio_in_vu=%f\n", global_audio_in_vu);
+    left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                    0, lines_down, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 4,
+                                    0, 0, 0);
+    left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                    0, lines_down, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, 255, 0);
 
-    for (int lines = 0; lines < (lines_height + 1); lines++)
+    if ((int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
     {
-        if ((lines == 0) || (lines == lines_height))
-        {
-            memset(dis_buf_save, 0, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
-        }
-        else
-        {
-            memset(dis_buf_save, 255, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE));
-        }
-
-        dis_buf_save = dis_buf_save + dstride;
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_MED_VALUE, lines_down,
+                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
+                                        0, 0, 0);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_MED_VALUE, lines_down,
+                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
+                                        255, 255, 0);
+    }
+    else if ((int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
+    {
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_RED_VALUE, lines_down,
+                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
+                                        0, 0, 0);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        AUDIO_VU_RED_VALUE, lines_down,
+                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
+                                        255, 0, 0);
     }
 
+    // --- audio in level ---
+    //
+    //
+    // --- playback mixer volume ---
     dis_buf_save = dis_buf + ((2 * lines_down) * dstride);
 
     for (int lines = 0; lines < (lines_height + 1); lines++)
@@ -6975,24 +7019,75 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
     }
 }
 
-
-
 void draw_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, uint8_t *dis_buf, int dw, int dh, int dstride)
 {
     if (dh > (h + 1))
     {
-        if (dstride >  stride + 8)
+        if (dstride > stride + 8)
         {
             uint8_t *start_output_pos = dis_buf + (dstride * dh) - (dstride * h - 1);
 
             for (int i = 0; i < h; i++)
             {
-                // copy y plane
+                // copy only the y-plane
                 memcpy(start_output_pos, yuf_buf, w);
                 start_output_pos = start_output_pos + dstride;
                 yuf_buf = yuf_buf + stride;
             }
         }
+    }
+
+    // draw the connection status of the friend we are in a video call with
+    //
+    // color black on some error
+    uint8_t color_r = 0;
+    uint8_t color_g = 0;
+    uint8_t color_b = 0;
+    int8_t conn_good = -1;
+    const uint8_t conn_color_bar_width = 8;
+    // orange like
+    color_r = 255;
+    color_g = 204;
+    color_b = 0;
+
+    if (friend_to_send_video_to > -1)
+    {
+        int friendlistnum = find_friend_in_friendlist((uint32_t)friend_to_send_video_to);
+
+        if (friendlistnum > -1)
+        {
+            if (Friends.list[friendlistnum].active == false)
+            {
+                // strange, this should not happen
+            }
+            else
+            {
+                conn_good = 0;
+
+                if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_UDP)
+                {
+                    // greenish
+                    color_r = 0;
+                    color_g = 128;
+                    color_b = 0;
+                    conn_good = 1;
+                }
+            }
+        }
+
+        int y_coord_start = dh - (h / 2);
+        int y_bar_height = dh - (y_coord_start) - 1;
+
+        if (conn_good == 1)
+        {
+            y_coord_start = dh - h;
+            y_bar_height = h;
+        }
+
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        0, y_coord_start,
+                                        conn_color_bar_width, y_bar_height,
+                                        color_r, color_g, color_b);
     }
 }
 
@@ -7091,69 +7186,6 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     }
 
     text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
-    // draw the connection status of the friend we are in a video call with
-    //
-    // color black on some error
-    uint8_t color_r = 0;
-    uint8_t color_g = 0;
-    uint8_t color_b = 0;
-    int8_t conn_good = -1;
-
-    if (friend_to_send_video_to > -1)
-    {
-        int friendlistnum = find_friend_in_friendlist((uint32_t)friend_to_send_video_to);
-
-        if (friendlistnum > -1)
-        {
-            if (Friends.list[friendlistnum].active == false)
-            {
-                // strange, this should not happen
-            }
-            else
-            {
-                conn_good = 0;
-
-                if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_UDP)
-                {
-                    // greenish
-                    conn_good = 1;
-                }
-            }
-        }
-    }
-
-    for (int lines = 0; lines < h; lines++)
-    {
-        for (int pixels = 0; pixels < 5; pixels++)
-        {
-            if (conn_good == -1)
-            {
-            }
-            else if (conn_good == 0)
-            {
-                if (lines < (h / 2))
-                {
-                    color_r = 0;
-                    color_g = 255;
-                    color_b = 0;
-                }
-                else
-                {
-                    color_r = 255;
-                    color_g = 255;
-                    color_b = 255;
-                }
-            }
-            else if (conn_good == 1)
-            {
-                color_r = 0;
-                color_g = 255;
-                color_b = 0;
-            }
-
-            set_color_in_yuv_frame_xy(yuf_buf, pixels, lines, w, h, color_r, color_g, color_b);
-        }
-    }
 }
 
 
@@ -9104,31 +9136,42 @@ void text_on_yuf_frame_xy(int start_x_pix, int start_y_pix, const char *text)
     }
 }
 
-void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
-                                 uint8_t g, uint8_t b)
+void left_top_bar_into_yuv_frame_ptr(uint8_t *yuv_frame, int frame_w, int frame_h,
+                                     int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix,
+                                     uint8_t r, uint8_t g, uint8_t b)
 {
-    // int bar_width = bar_w_pix; // 150; // should be mulitple of 2 !!
-    // int bar_height = bar_h_pix; // 20; // should be mulitple of 2 !!
-    // int bar_start_x = bar_start_x_pix; // 10; // should be mulitple of 2 !! (zero is also ok)
-    // int bar_start_y = bar_start_y_pix; // 10; // should be mulitple of 2 !! (zero is also ok)
-    // uint8_t *y_plane = av_video_frame.y;
     int k;
     int j;
-    // int offset = 0;
 
     for (k = 0; k < bar_h_pix; k++)
     {
-        // y_plane = av_video_frame.y + ((bar_start_y + k) * av_video_frame.w);
-        // y_plane = y_plane + bar_start_x;
+        for (j = 0; j < bar_w_pix; j++)
+        {
+            set_color_in_yuv_frame_xy(yuv_frame, (bar_start_x_pix + j), (bar_start_y_pix + k),
+                                      frame_w, frame_h, r, g, b);
+        }
+    }
+}
+
+
+void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
+                                 uint8_t g, uint8_t b)
+{
+    int k;
+    int j;
+
+    for (k = 0; k < bar_h_pix; k++)
+    {
         for (j = 0; j < bar_w_pix; j++)
         {
             // ******** // *y_plane = col_value; // luma value to 255 (white)
             set_color_in_yuv_frame_xy(av_video_frame.y, (bar_start_x_pix + j), (bar_start_y_pix + k),
                                       av_video_frame.w, av_video_frame.h, r, g, b);
-            // y_plane = y_plane + 1;
         }
     }
 }
+
+
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
 // ------------------ YUV420 overlay hack -------------
