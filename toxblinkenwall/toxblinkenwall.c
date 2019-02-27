@@ -2421,7 +2421,7 @@ void show_tox_id_qrcode(Tox *tox)
     {
         if ((tox != NULL) && (global_fb_device_stats_filled == 1))
         {
-            dbg(9, "Friends:A:000.0\n");
+            // dbg(9, "Friends:A:000.0\n");
             fb_fill_black();
             unsigned char *bf_out_real_fb = framebuffer_mappedmem;
             uint32_t line_position_y = 30;
@@ -2586,7 +2586,7 @@ void show_tox_id_qrcode(Tox *tox)
             // ------------------------------------
             //
             // Display all Friends second
-            dbg(9, "Friends.max_idx=%d\n", Friends.max_idx);
+            // dbg(9, "Friends.max_idx=%d\n", Friends.max_idx);
             text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, "Friends:");
@@ -2660,7 +2660,7 @@ void show_tox_id_qrcode(Tox *tox)
             }
         }
 
-        dbg(9, "Friends:A:099\n");
+        // dbg(9, "Friends:A:099\n");
     }
     else // if (QRCODE_AS_DEFAULT_SCREEN == 1)
     {
