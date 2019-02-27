@@ -2433,6 +2433,45 @@ void show_tox_id_qrcode(Tox *tox)
             uint8_t color_g;
             uint8_t color_b;
             uint32_t j = 0;
+
+            // ------------------------------------
+            // Display own connection status
+            switch (my_connection_status)
+            {
+                case TOX_CONNECTION_NONE:
+                    // default to: RED
+                    color_r = 255;
+                    color_g = 0;
+                    color_b = 0;
+                    break;
+
+                case TOX_CONNECTION_TCP:
+                    // orange like
+                    color_r = 255;
+                    color_g = 204;
+                    color_b = 0;
+                    break;
+
+                case TOX_CONNECTION_UDP:
+                    // greenish
+                    color_r = 0;
+                    color_g = 128;
+                    color_b = 0;
+                    break;
+
+                default:
+                    // default to: RED
+                    color_r = 255;
+                    color_g = 0;
+                    color_b = 0;
+                    break;
+            }
+
+            left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                         var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                         line_position_x_header, line_position_y, 126, 3,
+                                         color_r, color_g, color_b);
+            line_position_y = line_position_y + 4;
             // ------------------------------------
             // Display version
             CLEAR(text_line);
@@ -3083,6 +3122,11 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 
     update_friend_last_online(num, t);
     Friends.max_idx++;
+
+    if (global_is_qrcode_showing_on_screen == 1)
+    {
+        show_tox_id_qrcode(m);
+    }
 }
 
 // after you are finished call free_friendlist_nums !
@@ -4013,6 +4057,11 @@ void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_
     else
     {
         CLEAR(Friends.list[j].name);
+    }
+
+    if (global_is_qrcode_showing_on_screen == 1)
+    {
+        show_tox_id_qrcode(tox);
     }
 }
 
@@ -9647,6 +9696,11 @@ void *thread_phonebook_invite(void *data)
             }
 
             yieldcpu(30);
+        }
+
+        if (global_is_qrcode_showing_on_screen == 1)
+        {
+            show_tox_id_qrcode(tox);
         }
 
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
