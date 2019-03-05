@@ -7300,7 +7300,7 @@ static void *video_play(void *dummy)
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
 #ifndef HAVE_OUTPUT_OMX
-    //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
+    sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_OUTPUT_OPENGL
     //incoming_video_width = (int)frame_width_px;
