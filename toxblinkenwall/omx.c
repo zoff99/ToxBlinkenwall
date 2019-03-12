@@ -289,6 +289,44 @@ int omx_display_xy(int flag, struct omx_state *st,
 
 #endif
 
+int omx_change_video_stream_play_rect(struct omx_state *st, int32_t video_play_stream_number)
+{
+    unsigned int i;
+    OMX_PARAM_PORTDEFINITIONTYPE portdef;
+    OMX_CONFIG_DISPLAYREGIONTYPE config;
+    OMX_ERRORTYPE err = 0;
+    memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
+    config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
+    config.nVersion.nVersion = OMX_VERSION;
+    config.nPortIndex = VIDEO_RENDER_PORT;
+
+    if (video_play_stream_number == 0)
+    {
+        config.dest_rect.x_offset  = 0;
+        config.dest_rect.y_offset  = (int)(1080 / 4);
+        config.dest_rect.width     = (int)(1920 / 2);
+        config.dest_rect.height    = (int)(1080 / 2);
+        config.mode = OMX_DISPLAY_MODE_LETTERBOX;
+    }
+    else
+    {
+        config.dest_rect.x_offset  = (int)(1920 / 2);
+        config.dest_rect.y_offset  = (int)(1080 / 4);
+        config.dest_rect.width     = (int)(1920 / 2);
+        config.dest_rect.height    = (int)(1080 / 2);
+        config.mode = OMX_DISPLAY_MODE_LETTERBOX;
+    }
+
+    //
+    config.fullscreen = OMX_FALSE;
+    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_DEST_RECT |
+                                      OMX_DISPLAY_SET_FULLSCREEN |
+                                      OMX_DISPLAY_SET_MODE);
+    //
+    err |= OMX_SetParameter(st->video_render,
+                            OMX_IndexConfigDisplayRegion, &config);
+    return err;
+}
 
 int omx_change_video_out_rotation(struct omx_state *st, int angle)
 {
@@ -340,25 +378,11 @@ int omx_display_enable(struct omx_state *st,
     config.nVersion.nVersion = OMX_VERSION;
     config.nPortIndex = VIDEO_RENDER_PORT;
     //
-    //
-    // #define DEBUG_VIDEO_IN_FRAME 1
-    //
-    //
-#ifdef DEBUG_VIDEO_IN_FRAME
-    config.dest_rect.x_offset  = 0;
-    config.dest_rect.y_offset  = 0;
-    config.dest_rect.width     = (int)(1920 / 2);
-    config.dest_rect.height    = (int)(1080 / 2);
-    config.mode = OMX_DISPLAY_MODE_LETTERBOX;
-    config.transform = OMX_DISPLAY_ROT0;
-    config.fullscreen = OMX_FALSE;
-    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_TRANSFORM | OMX_DISPLAY_SET_DEST_RECT |
-                                      OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
-#else
     config.fullscreen = OMX_TRUE;
     config.mode = OMX_DISPLAY_MODE_LETTERBOX;
-    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
-#endif
+    config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_FULLSCREEN |
+                                      OMX_DISPLAY_SET_MODE |
+                                      OMX_DISPLAY_SET_DEST_RECT);
     //
     err |= OMX_SetParameter(st->video_render,
                             OMX_IndexConfigDisplayRegion, &config);
@@ -384,24 +408,12 @@ int omx_display_enable(struct omx_state *st,
     }
 
     //
-    dbg(9, "omx port definition(before): h=%d w=%d s=%d sh=%d\n",
-        portdef.format.video.nFrameWidth,
-        portdef.format.video.nFrameHeight,
-        portdef.format.video.nStride,
-        portdef.format.video.nSliceHeight);
-    //
     portdef.format.video.nFrameWidth = width;
     portdef.format.video.nFrameHeight = height;
     portdef.format.video.nStride = stride;
     portdef.format.video.nSliceHeight = height;
     //
     portdef.bEnabled = 1;
-    //
-    dbg(9, "omx port definition(after): h=%d w=%d s=%d sh=%d\n",
-        portdef.format.video.nFrameWidth,
-        portdef.format.video.nFrameHeight,
-        portdef.format.video.nStride,
-        portdef.format.video.nSliceHeight);
     //
     err |= OMX_SetParameter(st->video_render,
                             OMX_IndexParamPortDefinition, &portdef);

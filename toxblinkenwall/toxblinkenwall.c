@@ -679,7 +679,7 @@ void kill_all_file_transfers_friend(Tox *m, uint32_t friendnum);
 int has_reached_max_file_transfer_for_friend(uint32_t num);
 static int find_friend_in_friendlist(uint32_t friendnum);
 int is_friend_online(Tox *tox, uint32_t num);
-void av_local_disconnect(ToxAV *av, uint32_t num);
+void av_local_disconnect(ToxAV *av, uint32_t num, int32_t av_call_num);
 void run_cmd_return_output(const char *command, char *output, int lastline);
 void save_resumable_fts(Tox *m, uint32_t friendnum);
 void resume_resumable_fts(Tox *m, uint32_t friendnum);
@@ -955,6 +955,14 @@ int8_t call_waiting_for_answer = 0;
 int32_t call_waiting_friend_num = -1;
 bool call_waiting_audio_enabled = true;
 bool call_waiting_video_enabled = true;
+
+#define MAX_SIMULTANIOUS_CALLS 2 // only 2 is supported now!!
+
+int32_t friend_to_send_video_to__vc[MAX_SIMULTANIOUS_CALLS];
+int32_t active_calls__vc = 0;
+int32_t active_calls__vc_prev_omx = 0;
+int32_t global_video_stream_play_num = 0;
+
 // -- hardcoded --
 // -- hardcoded --
 // -- hardcoded --
@@ -3035,9 +3043,15 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         kill_all_file_transfers_friend(m, num);
 
         // friend went offline -> hang up on all calls
-        if ((int64_t)friend_to_send_video_to == (int64_t)num)
+        if (active_calls__vc > 0)
         {
-            av_local_disconnect(mytox_av, num);
+            for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+            {
+                if ((int64_t)friend_to_send_video_to__vc[kk] == (int64_t)num)
+                {
+                    av_local_disconnect(mytox_av, num, kk);
+                }
+            }
         }
     }
 
@@ -3727,55 +3741,70 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
         {
             dbg(9, "cmd_vcm:003\n");
             global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-            friend_to_send_video_to = friend_number;
-            dbg(9, "cmd_vcm:004\n");
-            update_status_line_1_text();
-            TOXAV_ERR_CALL error = 0;
-            toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
-            // toxav_call(mytox_av, friend_number, 0, 40, &error);
-            dbg(9, "cmd_vcm:005\n");
 
-            if (error != TOXAV_ERR_CALL_OK)
+            if (active_calls__vc >= MAX_SIMULTANIOUS_CALLS)
             {
-                switch (error)
-                {
-                    case TOXAV_ERR_CALL_MALLOC:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_MALLOC\n");
-                        break;
-
-                    case TOXAV_ERR_CALL_SYNC:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_SYNC\n");
-                        break;
-
-                    case TOXAV_ERR_CALL_FRIEND_NOT_FOUND:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_FOUND\n");
-                        break;
-
-                    case TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED\n");
-                        break;
-
-                    case TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL\n");
-                        break;
-
-                    case TOXAV_ERR_CALL_INVALID_BIT_RATE:
-                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_INVALID_BIT_RATE\n");
-                        break;
-
-                    default:
-                        dbg(0, "toxav_call (1):*unknown error*\n");
-                        break;
-                }
+                // can not accept any more calls
+                send_text_message_to_friend(tox, friend_number, "can not accept any more calls");
             }
             else
             {
+                if (active_calls__vc == 0)
+                {
+                    friend_to_send_video_to = friend_number;
+                }
+
+                friend_to_send_video_to__vc[active_calls__vc] = friend_number;
+                active_calls__vc++;
+                dbg(9, "cmd_vcm:004\n");
+                update_status_line_1_text();
+                TOXAV_ERR_CALL error = 0;
+                toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
+                // toxav_call(mytox_av, friend_number, 0, 40, &error);
+                dbg(9, "cmd_vcm:005\n");
+
+                if (error != TOXAV_ERR_CALL_OK)
+                {
+                    switch (error)
+                    {
+                        case TOXAV_ERR_CALL_MALLOC:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_MALLOC\n");
+                            break;
+
+                        case TOXAV_ERR_CALL_SYNC:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_SYNC\n");
+                            break;
+
+                        case TOXAV_ERR_CALL_FRIEND_NOT_FOUND:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_FOUND\n");
+                            break;
+
+                        case TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_NOT_CONNECTED\n");
+                            break;
+
+                        case TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL\n");
+                            break;
+
+                        case TOXAV_ERR_CALL_INVALID_BIT_RATE:
+                            dbg(0, "toxav_call (1):TOXAV_ERR_CALL_INVALID_BIT_RATE\n");
+                            break;
+
+                        default:
+                            dbg(0, "toxav_call (1):*unknown error*\n");
+                            break;
+                    }
+                }
+                else
+                {
 #ifdef HAVE_TOXAV_OPTION_SET
-                TOXAV_ERR_OPTION_SET error;
-                bool res = toxav_option_set(mytox_av, friend_number,
-                                            (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                                            (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+                    TOXAV_ERR_OPTION_SET error;
+                    bool res = toxav_option_set(mytox_av, friend_number,
+                                                (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                                                (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
 #endif
+                }
             }
         }
         else
@@ -4002,7 +4031,16 @@ void disconnect_all_calls(Tox *tox)
 
     for (i = 0; i < size; ++i)
     {
-        av_local_disconnect(mytox_av, list[i]);
+        if (active_calls__vc > 0)
+        {
+            for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+            {
+                if ((int64_t)friend_to_send_video_to__vc[kk] == (int64_t)list[i])
+                {
+                    av_local_disconnect(mytox_av, list[i], kk);
+                }
+            }
+        }
     }
 }
 
@@ -5972,31 +6010,54 @@ void close_cam()
 // ------------------ Tox AV stuff --------------------
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
 {
+    if (active_calls__vc >= MAX_SIMULTANIOUS_CALLS)
+    {
+        // can not accept any more calls
+        return;
+    }
+
     TOXAV_ERR_ANSWER err;
-    global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-    update_status_line_1_text();
     int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
     int video_bitrate = global_video_bit_rate;
-    friend_to_send_video_to = friend_number;
-    global_video_active = 1;
-    global_send_first_frame = 2;
-    dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d global_video_active=%d\n",
-        (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
-    show_text_as_image_stop();
+    friend_to_send_video_to__vc[active_calls__vc] = friend_number;
+
+    if (active_calls__vc > 0)
+    {
+        // additional call
+    }
+    else
+    {
+        // first call
+        global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+        update_status_line_1_text();
+        friend_to_send_video_to = friend_number;
+        global_video_active = 1;
+        global_send_first_frame = 2;
+        dbg(9, "Handling CALL callback friendnum=%d audio_bitrate=%d video_bitrate=%d global_video_active=%d\n",
+            (int)friend_number, (int)audio_bitrate, (int)video_bitrate, global_video_active);
+        show_text_as_image_stop();
+    }
+
     toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
-    on_start_call();
-    // clear screen on CALL ANSWER
-    stop_endless_image();
-    fb_fill_black();
-    // change some settings here -------
+
+    if (active_calls__vc == 0)
+    {
+        on_start_call();
+        // clear screen on CALL ANSWER
+        stop_endless_image();
+        fb_fill_black();
+        // change some settings here -------
 #ifdef HAVE_TOXAV_OPTION_SET
-    TOXAV_ERR_OPTION_SET error;
-    toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                     DEFAULT_GLOBAL_VID_MAX_Q,
-                     &error);
-    dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
+        TOXAV_ERR_OPTION_SET error;
+        toxav_option_set(av, friend_number, TOXAV_ENCODER_RC_MAX_QUANTIZER,
+                         DEFAULT_GLOBAL_VID_MAX_Q,
+                         &error);
+        dbg(9, "TOXAV_ENCODER_RC_MAX_QUANTIZER res=%d\n", (int)error);
 #endif
-    // change some settings here -------
+        // change some settings here -------
+    }
+
+    active_calls__vc++;
     reset_toxav_call_waiting();
 }
 
@@ -6012,27 +6073,32 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         return;
     }
 
-    if (global_video_active == 1)
+    if (active_calls__vc < MAX_SIMULTANIOUS_CALLS)
     {
-        if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
-        {
-            TOXAV_ERR_CALL_CONTROL error = 0;
-            toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
-            // global_disconnect_friend_num = friend_number;
-            dbg(9, "Somebody else is already in a call, hang up\n");
-        }
-        else
-        {
-            dbg(9, "Call already active\n");
-        }
+        // we can accept more calls
     }
     else
+    {
+        // we can NOT accept any more calls
+        TOXAV_ERR_CALL_CONTROL error = 0;
+        toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+        // global_disconnect_friend_num = friend_number;
+        dbg(9, "Somebody else is already in a call, hang up\n");
+        return;
+    }
+
+    if (active_calls__vc == 0)
     {
         ((CallControl *)user_data)->incoming = true;
         global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         update_status_line_1_text();
-        call_waiting_for_answer = 1;
-        call_waiting_friend_num = friend_number;
+    }
+
+    call_waiting_for_answer = 1;
+    call_waiting_friend_num = friend_number;
+
+    if (active_calls__vc == 0)
+    {
         call_waiting_audio_enabled = audio_enabled;
         call_waiting_video_enabled = video_enabled;
         show_text_as_image_stop();
@@ -6041,10 +6107,11 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         fb_fill_black();
         // show funny face
         show_video_calling(friend_number, true);
-#ifdef AV_AUTO_PICKUP_CALL
-        pick_up_call();
-#endif
     }
+
+#ifdef AV_AUTO_PICKUP_CALL
+    pick_up_call();
+#endif
 }
 
 #ifdef TOX_HAVE_TOXAV_CALLBACKS_002
@@ -6052,122 +6119,127 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
 static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_COMM_INFO comm_value,
                                  int64_t comm_number, void *user_data)
 {
-    if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_VP8)
+    // only update these for the first video stream!!
+    // TODO: make better somehow?
+    if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
     {
-        global_decoder_string = " VP8 ";
-    }
-    else if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_H264)
-    {
-        global_decoder_string = " H264";
-    }
-    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8)
-    {
-        global_encoder_string = " VP8 ";
-        using_h264_encoder_in_toxcore = 0;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
-    {
-        global_encoder_string = " H264";
+        if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_VP8)
+        {
+            global_decoder_string = " VP8 ";
+        }
+        else if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_H264)
+        {
+            global_decoder_string = " H264";
+        }
+        else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8)
+        {
+            global_encoder_string = " VP8 ";
+            using_h264_encoder_in_toxcore = 0;
+        }
+        else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264)
+        {
+            global_encoder_string = " H264";
 #ifdef USE_V4L2_H264
 
-        if (camera_supports_h264 == 1)
-        {
-            using_h264_encoder_in_toxcore = 1;
-        }
+            if (camera_supports_h264 == 1)
+            {
+                using_h264_encoder_in_toxcore = 1;
+            }
 
 #endif
-    }
-    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
-    {
-        global_encoder_string = " H264.P";
+        }
+        else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
+        {
+            global_encoder_string = " H264.P";
 #ifdef USE_V4L2_H264
 
-        if (camera_supports_h264 == 1)
-        {
-            using_h264_encoder_in_toxcore = 1;
-        }
+            if (camera_supports_h264 == 1)
+            {
+                using_h264_encoder_in_toxcore = 1;
+            }
 
 #endif
-    }
-    else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
-    {
-        global_decoder_video_bitrate = (uint32_t)comm_number;
-        // dbg(9, "t_toxav_call_comm_cb:global_decoder_video_bitrate:value=%d\n", (int)global_decoder_video_bitrate);
-    }
-    else if (comm_value == TOXAV_CALL_COMM_NETWORK_ROUND_TRIP_MS)
-    {
-        global_network_round_trip_ms = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
-    {
-        global_play_delay_ms = (int64_t)comm_number;
+        }
+        else if (comm_value == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE)
+        {
+            global_decoder_video_bitrate = (uint32_t)comm_number;
+            // dbg(9, "t_toxav_call_comm_cb:global_decoder_video_bitrate:value=%d\n", (int)global_decoder_video_bitrate);
+        }
+        else if (comm_value == TOXAV_CALL_COMM_NETWORK_ROUND_TRIP_MS)
+        {
+            global_network_round_trip_ms = (uint32_t)comm_number;
+        }
+        else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
+        {
+            global_play_delay_ms = (int64_t)comm_number;
 
-        if (global_play_delay_ms < 0)
-        {
-            global_play_delay_ms = 0;
-        }
-        else if (global_play_delay_ms > 20000)
-        {
-            global_play_delay_ms = 20000;
-        }
+            if (global_play_delay_ms < 0)
+            {
+                global_play_delay_ms = 0;
+            }
+            else if (global_play_delay_ms > 20000)
+            {
+                global_play_delay_ms = 20000;
+            }
 
-        // dbg(9, "vplay_delay=%d\n", (int)global_play_delay_ms);
-    }
-    else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
-    {
-        global_video_play_buffer_entries = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_PROFILE)
-    {
-        global_video_h264_incoming_profile = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_LEVEL)
-    {
-        global_video_h264_incoming_level = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_PLAY_VIDEO_ORIENTATION)
-    {
-        if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
-        {
-            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
-            global_video_incoming_orientation_angle = 0;
+            // dbg(9, "vplay_delay=%d\n", (int)global_play_delay_ms);
         }
-        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_90)
+        else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
         {
-            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
-            global_video_incoming_orientation_angle = 90;
+            global_video_play_buffer_entries = (uint32_t)comm_number;
         }
-        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_180)
+        else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_PROFILE)
         {
-            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
-            global_video_incoming_orientation_angle = 180;
+            global_video_h264_incoming_profile = (uint32_t)comm_number;
         }
-        else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270)
+        else if (comm_value == TOXAV_CALL_COMM_DECODER_H264_LEVEL)
         {
-            global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
-            global_video_incoming_orientation_angle = 270;
+            global_video_h264_incoming_level = (uint32_t)comm_number;
         }
-    }
-    else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
-    {
-        global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
-        global_encoder_video_bitrate = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_INCOMING_FPS)
-    {
-        global_tox_video_incoming_fps = (uint32_t)comm_number;
-    }
-    else if (comm_value == TOXAV_CALL_COMM_REMOTE_RECORD_DELAY)
-    {
-        global_remote_record_delay = (int64_t)comm_number;
+        else if (comm_value == TOXAV_CALL_COMM_PLAY_VIDEO_ORIENTATION)
+        {
+            if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
+            {
+                global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+                global_video_incoming_orientation_angle = 0;
+            }
+            else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_90)
+            {
+                global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+                global_video_incoming_orientation_angle = 90;
+            }
+            else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_180)
+            {
+                global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+                global_video_incoming_orientation_angle = 180;
+            }
+            else if ((uint32_t)comm_number == TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270)
+            {
+                global_video_incoming_orientation_angle_prev = global_video_incoming_orientation_angle;
+                global_video_incoming_orientation_angle = 270;
+            }
+        }
+        else if (comm_value == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE)
+        {
+            global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
+            global_encoder_video_bitrate = (uint32_t)comm_number;
+        }
+        else if (comm_value == TOXAV_CALL_COMM_INCOMING_FPS)
+        {
+            global_tox_video_incoming_fps = (uint32_t)comm_number;
+        }
+        else if (comm_value == TOXAV_CALL_COMM_REMOTE_RECORD_DELAY)
+        {
+            global_remote_record_delay = (int64_t)comm_number;
 
-        if (global_remote_record_delay < 0)
-        {
-            global_remote_record_delay = 0;
-        }
-        else if (global_remote_record_delay > 20000)
-        {
-            global_remote_record_delay = 20000;
+            if (global_remote_record_delay < 0)
+            {
+                global_remote_record_delay = 0;
+            }
+            else if (global_remote_record_delay > 20000)
+            {
+                global_remote_record_delay = 20000;
+            }
         }
     }
 }
@@ -6182,84 +6254,118 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         return;
     }
 
-    if (((int64_t)friend_to_send_video_to != (int64_t)friend_number) && (global_video_active == 1))
+    if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
     {
-        if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
-        {
-            // call already finished
-        }
-        else
-        {
-            // we are in a call with someone else already
-            dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
-            // calling this here crashes!
-            // TOXAV_ERR_CALL_CONTROL error = 0;
-            // toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
-            global_disconnect_friend_num = friend_number;
-        }
-
-        return;
+        dbg(9, "Handling CALL STATE callback: %d friend_number=%d\n", state, (int)friend_number);
+        ((CallControl *)user_data)->state = state;
     }
-
-    dbg(9, "Handling CALL STATE callback: %d friend_number=%d\n", state, (int)friend_number);
-    ((CallControl *)user_data)->state = state;
 
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
         reset_toxav_call_waiting();
-        global_video_active = 0;
-        on_end_call();
 
-        if (video_play_rb != NULL)
+        if (active_calls__vc == 1)
         {
-            void *p;
-            struct opengl_video_frame_data *fd;
-            uint32_t dummy1;
-            uint32_t dummy2;
+            global_video_active = 0;
+            on_end_call();
 
-            while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
+            if (video_play_rb != NULL)
             {
-                free(fd->p);
-                free(fd);
-            }
+                void *p;
+                struct opengl_video_frame_data *fd;
+                uint32_t dummy1;
+                uint32_t dummy2;
 
-            bw_rb_kill(video_play_rb);
-            video_play_rb = NULL;
+                while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
+                {
+                    free(fd->p);
+                    free(fd);
+                }
+
+                bw_rb_kill(video_play_rb);
+                video_play_rb = NULL;
+            }
         }
 
         dbg(9, "Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
-        friend_to_send_video_to = -1;
-        fb_fill_black();
-        show_tox_id_qrcode(toxav_get_tox(av));
+
+        if (active_calls__vc == 1)
+        {
+            friend_to_send_video_to = -1;
+            fb_fill_black();
+            show_tox_id_qrcode(toxav_get_tox(av));
+        }
+
+        for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+        {
+            if ((int64_t)friend_to_send_video_to__vc[kk] == (int64_t)friend_number)
+            {
+                friend_to_send_video_to__vc[kk] = -1;
+            }
+        }
+
+        active_calls__vc--;
+
+        if (active_calls__vc < 0)
+        {
+            // should not get here!!
+            active_calls__vc = 0;
+        }
+
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
         reset_toxav_call_waiting();
-        global_video_active = 0;
-        on_end_call();
 
-        if (video_play_rb != NULL)
+        if (active_calls__vc == 1)
         {
-            void *p;
-            struct opengl_video_frame_data *fd;
-            uint32_t dummy1;
-            uint32_t dummy2;
+            global_video_active = 0;
+            on_end_call();
 
-            while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
+            if (video_play_rb != NULL)
             {
-                free(fd->p);
-                free(fd);
-            }
+                void *p;
+                struct opengl_video_frame_data *fd;
+                uint32_t dummy1;
+                uint32_t dummy2;
 
-            bw_rb_kill(video_play_rb);
-            video_play_rb = NULL;
+                while (bw_rb_read(video_play_rb, (void **)&fd, &dummy1, &dummy2))
+                {
+                    free(fd->p);
+                    free(fd);
+                }
+
+                bw_rb_kill(video_play_rb);
+                video_play_rb = NULL;
+            }
         }
 
         dbg(9, "Call with friend %d errored, global_video_active=%d\n", friend_number, global_video_active);
-        friend_to_send_video_to = -1;
-        fb_fill_black();
-        show_tox_id_qrcode(toxav_get_tox(av));
+
+        if (active_calls__vc == 1)
+        {
+            friend_to_send_video_to = -1;
+            fb_fill_black();
+            show_tox_id_qrcode(toxav_get_tox(av));
+        }
+
+        for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+        {
+            if ((int64_t)friend_to_send_video_to__vc[kk] == (int64_t)friend_number)
+            {
+                friend_to_send_video_to__vc[kk] = -1;
+            }
+        }
+
+        active_calls__vc--;
+
+        if (active_calls__vc < 0)
+        {
+            // should not get here!!
+            active_calls__vc = 0;
+        }
+
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -6336,39 +6442,42 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
 {
-    //if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
-    //{
-    //  // we are in a call with someone else already
-    //  dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
-    //  return;
-    //}
-    dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
-    dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
-    TOXAV_ERR_BIT_RATE_SET error = 0;
-    uint32_t video_bit_rate_ = video_bit_rate;
-
-    if (video_bit_rate < DEFAULT_GLOBAL_MIN_VID_BITRATE)
+    if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
     {
-        video_bit_rate_ = DEFAULT_GLOBAL_MIN_VID_BITRATE;
-    }
+        //if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
+        //{
+        //  // we are in a call with someone else already
+        //  dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
+        //  return;
+        //}
+        dbg(0, "t_toxav_bit_rate_status_cb:001 video_bit_rate=%d\n", (int)video_bit_rate);
+        dbg(0, "t_toxav_bit_rate_status_cb:001 audio_bit_rate=%d\n", (int)audio_bit_rate);
+        TOXAV_ERR_BIT_RATE_SET error = 0;
+        uint32_t video_bit_rate_ = video_bit_rate;
 
-    toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate_, &error);
+        if (video_bit_rate < DEFAULT_GLOBAL_MIN_VID_BITRATE)
+        {
+            video_bit_rate_ = DEFAULT_GLOBAL_MIN_VID_BITRATE;
+        }
 
-    if (error != 0)
-    {
-        dbg(0, "ToxAV:Setting new Video bitrate has failed with error #%u\n", error);
-    }
-    else
-    {
-        // HINT: don't touch global video bitrate --------
-        // global_video_bit_rate = video_bit_rate_;
-        // HINT: don't touch global video bitrate --------
-        // TODO: this will get overwritten at every fps update!!
-        update_status_line_1_text_arg(video_bit_rate_);
-    }
+        toxav_bit_rate_set(av, friend_number, audio_bit_rate, video_bit_rate_, &error);
 
-    dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
-    dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
+        if (error != 0)
+        {
+            dbg(0, "ToxAV:Setting new Video bitrate has failed with error #%u\n", error);
+        }
+        else
+        {
+            // HINT: don't touch global video bitrate --------
+            // global_video_bit_rate = video_bit_rate_;
+            // HINT: don't touch global video bitrate --------
+            // TODO: this will get overwritten at every fps update!!
+            update_status_line_1_text_arg(video_bit_rate_);
+        }
+
+        dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
+        dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
+    }
 }
 
 #ifdef HAVE_ALSA_PLAY
@@ -6525,6 +6634,13 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
+    if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
+    {
+        // only use audio of first call at the moment!!
+        // TODO: mix audio of 2 calls somehow
+        return;
+    }
+
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 
     if (pcm)
@@ -7374,8 +7490,13 @@ static void *video_play(void *dummy)
         global_display_orientation_angle_prev = 99;
     }
 
-    if (frame_width_px != omx_w || frame_height_px != omx_h)
+    uint32_t frame_width_px__3 = frame_width_px;
+    uint32_t frame_height_px__3 = frame_height_px;
+
+    if (frame_width_px__3 != omx_w || frame_height_px__3 != omx_h || active_calls__vc_prev_omx != active_calls__vc)
     {
+        active_calls__vc_prev_omx = active_calls__vc;
+
         if ((omx_w != 0) && (omx_h != 0))
         {
             usleep_usec(10000);
@@ -7390,6 +7511,7 @@ static void *video_play(void *dummy)
             global_display_orientation_angle_prev = 99;
         }
 
+        dbg(9, "omx_display_enable:w h stride:%d %d %d\n", frame_width_px1, frame_height_px1, ystride);
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
 
         if (err)
@@ -7400,8 +7522,8 @@ static void *video_play(void *dummy)
             return (void *)NULL;
         }
 
-        omx_w = frame_width_px;
-        omx_h = frame_height_px;
+        omx_w = frame_width_px__3;
+        omx_h = frame_height_px__3;
     }
 
     // --- check rotation ---
@@ -7422,6 +7544,13 @@ static void *video_play(void *dummy)
     }
 
     // --- check rotation ---
+    // --- set output rectangle ---
+    if (active_calls__vc > 1)
+    {
+        omx_change_video_stream_play_rect(&omx, global_video_stream_play_num);
+    }
+
+    // --- set output rectangle ---
     void *buf = NULL;
     uint32_t len = 0;
     omx_display_input_buffer(&omx, &buf, &len);
@@ -7820,79 +7949,82 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     if (global_video_active == 1)
     {
-        if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
+        if (active_calls__vc > 0)
         {
+            for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+            {
+                if ((int64_t)friend_to_send_video_to__vc[kk] == (int64_t)friend_number)
+                {
 #ifdef HAVE_FRAMEBUFFER
 
-            if (global_framebuffer_device_fd != 0)
+                    if (global_framebuffer_device_fd != 0)
 #else
-            if (1 == 1)
+                    if (1 == 1)
 #endif
-            {
-                toggle_display_frame++;
-
-                if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
-                {
-                    dbg(9, "skipping video frame ...\n");
-                    return;
-                }
-                else
-                {
-                    toggle_display_frame = 0;
-                }
-
-                //PL// sem_wait(&video_play_lock);
-                // dbg(9, "VP-DEBUG:F:002:w=%d s=%d\n", (int)video__width, (int)video__ystride);
-                video__width = width;
-                video__height = height;
-                video__y = y;
-                video__u = u;
-                video__v = v;
-                video__ystride = ystride;
-                video__ustride = ustride;
-                video__vstride = vstride;
-#ifdef HAVE_OUTPUT_OMX
-                video_play((void *)NULL);
-#else
-                pthread_t video_play_thread;
-
-                if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
-                {
-                    inc_video_t_counter();
-                    sem_wait(&video_in_frame_copy_sem);
-                    int res_ = pthread_create(&video_play_thread, NULL, video_play, NULL);
-
-                    if (res_ != 0)
                     {
-                        dec_video_t_counter();
-                        sem_post(&video_in_frame_copy_sem);
-                        dbg(0, "error creating video play thread ERRNO=%d\n", res_);
-                    }
-                    else
-                    {
-                        // dbg(2, "creating video play thread #%d\n", get_video_t_counter());
-                        if (pthread_detach(video_play_thread))
+                        toggle_display_frame++;
+
+                        if (toggle_display_frame < SHOW_EVERY_X_TH_VIDEO_FRAME)
                         {
-                            dbg(0, "error detaching video play thread\n");
+                            dbg(9, "skipping video frame ...\n");
+                            return;
+                        }
+                        else
+                        {
+                            toggle_display_frame = 0;
                         }
 
-                        sem_wait(&video_in_frame_copy_sem);
-                        sem_post(&video_in_frame_copy_sem);
-                        // yieldcpu(1);
+                        //PL// sem_wait(&video_play_lock);
+                        // dbg(9, "VP-DEBUG:F:002:w=%d s=%d\n", (int)video__width, (int)video__ystride);
+                        video__width = width;
+                        video__height = height;
+                        video__y = y;
+                        video__u = u;
+                        video__v = v;
+                        video__ystride = ystride;
+                        video__ustride = ustride;
+                        video__vstride = vstride;
+#ifdef HAVE_OUTPUT_OMX
+                        global_video_stream_play_num = kk;
+                        video_play((void *)NULL);
+#else
+                        pthread_t video_play_thread;
+
+                        if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
+                        {
+                            inc_video_t_counter();
+                            sem_wait(&video_in_frame_copy_sem);
+                            int res_ = pthread_create(&video_play_thread, NULL, video_play, NULL);
+
+                            if (res_ != 0)
+                            {
+                                dec_video_t_counter();
+                                sem_post(&video_in_frame_copy_sem);
+                                dbg(0, "error creating video play thread ERRNO=%d\n", res_);
+                            }
+                            else
+                            {
+                                // dbg(2, "creating video play thread #%d\n", get_video_t_counter());
+                                if (pthread_detach(video_play_thread))
+                                {
+                                    dbg(0, "error detaching video play thread\n");
+                                }
+
+                                sem_wait(&video_in_frame_copy_sem);
+                                sem_post(&video_in_frame_copy_sem);
+                                // yieldcpu(1);
+                            }
+                        }
+                        else
+                        {
+                            dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+                        }
+
+                        //PL// sem_post(&video_play_lock);
+#endif
                     }
                 }
-                else
-                {
-                    dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
-                }
-
-                //PL// sem_post(&video_play_lock);
-#endif
             }
-        }
-        else
-        {
-            // wrong friend
         }
     }
     else
@@ -8516,7 +8648,7 @@ void reset_toxav_call_waiting()
     }
 }
 
-void av_local_disconnect(ToxAV *av, uint32_t num)
+void av_local_disconnect(ToxAV *av, uint32_t num, int32_t av_call_num)
 {
     int really_in_call = 0;
     reset_toxav_call_waiting();
@@ -8546,16 +8678,34 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
-    global_video_active = 0;
-    on_end_call();
-    dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
-    global_send_first_frame = 0;
-    friend_to_send_video_to = -1;
+    // ---------------
+    active_calls__vc--;
 
-    if (really_in_call == 1)
+    if (active_calls__vc < 0)
     {
-        fb_fill_black();
-        show_tox_id_qrcode(toxav_get_tox(av));
+        active_calls__vc == 0;
+    }
+
+    // ---------------
+
+    if ((av_call_num >= 0) && (av_call_num <  MAX_SIMULTANIOUS_CALLS))
+    {
+        friend_to_send_video_to__vc[av_call_num] = -1;
+    }
+
+    if (active_calls__vc == 0)
+    {
+        global_video_active = 0;
+        on_end_call();
+        dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
+        global_send_first_frame = 0;
+        friend_to_send_video_to = -1;
+
+        if (really_in_call == 1)
+        {
+            fb_fill_black();
+            show_tox_id_qrcode(toxav_get_tox(av));
+        }
     }
 }
 // ------------------ Tox AV stuff --------------------
@@ -11271,6 +11421,13 @@ void *thread_opengl(void *data)
 
 int main(int argc, char *argv[])
 {
+    active_calls__vc = 0;
+
+    for (int32_t kk = 0; kk < MAX_SIMULTANIOUS_CALLS; kk++)
+    {
+        friend_to_send_video_to__vc[kk] = -1;
+    }
+
     on_start();
     // don't accept calls until video device is ready
     accepting_calls = 0;
