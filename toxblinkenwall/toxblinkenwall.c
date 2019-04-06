@@ -862,8 +862,8 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 
 
 #define AUDIO_VU_MIN_VALUE -20
-#define AUDIO_VU_MED_VALUE 80
-#define AUDIO_VU_RED_VALUE 80
+#define AUDIO_VU_MED_VALUE 85
+#define AUDIO_VU_RED_VALUE 95
 float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 float global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
