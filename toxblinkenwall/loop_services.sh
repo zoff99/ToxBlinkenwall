@@ -79,6 +79,13 @@ while [ 1 == 1 ]; do
     sudo systemctl daemon-reload
     sudo systemctl restart systemd-udevd
 
+    hdmi_device_w=$(tvservice -s|awk -F',' '{print $2}'|tr -d ' '|cut -d'@' -f1|cut -d'x' -f 1)
+    hdmi_device_h=$(tvservice -s|awk -F',' '{print $2}'|tr -d ' '|cut -d'@' -f1|cut -d'x' -f 2)
+    cam_overlay_w=250
+    cam_overlay_h=141
+    cam_overlay_left_coord=$[ $hdmi_device_w - $cam_overlay_w - 12 ]
+    cam_overlay_top_coord=$[ $hdmi_device_h - $cam_overlay_h - 9 ]
+
     v4l2-ctl -d "$video_device" -v width=1280,height=720,pixelformat=YV12
     v4l2-ctl -d "$video_device" --set-ctrl=scene_mode=0
     # v4l2-ctl -d "$video_device" --set-ctrl=exposure_dynamic_framerate=1 --set-ctrl=scene_mode=8
@@ -87,7 +94,7 @@ while [ 1 == 1 ]; do
     v4l2-ctl -d "$video_device" --set-ctrl=power_line_frequency=1
     v4l2-ctl -d "$video_device" -p 25
     # set own camera preview size
-    v4l2-ctl -d "$video_device" --set-fmt-overlay=top=930,left=1658,width=250,height=141
+    v4l2-ctl -d "$video_device" --set-fmt-overlay=top="$cam_overlay_top_coord",left="$cam_overlay_left_coord",width="$cam_overlay_w",height="$cam_overlay_h"
 
     #        rotate (int)    : min=0 max=360 step=90 default=0 value=0 flags=00000400
     #
