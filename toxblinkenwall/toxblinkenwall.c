@@ -2592,9 +2592,29 @@ void show_tox_id_qrcode(Tox *tox)
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, "Friends:");
             line_position_y = line_position_y + 20;
+            uint32_t max_display = 10;
 
-            for (uint32_t j2 = 0; j2 < Friends.max_idx; j2++)
+            if (Friends.max_idx < max_display)
             {
+                max_display = Friends.max_idx;
+            }
+
+            uint32_t j2 = Friends.max_idx;
+
+            for (uint32_t j2x = 0; j2x < Friends.max_idx; j2x++)
+            {
+                j2 = Friends.max_idx - 1 - j2x;
+
+                if (j2 < 0)
+                {
+                    j2 = 0;
+                }
+
+                if (j2 >= Friends.max_idx)
+                {
+                    j2 = Friends.max_idx - 1;
+                }
+
                 if (Friends.list[j2].active == false)
                 {
                     continue;
