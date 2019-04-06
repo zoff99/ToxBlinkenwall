@@ -85,6 +85,7 @@ keymap = {
     ecodes.KEY_K: "play-vol:down\n",
     ecodes.KEY_C: "camera-orient:turn-right\n",
     ecodes.KEY_D: "display-orient:turn-right\n",
+    ecodes.KEY_Q: "toggle_quality:\n",
 }
 
 keyboards = []

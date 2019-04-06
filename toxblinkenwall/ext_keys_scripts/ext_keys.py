@@ -158,10 +158,10 @@ try:
                         # button "#" pressed
                         if cur_button != 5:
                             #print "BUTTON:#"
-                            #fifo_write = open(fifo_path, 'w')
-                            #fifo_write.write("toggle_quality:\n")
-                            #fifo_write.flush()
-                            #fifo_write.close()
+                            fifo_write = open(fifo_path, 'w')
+                            fifo_write.write("toggle_quality:\n")
+                            fifo_write.flush()
+                            fifo_write.close()
                             last_button_press = int(round(time.time() * 1000))
                         cur_button=5
                     elif rowVal == 0 and colVal == 3:

@@ -921,6 +921,7 @@ int count_video_record_threads_int;
 
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
+uint32_t global_video_quality = 1; // 1 -> normal, 0 -> low
 int32_t global_video_dbuf_ms = 250;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
@@ -9632,41 +9633,31 @@ void toggle_speaker()
 
 void toggle_quality()
 {
-    int vbr_new = DEFAULT_GLOBAL_VID_BITRATE;
-    int max_q_new = DEFAULT_GLOBAL_VID_MAX_Q;
-    dbg(2, "toggle_quality: 1:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
+    dbg(2, "toggle_quality: 1:global_video_quality=%d\n", (int)global_video_quality);
+    int32_t max_video_bitrate_new = 3100;
 
-    if (global_video_bit_rate == DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY)
+    if (global_video_quality == 1)
     {
-        vbr_new = DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY;
-        max_q_new = DEFAULT_GLOBAL_VID_MAX_Q_HIGHER_QUALITY;
-        dbg(2, "toggle_quality: HIGH\n");
+        dbg(2, "toggle_quality: LOW\n");
+        global_video_quality = 0;
+        max_video_bitrate_new = 180;
     }
     else
     {
-        vbr_new = DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY;
-        max_q_new = DEFAULT_GLOBAL_VID_MAX_Q_NORMAL_QUALITY;
         dbg(2, "toggle_quality: normal\n");
+        global_video_quality = 1;
+        max_video_bitrate_new = 3100;
     }
-
-    DEFAULT_GLOBAL_VID_BITRATE = (uint32_t)vbr_new;
-    DEFAULT_GLOBAL_VID_MAX_Q = (uint32_t)max_q_new;
-    global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-    update_status_line_1_text();
-    dbg(2, "toggle_quality: 2:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
-    update_status_line_on_fb();
 
     if (mytox_av != NULL)
     {
         if (friend_to_send_video_to > -1)
         {
-            toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                               global_audio_bit_rate, global_video_bit_rate, NULL);
 #ifdef HAVE_TOXAV_OPTION_SET
             TOXAV_ERR_OPTION_SET error;
             bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                                        (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                                        (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+                                        (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_VIDEO_MAX_BITRATE,
+                                        max_video_bitrate_new, &error);
 #endif
         }
     }
