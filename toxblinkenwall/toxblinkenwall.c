@@ -152,8 +152,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 39
-static const char global_version_string[] = "0.99.39";
+#define VERSION_PATCH 40
+static const char global_version_string[] = "0.99.40";
 // ----------- version -----------
 // ----------- version -----------
 
