@@ -75,7 +75,7 @@ try:
                 tmpRead = GPIO.input(ROW[i])
                 if tmpRead == 0:
                     rowVal = i
-                    # print "row pressed " + str(rowVal)
+                    # print("row pressed " + str(rowVal))
 
 
         # if rowVal is not 0 thru 3 then no button was pressed and we can exit
@@ -100,7 +100,7 @@ try:
                     tmpRead = GPIO.input(COLUMN[j])
                     if tmpRead == 1:
                         colVal=j
-                        # print "col pressed " + str(colVal)
+                        # print("col pressed " + str(colVal))
 
 
             # if colVal is not 0 thru 3 then no button was pressed and we can exit
@@ -108,7 +108,7 @@ try:
                     # nothing pressed
                     pass
                 else:
-                    # print "B:row=" + str(rowVal) + " col=" + str(colVal) + " cur_button=" + str(cur_button)
+                    # print("B:row=" + str(rowVal) + " col=" + str(colVal) + " cur_button=" + str(cur_button))
 
                     if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
                         # reset current button
