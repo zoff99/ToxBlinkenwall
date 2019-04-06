@@ -6985,7 +6985,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                     0, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 4,
                                     0, 0, 0);
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, 1, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 2,
                                     0, 255, 0);
 
     if ((int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
@@ -6995,7 +6995,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                         (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                        AUDIO_VU_MED_VALUE, 0,
+                                        AUDIO_VU_MED_VALUE, 1,
                                         (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
                                         255, 255, 0);
     }
@@ -7006,7 +7006,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                         (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                        AUDIO_VU_RED_VALUE, 0,
+                                        AUDIO_VU_RED_VALUE, 1,
                                         (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
                                         255, 0, 0);
     }
@@ -7019,7 +7019,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                     0, lines_down, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 4,
                                     0, 0, 0);
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, lines_down, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, (lines_down + 1), (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 2,
                                     0, 255, 0);
 
     if ((int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
@@ -7029,7 +7029,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                         (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                        AUDIO_VU_MED_VALUE, lines_down,
+                                        AUDIO_VU_MED_VALUE, (lines_down + 1),
                                         (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
                                         255, 255, 0);
     }
@@ -7040,7 +7040,7 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
                                         (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                        AUDIO_VU_RED_VALUE, lines_down,
+                                        AUDIO_VU_RED_VALUE, (lines_down + 1),
                                         (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
                                         255, 0, 0);
     }
