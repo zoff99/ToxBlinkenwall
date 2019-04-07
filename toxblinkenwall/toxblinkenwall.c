@@ -862,8 +862,8 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 
 
 #define AUDIO_VU_MIN_VALUE -20
-#define AUDIO_VU_MED_VALUE 85
-#define AUDIO_VU_RED_VALUE 95
+#define AUDIO_VU_MED_VALUE 110
+#define AUDIO_VU_RED_VALUE 120
 float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 float global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
@@ -7000,69 +7000,73 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
     const int lines_height = 3;
     const int factor = 3;
     const int volume_right_bar_width = 10;
+    const float global_audio_out_vu_ = global_audio_out_vu;
+    const float global_audio_in_vu_ = global_audio_in_vu;
     //
     // --- audio out level ---
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, 0, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 4,
+                                    0, 0, (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE), 4,
                                     0, 0, 0);
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, 1, (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, 1, (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE), 2,
                                     0, 255, 0);
 
-    if ((int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
+    if ((int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
     {
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_MED_VALUE, 0,
-                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
+                                        (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_MED_VALUE, 1,
-                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
+                                        (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
                                         255, 255, 0);
     }
-    else if ((int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
+
+    if ((int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
     {
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_RED_VALUE, 0,
-                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
+                                        (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_RED_VALUE, 1,
-                                        (int)(global_audio_out_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
+                                        (int)(global_audio_out_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
                                         255, 0, 0);
     }
 
     // --- audio out level ---
     //
     // --- audio in level ---
-    // dbg(9, "global_audio_in_vu=%f\n", global_audio_in_vu);
+    // dbg(9, "global_audio_in_vu_=%f\n", global_audio_in_vu_);
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, lines_down, (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 4,
+                                    0, lines_down, (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE), 4,
                                     0, 0, 0);
     left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
-                                    0, (lines_down + 1), (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE), 2,
+                                    0, (lines_down + 1), (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE), 2,
                                     0, 255, 0);
 
-    if ((int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
+    if ((int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) > AUDIO_VU_MED_VALUE)
     {
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_MED_VALUE, lines_down,
-                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
+                                        (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_MED_VALUE, (lines_down + 1),
-                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
+                                        (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_MED_VALUE, 2,
                                         255, 255, 0);
     }
-    else if ((int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
+
+    if ((int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) > AUDIO_VU_RED_VALUE)
     {
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_RED_VALUE, lines_down,
-                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
+                                        (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 4,
                                         0, 0, 0);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         AUDIO_VU_RED_VALUE, (lines_down + 1),
-                                        (int)(global_audio_in_vu - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
+                                        (int)(global_audio_in_vu_ - AUDIO_VU_MIN_VALUE) - AUDIO_VU_RED_VALUE, 2,
                                         255, 0, 0);
     }
 
