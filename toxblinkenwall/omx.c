@@ -480,6 +480,7 @@ int omx_display_input_buffer(struct omx_state *st,
         return EINVAL;
     }
 
+    st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
     buf_idx = st->current_buffer;
     *pbuf = st->buffers[buf_idx]->pBuffer;
     *plen = st->buffers[buf_idx]->nAllocLen;
@@ -491,7 +492,6 @@ int omx_display_input_buffer(struct omx_state *st,
 int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
 {
     int buf_idx = st->current_buffer;
-    st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
     st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME;
     st->buffers[buf_idx]->nOffset = 0;
     st->buffers[buf_idx]->nFilledLen = data_len;
