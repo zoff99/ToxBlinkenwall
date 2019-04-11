@@ -186,6 +186,7 @@ static const char global_version_string[] = "0.99.40";
 
 #include <sodium/utils.h>
 #include <sodium/crypto_generichash.h>
+#include <sodium/randombytes.h>
 
 #include <linux/videodev2.h>
 #include <vpx/vpx_image.h>
@@ -1141,6 +1142,9 @@ static uint64_t bw_current_time_actual(void)
 
 uint32_t generate_random_uint32()
 {
+    // use libsodium function
+    return randombytes_random();
+#if 0
     // HINT: this is not perfectly randon, FIX ME!
     uint32_t r;
     struct timeval time;
@@ -1150,6 +1154,7 @@ uint32_t generate_random_uint32()
     rand();
     r = rand();
     return r;
+#endif
 }
 
 void randomish_string(char *str, size_t size)
