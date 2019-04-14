@@ -299,6 +299,7 @@ static const char global_version_string[] = "0.99.40";
 
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
+#define MAX_VIDEO_BITRATE_FOR_720P 2700
 #define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
 #define H264_HW_ENCODER_MAX_VIDEO_BITRATE 10000 // kbit/s
 uint32_t h264_bufcounter = 0;
@@ -9663,7 +9664,7 @@ void toggle_speaker()
 void toggle_quality()
 {
     dbg(2, "toggle_quality: 1:global_video_quality=%d\n", (int)global_video_quality);
-    int32_t max_video_bitrate_new = 3100;
+    int32_t max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
 
     if (global_video_quality == 1)
     {
@@ -9675,7 +9676,7 @@ void toggle_quality()
     {
         dbg(2, "toggle_quality: normal\n");
         global_video_quality = 1;
-        max_video_bitrate_new = 3100;
+        max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
     }
 
     if (mytox_av != NULL)
