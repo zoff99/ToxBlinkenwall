@@ -21,7 +21,14 @@
  * forward func declarations (acutal functions in toxblinkenwall.c)
  */
 void dbg(int level, const char *fmt, ...);
-void usleep_usec(uint64_t msec);
+
+void usleep_usec2(uint64_t usec)
+{
+    struct timespec ts;
+    ts.tv_sec = usec / 1000000;
+    ts.tv_nsec = (usec % 1000000) * 1000;
+    nanosleep(&ts, NULL);
+}
 
 
 #include <stdio.h>
@@ -58,6 +65,24 @@ static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
                     "d1=%x\td2=%x\teventData=%p\tappdata=%p\n",
                     nData1, nData2, pEventData, pAppData);
             }
+            else if (nData1 == OMX_CommandStateSet)
+            {
+                dbg(9, "omx.EventHandler: OMX_CommandStateSet command completed\n"
+                    "d1=%x\td2=%x\teventData=%p\tappdata=%p\n",
+                    nData1, nData2, pEventData, pAppData);
+            }
+            else if (nData1 == OMX_CommandPortEnable)
+            {
+                dbg(9, "omx.EventHandler: OMX_CommandPortEnable command completed\n"
+                    "d1=%x\td2=%x\teventData=%p\tappdata=%p\n",
+                    nData1, nData2, pEventData, pAppData);
+            }
+            else if (nData1 == OMX_CommandPortDisable)
+            {
+                dbg(9, "omx.EventHandler: OMX_CommandPortDisable command completed\n"
+                    "d1=%x\td2=%x\teventData=%p\tappdata=%p\n",
+                    nData1, nData2, pEventData, pAppData);
+            }
             else
             {
                 dbg(9, "omx.EventHandler: Previous command completed\n"
@@ -69,11 +94,27 @@ static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
 
         case OMX_EventParamOrConfigChanged:
             dbg(9, "omx.EventHandler: Param_or_config changed event type "
-                "data1=%x\tdata2=%x\n", nData1, nData2);
+                "hComponent:0x%08x\tdata1=%x\tdata2=%x\n",
+                hComponent, nData1, nData2);
             break;
 
         case OMX_EventError:
+            if (nData1 == OMX_CommandStateSet)
+            {
+                dbg(9, "omx.EventHandler: OMX_EventError: OMX_CommandStateSet\n");
+            }
+            else if (nData1 == OMX_CommandPortEnable)
+            {
+                dbg(9, "omx.EventHandler: OMX_EventError: OMX_CommandPortEnable\n");
+            }
+
             dbg(9, "omx.EventHandler: Error event type "
+                "hComponent:0x%08x\tdata1=%x\tdata2=%x\n",
+                hComponent, nData1, nData2);
+            break;
+
+        case OMX_EventPortSettingsChanged:
+            dbg(9, "omx.EventHandler: EventPortSettingsChanged event type "
                 "data1=%x\tdata2=%x\n", nData1, nData2);
             break;
 
@@ -128,6 +169,7 @@ static void free_omx_buffers(struct omx_state *st)
     {
         for (int i = 0; i < st->num_buffers; i++)
         {
+            dbg(9, "OMX_FreeBuffer: %d\n", i);
             err = OMX_FreeBuffer(st->video_render, VIDEO_RENDER_PORT, st->buffers[i]);
 
             if (err != OMX_ErrorNone)
@@ -137,11 +179,11 @@ static void free_omx_buffers(struct omx_state *st)
             else
             {
                 dbg(9, "OMX_FreeBuffer OK: %d\n", err);
-                usleep_usec(10000);
+                usleep_usec2(1000);
             }
         }
 
-        usleep_usec(10000);
+        usleep_usec2(1000);
         dbg(9, "OMX_FreeBuffer *DONE*\n");
         free(st->buffers);
         st->buffers = NULL;
@@ -153,7 +195,7 @@ static void free_omx_buffers(struct omx_state *st)
 static void block_until_flushed(void)
 {
     // TODO: write me: wait until buffers are actually flushed
-    usleep_usec(25000);
+    usleep_usec2(25000);
 }
 
 int omx_init(struct omx_state *st)
@@ -197,13 +239,14 @@ static void block_until_state_changed(OMX_HANDLETYPE hComponent,
 
         if (eState != wanted_eState)
         {
-            usleep_usec(10000);
+            usleep_usec2(1000);
         }
 
         loop_counter++;
 
         if (loop_counter > 200)
         {
+            dbg(9, "OMX: block_until_state_changed: TIMEOUT\n");
             // we don't want to get stuck here
             break;
         }
@@ -220,7 +263,7 @@ void omx_deinit(struct omx_state *st)
 
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
-    usleep_usec(20000);
+    usleep_usec2(20000);
     dbg(9, "omx_deinit:006\n");
     OMX_Deinit();
     dbg(9, "omx_deinit:099\n");
@@ -245,19 +288,20 @@ static void block_until_port_changed(OMX_HANDLETYPE hComponent,
 
         if (r != OMX_ErrorNone)
         {
-            dbg(9, "block_until_port_changed: OMX_GetParameter "
+            dbg(9, "OMX: block_until_port_changed: OMX_GetParameter "
                 " failed with Result=%d\n", r);
         }
 
         if (portdef.bEnabled != bEnabled)
         {
-            usleep_usec(10000);
+            usleep_usec2(1000);
         }
 
         loop_counter++;
 
         if (loop_counter > 200)
         {
+            dbg(9, "OMX: block_until_port_changed: TIMEOUT\n");
             // we don't want to get stuck here
             break;
         }
@@ -275,78 +319,62 @@ void omx_display_disable(struct omx_state *st)
         return;
     }
 
-#if 0
-
-    for (int i = 0; i < st->num_buffers; i++)
-    {
-        st->buffers[i]->nFlags = OMX_BUFFERFLAG_EOS;
-        st->buffers[i]->nOffset = 0;
-        st->buffers[i]->nFilledLen = 0;
-        st->buffers[i]->nTimeStamp = omx_ticks_from_s64(0);
-        dbg(9, "OMX_EmptyThisBuffer(2)\n");
-
-        if (OMX_EmptyThisBuffer(st->video_render, st->buffers[i]) != OMX_ErrorNone)
-        {
-            dbg(9, "OMX_EmptyThisBuffer(2) error\n");
-        }
-    }
-
-#endif
     dbg(9, "OMX flush buffers\n");
 
     if ((err = OMX_SendCommand(st->video_render, OMX_CommandFlush, VIDEO_RENDER_PORT, NULL)) != OMX_ErrorNone)
     {
-        dbg(9, "OMX Failed to flush buffers\n");
+        dbg(9, "OMX Failed to flush buffers: %d\n", (int)err);
     }
 
     block_until_flushed();
+    //
+    //
+    //
+    //
+    //
+    //
+    dbg(9, "OMX switch state of the encoder component to idle\n");
+
+    if ((err = OMX_SendCommand(st->video_render, OMX_CommandStateSet, OMX_StateIdle, NULL)) != OMX_ErrorNone)
+    {
+        dbg(9, "OMX: Failed to switch state of the encoder component to idle: %d\n", (int)err);
+    }
+
+    block_until_state_changed(st->video_render, OMX_StateIdle);
+    //
+    //
+    //
+    //
+    //
+    //
     // Disable the port
     dbg(9, "OMX disable port\n");
 
     if ((err = OMX_SendCommand(st->video_render, OMX_CommandPortDisable, VIDEO_RENDER_PORT, NULL)) != OMX_ErrorNone)
     {
-        dbg(9, "OMX Failed to disable port\n");
+        dbg(9, "OMX Failed to disable port: %d\n", (int)err);
     }
 
-    block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, OMX_FALSE);
-    usleep_usec(10000);
     //
-    //
-#if 0
-    memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
-    config.nSize = sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
-    config.nVersion.nVersion = OMX_VERSION;
-    config.nPortIndex = VIDEO_RENDER_PORT;
-    config.fullscreen = OMX_FALSE;
-    config.set = OMX_DISPLAY_SET_FULLSCREEN;
-    dbg(9, "OMX_SetParameter command\n");
-    err = OMX_SetParameter(st->video_render,
-                           OMX_IndexConfigDisplayRegion, &config);
-
-    if (err != 0)
-    {
-        dbg(9, "OMX_SetParameter command failed\n");
-    }
-
-    usleep_usec(10000);
-#endif
     //
     //
     dbg(9, "OMX free buffers\n");
     free_omx_buffers(st);
-    dbg(9, "OMX switch state of the encoder component to idle\n");
-
-    if ((err = OMX_SendCommand(st->video_render, OMX_CommandStateSet, OMX_StateIdle, NULL)) != OMX_ErrorNone)
-    {
-        dbg(9, "Failed to switch state of the encoder component to idle\n");
-    }
-
-    block_until_state_changed(st->video_render, OMX_StateIdle);
+    //
+    //
+    //
+    //
+    //
+    //
+    block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, OMX_FALSE);
+    //
+    //
+    //
     dbg(9, "OMX switch state of the encoder component to loaded\n");
 
     if ((err = OMX_SendCommand(st->video_render, OMX_CommandStateSet, OMX_StateLoaded, NULL)) != OMX_ErrorNone)
     {
-        dbg(9, "Failed to switch state of the encoder component to loaded\n");
+        dbg(9, "OMX: Failed to switch state of the encoder component to loaded: %d\n", (int)err);
     }
 
     block_until_state_changed(st->video_render, OMX_StateLoaded);
@@ -390,8 +418,8 @@ int omx_display_xy(int flag, struct omx_state *st,
                                       OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
     //
     dbg(9, "OMX_SetParameter\n");
-    err |= OMX_SetParameter(st->video_render,
-                            OMX_IndexConfigDisplayRegion, &config);
+    err = OMX_SetParameter(st->video_render,
+                           OMX_IndexConfigDisplayRegion, &config);
     return err;
 }
 
@@ -444,28 +472,13 @@ int omx_display_enable(struct omx_state *st,
     OMX_CONFIG_DISPLAYREGIONTYPE config;
     OMX_ERRORTYPE err = 0;
     //
-    /* HACK: This state-change sometimes hangs for unknown reasons,
-     *       so we just send the state command and wait 50 ms */
-    /* block_until_state_changed(st->video_render, OMX_StateIdle); */
     dbg(9, "OMX command state set IDLE\n");
-    OMX_SendCommand(st->video_render, OMX_CommandStateSet,
-                    OMX_StateIdle, NULL);
-    usleep_usec(25000);
-    dbg(9, "===================\n");
-    dbg(9, "===================\n");
-    dbg(9, "===================\n");
-    dbg(9, "OMX command port enable VIDEO RENDER PORT\n");
 
-    if ((err = OMX_SendCommand(st->video_render, OMX_CommandPortEnable, VIDEO_RENDER_PORT, NULL)) != OMX_ErrorNone)
+    if ((err = OMX_SendCommand(st->video_render, OMX_CommandStateSet, OMX_StateIdle, NULL)) != OMX_ErrorNone)
     {
-        dbg(9, "OMX Failed to enable port\n");
+        dbg(9, "OMX Failed to set IDLE state: %d\n", (int)err);
     }
 
-    block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, OMX_TRUE);
-    usleep_usec(25000);
-    dbg(9, "===================\n");
-    dbg(9, "===================\n");
-    dbg(9, "===================\n");
     //
     dbg(9, "omx_update_size %d %d %d\n", width, height, stride);
     memset(&config, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
@@ -478,12 +491,12 @@ int omx_display_enable(struct omx_state *st,
     config.set = (OMX_DISPLAYSETTYPE)(OMX_DISPLAY_SET_FULLSCREEN | OMX_DISPLAY_SET_MODE);
     //
     dbg(9, "OMX_SetParameter(3)\n");
-    err |= OMX_SetParameter(st->video_render,
-                            OMX_IndexConfigDisplayRegion, &config);
+    err = OMX_SetParameter(st->video_render,
+                           OMX_IndexConfigDisplayRegion, &config);
 
     if (err != 0)
     {
-        dbg(9, "omx_display_enable: couldn't configure display region\n");
+        dbg(9, "omx_display_enable: couldn't configure display region: %d\n", (int)err);
     }
 
     memset(&portdef, 0, sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
@@ -492,12 +505,12 @@ int omx_display_enable(struct omx_state *st,
     portdef.nPortIndex = VIDEO_RENDER_PORT;
     /* specify buffer requirements */
     dbg(9, "OMX_GetParameter\n");
-    err |= OMX_GetParameter(st->video_render,
-                            OMX_IndexParamPortDefinition, &portdef);
+    err = OMX_GetParameter(st->video_render,
+                           OMX_IndexParamPortDefinition, &portdef);
 
     if (err != 0)
     {
-        dbg(9, "omx_display_enable: couldn't retrieve port def\n");
+        dbg(9, "omx_display_enable: couldn't retrieve port def: %d\n", (int)err);
         err = ENOMEM;
         goto exit;
     }
@@ -523,24 +536,25 @@ int omx_display_enable(struct omx_state *st,
         portdef.format.video.nSliceHeight);
     //
     dbg(9, "OMX_SetParameter(4)\n");
-    err |= OMX_SetParameter(st->video_render,
-                            OMX_IndexParamPortDefinition, &portdef);
+    err = OMX_SetParameter(st->video_render,
+                           OMX_IndexParamPortDefinition, &portdef);
 
     if (err)
     {
-        dbg(9, "omx_display_enable: could not set port definition\n");
+        dbg(9, "omx_display_enable: could not set port definition: %d\n", (int)err);
+        err = EINVAL;
         goto exit;
     }
 
     dbg(9, "OMX_GetParameter(2)\n");
-    err |= OMX_GetParameter(st->video_render,
-                            OMX_IndexParamPortDefinition, &portdef);
+    err = OMX_GetParameter(st->video_render,
+                           OMX_IndexParamPortDefinition, &portdef);
 
     if (portdef.format.video.nFrameWidth != width ||
             portdef.format.video.nFrameHeight != height ||
             portdef.format.video.nStride != stride)
     {
-        dbg(9, "could not set requested resolution\n");
+        dbg(9, "OMX: could not set requested resolution: %d\n", (int)err);
         err = EINVAL;
         goto exit;
     }
@@ -561,17 +575,44 @@ int omx_display_enable(struct omx_state *st,
 
             if (err)
             {
-                dbg(9, "OMX_AllocateBuffer failed: %d\n",
-                    err);
+                dbg(9, "OMX_AllocateBuffer failed: %d\n", (int)err);
                 err = ENOMEM;
                 goto exit;
             }
         }
     }
 
-    dbg(9, "omx_update_size: send to execute state\n");
+    //
+    //
+    //
+    block_until_state_changed(st->video_render, OMX_StateIdle);
+    //
+    //
+    //
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: command port enable VIDEO RENDER PORT\n");
+
+    if ((err = OMX_SendCommand(st->video_render, OMX_CommandPortEnable, VIDEO_RENDER_PORT, NULL)) != OMX_ErrorNone)
+    {
+        dbg(9, "OMX Failed to enable port: %d\n", (int)err);
+    }
+
+    block_until_port_changed(st->video_render, VIDEO_RENDER_PORT, OMX_TRUE);
+    usleep_usec2(10000);
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: ===================\n");
+    dbg(9, "OMX: omx_update_size: send to execute state\n");
     OMX_SendCommand(st->video_render, OMX_CommandStateSet,
                     OMX_StateExecuting, NULL);
+
+    if (err)
+    {
+        dbg(9, "omx_update_size: send to execute state ERROR: %d\n", (int)err);
+    }
+
     block_until_state_changed(st->video_render, OMX_StateExecuting);
 exit:
     return err;
