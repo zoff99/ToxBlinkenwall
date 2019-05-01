@@ -4,6 +4,8 @@
 #include <time.h>
 #include <assert.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 /*
  * 
@@ -28,7 +30,6 @@ test_omx_02.c omx.c \
  * 
  */
 
-#include <stdarg.h>
 
 void dbg(int level, const char *fmt, ...)
 {
@@ -48,9 +49,9 @@ void usleep_usec(uint64_t usec)
 
 
 // https://github.com/raspberrypi/userland/blob/master/host_applications/linux/apps/hello_pi/hello_encode/encode.c
-#define WIDTH     640
-#define HEIGHT    480
-#define STRIDE    640
+#define WIDTH     1920
+#define HEIGHT    1080
+#define STRIDE    1920
 
 // generate an animated test card in YUV format
 static int
@@ -86,6 +87,7 @@ struct omx_state omx;
 
 void deinit(int sig)
 {
+    omx_display_disable(&omx);
     omx_deinit(&omx);
 }
 
@@ -94,28 +96,45 @@ int main()
     void* pbuf;
     uint32_t buf_len, fill_len, i;
     int ret;
+    int j;
 
-    i = 1000;
+    for (j = 0;j < 10;j++)
+    {
 
-    ret = omx_init(&omx);
-    assert(ret == 0);
+        i = 20;
 
-    signal(SIGINT, deinit);
-
-    ret = omx_display_enable(&omx, WIDTH, HEIGHT, STRIDE);
-    assert(ret == 0);
-
-    while (i--) {
-        ret = omx_display_input_buffer(&omx, &pbuf, &buf_len);
+        ret = omx_init(&omx);
         assert(ret == 0);
 
-        generate_test_card(pbuf, &fill_len, i);
-        assert(fill_len == buf_len);
+        signal(SIGINT, deinit);
 
-        ret = omx_display_flush_buffer(&omx, fill_len);
+        ret = omx_display_enable(&omx, WIDTH, HEIGHT, STRIDE);
         assert(ret == 0);
+
+        while (i--) {
+            ret = omx_display_input_buffer(&omx, &pbuf, &buf_len);
+            assert(ret == 0);
+
+            generate_test_card(pbuf, &fill_len, i);
+            assert(fill_len <= buf_len);
+
+            ret = omx_display_flush_buffer(&omx, fill_len);
+            assert(ret == 0);
+        }
+
+        deinit(0);
+
+        dbg(9, "-- END %d --\n", j);
+
+        // ======================
+        usleep_usec(2 * 1000000);
+        // ======================
+
     }
 
-    deinit(0);
+    // ======================
+    usleep_usec(40 * 1000000);
+    // ======================
+
 }
 
