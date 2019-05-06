@@ -77,7 +77,7 @@ x = 0
 
 def measure_temp():
         temp = os.popen("vcgencmd measure_temp").readline()
-        return (temp.replace("temp=",""))
+        return (temp.replace("temp=","")).rstrip()
 
 
 # Load default font.
@@ -87,6 +87,9 @@ font = ImageFont.load_default()
 # same directory as the python script!
 # Some other nice fonts to try: http://www.dafont.com/bitmap.php
 #font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 9)
+
+toggle = 0
+toggle_char = ["+","*"]
 
 while True:
 
@@ -105,13 +108,13 @@ while True:
     cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
     Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
 
+    toggle = 1 - toggle
 
     # Write four lines of text.
-
     draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
     draw.text((x, top+8), CPU, font=font, fill=255)
     draw.text((x, top+16), MemUsage, font=font, fill=255)
-    draw.text((x, top+25), measure_temp(), font=font, fill=255)
+    draw.text((x, top+25), measure_temp() + " " + toggle_char[toggle]  + " " + toggle_char[toggle], font=font, fill=255)
 
     # Display image.
     disp.image(image)
