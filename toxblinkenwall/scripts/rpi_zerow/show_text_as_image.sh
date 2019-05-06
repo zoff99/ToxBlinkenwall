@@ -52,11 +52,12 @@ if (filename == None):
     exit(-1)
 
 txt = open(filename, 'r')
+text_in_file=txt.read()
 
-draw.text((x, top+0), txt.read()[0:17], font=font, fill=255)
-draw.text((x, top+8), txt.read()[(0+(1*17)):(17+(1*17))], font=font, fill=255)
-draw.text((x, top+16), txt.read()[(0+(2*17)):(17+(2*17))], font=font, fill=255)
-draw.text((x, top+25), txt.read()[(0+(3*17)):(17+(3*17))], font=font, fill=255)
+draw.text((x, top+0), text_in_file[0:17], font=font, fill=255)
+draw.text((x, top+8), text_in_file[(0+(1*17)):(17+(1*17))], font=font, fill=255)
+draw.text((x, top+16), text_in_file[(0+(2*17)):(17+(2*17))], font=font, fill=255)
+draw.text((x, top+25), text_in_file[(0+(3*17)):(17+(3*17))], font=font, fill=255)
 
 txt.close()
 
