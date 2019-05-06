@@ -62,8 +62,14 @@ draw.text((x, top+25), text_in_file[(0+(3*17)):(17+(3*17))], font=font, fill=255
 txt.close()
 
 
-disp.image(image)
-disp.show()
+# display test for 3 seconds
+for x in range(0, 5):
+    disp.image(image)
+    disp.show()
+    time.sleep(0.5)
+
 
 
 END
+
+rm -f "$file_with_text"
