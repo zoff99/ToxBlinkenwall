@@ -11,6 +11,8 @@
  * 
  *
 
+ pi zero: -marm -mtune=arm1176jzf-s -march=armv6 -mfpu=vfp -mfloat-abi=hard
+
 gcc -O0 \
 -DDEBUG_OMX_TEST_PROGRAM \
 -DRASPBERRY_PI -DOMX_SKIP64BIT -DUSE_VCHIQ_ARM \

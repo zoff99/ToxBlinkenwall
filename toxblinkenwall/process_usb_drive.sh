@@ -35,10 +35,12 @@ if [ "$2""x" == "removex" ]; then
     # drive was removed - do nothing
     # just in case turn off the blinking red led
     echo none | sudo tee /sys/class/leds/led1/trigger
+    bash "$dst_dir"/scripts/on_usb_remove.sh
     exit 0
 elif [ "$2""x" == "addx" ]; then
-    # drive iinserted - start blinking the led
+    # drive inserted - start blinking the led
     echo heartbeat | sudo tee /sys/class/leds/led1/trigger
+    bash "$dst_dir"/scripts/on_usb_insert.sh
 fi
 
 

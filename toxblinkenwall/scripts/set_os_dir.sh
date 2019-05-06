@@ -3,7 +3,17 @@
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
         _OS_DIR_="/linux/"
 elif [[ "$OSTYPE" == "linux-gnueabihf" ]]; then
-        _OS_DIR_="/raspi/"
+
+    # default RPI dir
+    _OS_DIR_="/raspi/"
+    # check for other models of the RPI
+    pi_model=$(tr -d '\0' </proc/device-tree/model)
+    echo $pi_model|grep 'Raspberry Pi Zero W' >/dev/null 2> /dev/null
+    pizero_w=$?
+    if [ $pizero_w == 0 ]; then
+        _OS_DIR_="/rpi_zerow/"
+    fi
+
 elif [[ "$OSTYPE" == "darwin"* ]]; then
         # Mac OSX
         _OS_DIR_="/osx/"

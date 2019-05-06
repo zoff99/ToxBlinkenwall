@@ -17,6 +17,7 @@ function clean_up
 	pkill -9 toxblinkenwall
 	pkill -f ext_keys_evdev.py
 	pkill -f ext_keys.py
+    pkill -f pizerow_stats_oled.sh
     rm -f ext_keys.fifo
 	# Perform program exit cleanup of framebuffer
 	scripts/stop_loading_endless.sh
@@ -55,7 +56,9 @@ fi
 trap clean_up SIGHUP SIGINT SIGTERM SIGKILL
 
 chmod u+x scripts/*.sh
+chmod u+x scripts/*.py
 chmod u+x scripts/raspi/*.sh
+chmod u+x scripts/rpi_zerow/*.sh
 chmod u+x scripts/linux/*.sh
 chmod u+x toxblinkenwall
 chmod u+x ext_keys_scripts/*.py
@@ -74,6 +77,7 @@ while [ 1 == 1 ]; do
 
 	pkill -f ext_keys_evdev.py
 	pkill -f ext_keys.py
+    pkill -f pizerow_stats_oled.sh
 
     # just in case, so that udev scripts really really work
     sudo systemctl daemon-reload
@@ -134,6 +138,8 @@ while [ 1 == 1 ]; do
 	python3 ./ext_keys.py &
     python3 ./ext_keys_evdev.py &
 	cd ..
+    ./scripts/pizerow_stats_oled.sh &
+
 
     # ---- only for RASPI ----
     #if [ "$IS_ON""x" == "RASPI""x" ]; then
