@@ -103,8 +103,10 @@ while True:
     # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
     cmd = "top -bn1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
     CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
-    cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB  %.2f%%\", $3,$2,$3*100/$2 }'"
+    cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
     MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
+    cmd = "iwgetid -r 2>/dev/null"
+    SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
     cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
     Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
 
@@ -114,7 +116,7 @@ while True:
     draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
     draw.text((x, top+8), CPU, font=font, fill=255)
     draw.text((x, top+16), MemUsage, font=font, fill=255)
-    draw.text((x, top+25), measure_temp() + " " + toggle_char[toggle]  + " " + toggle_char[toggle], font=font, fill=255)
+    draw.text((x, top+25), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
 
     # Display image.
     disp.image(image)

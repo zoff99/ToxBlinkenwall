@@ -6554,6 +6554,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 
+#ifndef RPIZEROW
     if (pcm)
     {
         if (sample_count > 0)
@@ -6569,6 +6570,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             }
         }
     }
+#endif
 
     if (global_video_active == 1)
     {
@@ -7800,6 +7802,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+
+#ifdef RPIZEROW
+    // ignore video on the PI Zero W
+    return;
+#endif
+
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
 
     // struct timeval tm_022;
@@ -8186,10 +8194,35 @@ void *thread_av(void *data)
     global_timespan_video_out = 0;
     h264_bufcounter = 0;
 
+#ifdef RPIZEROW
+    uint8_t *black_yuv_y = (uint8_t *)calloc(1, 200 * 200);
+#endif
+
     while (toxav_iterate_thread_stop != 1)
     {
         if (global_video_active == 1)
         {
+
+#ifdef RPIZEROW
+
+            TOXAV_ERR_SEND_FRAME error = 0;
+
+            if (friend_to_send_video_to > -1)
+            {
+                // send a dummy green frame 64x64 pixels in size
+                toxav_video_send_frame(av, friend_to_send_video_to,
+                                       64,
+                                       64,
+                                       black_yuv_y,
+                                       black_yuv_y,
+                                       black_yuv_y,
+                                       &error);
+            }
+
+            yieldcpu(1000); /* ~1 frame per second */
+
+#else
+
             if (hw_encoder_wanted_prev != hw_encoder_wanted)
             {
                 if (hw_encoder_wanted == 0)
@@ -8428,6 +8461,7 @@ void *thread_av(void *data)
             // ----------------- for sending video -----------------
             // ----------------- for sending video -----------------
             // ----------------- for sending video -----------------
+#endif
         }
         else
         {
@@ -8442,6 +8476,10 @@ void *thread_av(void *data)
             init_and_start_cam(0, false);
         }
     }
+
+#ifdef RPIZEROW
+    free(black_yuv_y);
+#endif
 
     if (video_call_enabled == 1)
     {
@@ -8527,7 +8565,11 @@ void *thread_video_av(void *data)
         // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
+#ifdef RPIZEROW
+            usleep_usec((500 * 1000));
+#else
             usleep_usec((global_av_iterate_ms * 1000));
+#endif
         }
         else
         {
@@ -9446,22 +9488,20 @@ int get_audio_record_t_counter()
 }
 // r -u /dev/fb0 -j 640 -k 480
 
-void *audio_record__(void *buf_pointer)
+void audio_record__(int16_t *buf_pointer)
 {
     if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
     {
-#if 1
         // make a local copy
         int16_t *audio_buf_orig = (int16_t *)buf_pointer;
         size_t audio_record_bytes_ = AUDIO_RECORD_BUFFER_BYTES;
 
-        // int16_t *audio_buf_ = (int16_t *)malloc(audio_record_bytes_);
         if (audio_buf_orig)
         {
-            // memcpy(audio_buf_, audio_buf_orig, audio_record_bytes_);
             size_t sample_count = (size_t)((audio_record_bytes_ / 2) / DEFAULT_AUDIO_CAPTURE_CHANNELS);
             global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
+#ifndef RPIZEROW
             if (sample_count > 0)
             {
                 float vu_value = audio_vu(audio_buf_orig, sample_count);
@@ -9474,20 +9514,16 @@ void *audio_record__(void *buf_pointer)
                     }
                 }
             }
+#endif
 
             TOXAV_ERR_SEND_FRAME error;
             bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                               sample_count,
                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
-            // dbg(9, "audio_record:006 TOXAV_ERR_SEND_FRAME=%d res=%d\n", (int)error, (int)res);
-            free(audio_buf_orig);
+            // dbg(9, "record_device:006 TOXAV_ERR_SEND_FRAME=%d res=%d\n", (int)error, (int)res);
         }
 
-#endif
     }
-
-    dec_audio_record_t_counter();
-    pthread_exit(0);
 }
 
 void *thread_record_alsa_audio(void *data)
@@ -9519,6 +9555,22 @@ void *thread_record_alsa_audio(void *data)
 #endif
     // ------ thread priority ------
 
+
+
+#if 0
+    // ------- generate noise ----------
+    uint8_t *stream = malloc((size_t)(AUDIO_RECORD_BUFFER_BYTES * 2));
+    srand((unsigned int)time(NULL));
+
+    for (size_t i = 0; i < (size_t)(AUDIO_RECORD_BUFFER_BYTES * 2); i++)
+    {
+        stream[i] = rand();
+    }
+    // ------- generate noise ----------
+#endif
+
+    int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
+
     while (do_audio_recording == 1)
     {
         if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
@@ -9527,16 +9579,13 @@ void *thread_record_alsa_audio(void *data)
             {
                 //*record*lock*// sem_wait(&audio_record_lock);
                 // snd_pcm_reset(audio_capture_handle);
-                int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
-
                 if ((err = snd_pcm_readi(audio_capture_handle, audio_buf_l, AUDIO_RECORD_BUFFER_FRAMES)) != AUDIO_RECORD_BUFFER_FRAMES)
                 {
                     dbg(1, "record_device:read from audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
-                    free(audio_buf_l);
 
                     if ((int)err == -11) // -> Resource temporarily unavailable
                     {
-                        dbg(0, "play_device:yield a bit (2)\n");
+                        dbg(0, "record_device:yield a bit (2)\n");
                         yieldcpu(2);
                     }
 
@@ -9549,37 +9598,9 @@ void *thread_record_alsa_audio(void *data)
                 }
                 else
                 {
-                    // dbg(1, "read from audio interface OK (frames=%d)\n", (int)err);
-                    pthread_t audio_record_thread__;
-
-                    if (get_audio_record_t_counter() <= MAX_ALSA_RECORD_THREADS)
-                    {
-                        inc_audio_record_t_counter();
-
-                        if (pthread_create(&audio_record_thread__, NULL, audio_record__, (void *)audio_buf_l))
-                        {
-                            dec_audio_record_t_counter();
-                            dbg(0, "error creating audio record thread\n");
-                            free(audio_buf_l);
-                        }
-                        else
-                        {
-                            // int pthread_setschedparam(audio_record_thread__, int policy, const struct sched_param *param);
-
-                            // pthread_setname_np(audio_record_thread__, "audio_rec_thd__");
-
-                            //dbg(0, "creating audio play thread #%d\n", get_audio_t_counter());
-                            if (pthread_detach(audio_record_thread__))
-                            {
-                                dbg(0, "error detaching audio record thread\n");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        dbg(1, "more than %d audio record threads already\n", (int)MAX_ALSA_RECORD_THREADS);
-                        free(audio_buf_l);
-                    }
+                    // dbg(1, "record_device:read from audio interface OK (frames=%d)\n", (int)err);
+                    audio_record__(audio_buf_l);
+                    // audio_record__(stream);
                 }
 
                 //*record*lock*// sem_post(&audio_record_lock);
@@ -9595,6 +9616,11 @@ void *thread_record_alsa_audio(void *data)
             yieldcpu(200);
         }
     }
+
+    free(audio_buf_l);
+#if 0
+    free(stream);
+#endif
 
     close_sound_device();
 }
