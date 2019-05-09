@@ -34,7 +34,7 @@
 # not support PIL/pillow (python imaging library)!
 
 import time
-import os
+import os, sys
 import subprocess
 
 from board import SCL, SDA
@@ -107,9 +107,23 @@ bottom = height-padding
 # Move left to right keeping track of the current x position for drawing shapes.
 x = 0
 
+fifo_path = '../ext_keys.fifo'
+
+try:
+    os.mkfifo(fifo_path)
+except Exception:
+    pass
+
+
 def measure_temp():
         temp = os.popen("vcgencmd measure_temp").readline()
         return (temp.replace("temp=","")).rstrip()
+
+def send_event(txt):
+    # print(txt)
+    fifo_write = os.open(fifo_path, os.O_RDWR)
+    os.write(fifo_write, txt.encode('UTF8'))
+    os.close(fifo_write)
 
 
 # Load default font.
@@ -121,8 +135,6 @@ font = ImageFont.load_default()
 # font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 9)
 # *does not work* font = ImageFont.truetype('/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf', 9)
 # font = ImageFont.truetype('/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf', 9)
-
-
 
 toggle = 0
 toggle_char = ["+","*"]
@@ -191,18 +203,21 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.rectangle((20, 22/2, 40, 40/2), outline=255, fill=0) #center
+            send_event("hangup:\n")
             need_draw = 1
 
         if not button_A.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.ellipse((70, 40/2, 90, 60/2), outline=255, fill=0) #A button
+            send_event("call:2\n")
             need_draw = 1
 
         if not button_B.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.ellipse((100, 20/2, 120, 40/2), outline=255, fill=0) #B button
+            send_event("call:1\n")
             need_draw = 1
 
 
