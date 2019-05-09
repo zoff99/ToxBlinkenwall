@@ -107,7 +107,7 @@ bottom = height-padding
 # Move left to right keeping track of the current x position for drawing shapes.
 x = 0
 
-fifo_path = '../ext_keys.fifo'
+fifo_path = './ext_keys.fifo'
 
 try:
     os.mkfifo(fifo_path)
