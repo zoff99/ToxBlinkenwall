@@ -38,7 +38,9 @@ import os
 import subprocess
 
 from board import SCL, SDA
+import board
 import busio
+from digitalio import DigitalInOut, Direction, Pull
 from PIL import Image, ImageDraw, ImageFont
 import adafruit_ssd1306
 
@@ -50,6 +52,36 @@ i2c = busio.I2C(SCL, SDA)
 # The first two parameters are the pixel width and pixel height.  Change these
 # to the right size for your display!
 disp = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
+
+# Input pins:
+button_A = DigitalInOut(board.D5)
+button_A.direction = Direction.INPUT
+button_A.pull = Pull.UP
+
+button_B = DigitalInOut(board.D6)
+button_B.direction = Direction.INPUT
+button_B.pull = Pull.UP
+
+button_L = DigitalInOut(board.D27)
+button_L.direction = Direction.INPUT
+button_L.pull = Pull.UP
+
+button_R = DigitalInOut(board.D23)
+button_R.direction = Direction.INPUT
+button_R.pull = Pull.UP
+
+button_U = DigitalInOut(board.D17)
+button_U.direction = Direction.INPUT
+button_U.pull = Pull.UP
+
+button_D = DigitalInOut(board.D22)
+button_D.direction = Direction.INPUT
+button_D.pull = Pull.UP
+
+button_C = DigitalInOut(board.D4)
+button_C.direction = Direction.INPUT
+button_C.pull = Pull.UP
+
 
 # Clear display.
 disp.fill(0)
@@ -90,38 +122,90 @@ font = ImageFont.load_default()
 
 toggle = 0
 toggle_char = ["+","*"]
+need_draw = 0
 
 while True:
 
-    # Draw a black filled box to clear the image.
-    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+    if button_A.value and button_B.value and button_C.value and button_U.value and button_L.value and button_R.value and button_D.value:
+        # Draw a black filled box to clear the image.
+        draw.rectangle((0, 0, width, height), outline=0, fill=0)
 
-    # Shell scripts for system monitoring from here:
-    # https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
-    cmd = "hostname -I | cut -d\' \' -f1"
-    IP = subprocess.check_output(cmd, shell=True).decode("utf-8")
-    # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
-    cmd = "top -bn1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
-    CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
-    cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
-    MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
-    cmd = "iwgetid -r 2>/dev/null"
-    SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
-    cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
-    Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        # Shell scripts for system monitoring from here:
+        # https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
+        cmd = "hostname -I | cut -d\' \' -f1"
+        IP = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
+        cmd = "top -bn1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
+        CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
+        MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "iwgetid -r 2>/dev/null"
+        SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
+        Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
 
-    toggle = 1 - toggle
+        toggle = 1 - toggle
 
-    # Write four lines of text.
-    draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
-    draw.text((x, top+8), CPU, font=font, fill=255)
-    draw.text((x, top+16), MemUsage, font=font, fill=255)
-    draw.text((x, top+25), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
+        # Write four lines of text.
+        draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
+        draw.text((x, top+8), CPU, font=font, fill=255)
+        draw.text((x, top+16), MemUsage, font=font, fill=255)
+        draw.text((x, top+25), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
 
-    # Display image.
-    disp.image(image)
-    disp.show()
+        # Display image.
+        disp.image(image)
+        disp.show()
 
-    # run every 10 seconds
-    time.sleep(10)
+    for xy in range(0, 5):
+
+        need_draw = 0
+        if not button_U.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.polygon([(20, 20/2), (30, 2/2), (40, 20/2)], outline=255, fill=0)  #Up
+            need_draw = 1
+
+        if not button_L.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.polygon([(0, 30/2), (18, 21/2), (18, 41/2)], outline=255, fill=0)  #left
+            need_draw = 1
+
+        if not button_R.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.polygon([(60, 30/2), (42, 21/2), (42, 41/2)], outline=255, fill=0) #right
+            need_draw = 1
+
+        if not button_D.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.polygon([(30, 60/2), (40, 42/2), (20, 42/2)], outline=255, fill=0) #down
+            need_draw = 1
+
+        if not button_C.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.rectangle((20, 22/2, 40, 40/2), outline=255, fill=0) #center
+            need_draw = 1
+
+        if not button_A.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.ellipse((70, 40/2, 90, 60/2), outline=255, fill=0) #A button
+            need_draw = 1
+
+        if not button_B.value:
+            if need_draw == 0:
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            draw.ellipse((100, 20/2, 120, 40/2), outline=255, fill=0) #B button
+            need_draw = 1
+
+
+        if need_draw == 1:
+            disp.image(image)
+            disp.show()
+            need_draw = 0
+
+        time.sleep(0.2)
 
