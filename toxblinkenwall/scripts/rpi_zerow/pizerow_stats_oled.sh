@@ -172,10 +172,14 @@ while True:
         disp.image(image)
         disp.show()
 
-        cmd = "convert toxid.png -resize 64x64 toxid2.png"
+        # --foreground=FFFFFF --background=000000
+        cmd = "qrencode -s2 -m1 -o toxid2.png $(cat toxid.txt)"
         subprocess.check_output(cmd, shell=True).decode("utf-8")
 
-        cmd = "mogrify -extent 128x64 -gravity Center toxid2.png"
+        # cmd = "convert toxid2.png -crop 106x106+8+8 toxid2.png ; convert toxid2.png -resize 64x64 toxid2.png"
+        # subprocess.check_output(cmd, shell=True).decode("utf-8")
+
+        cmd = "mogrify -extent 128x64 -gravity Center -background black toxid2.png"
         subprocess.check_output(cmd, shell=True).decode("utf-8")
 
     for xy in range(0, 20):
