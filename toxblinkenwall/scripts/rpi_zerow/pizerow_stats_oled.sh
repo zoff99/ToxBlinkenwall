@@ -51,7 +51,7 @@ i2c = busio.I2C(SCL, SDA)
 # Create the SSD1306 OLED class.
 # The first two parameters are the pixel width and pixel height.  Change these
 # to the right size for your display!
-disp = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
+disp = adafruit_ssd1306.SSD1306_I2C(128, 64, i2c)
 
 # Input pins:
 button_A = DigitalInOut(board.D5)
@@ -172,59 +172,78 @@ while True:
         disp.image(image)
         disp.show()
 
-    for xy in range(0, 5):
+        cmd = "convert toxid.png -resize 64x64 toxid2.png"
+        subprocess.check_output(cmd, shell=True).decode("utf-8")
+
+        cmd = "mogrify -extent 128x64 -gravity Center toxid2.png"
+        subprocess.check_output(cmd, shell=True).decode("utf-8")
+
+    for xy in range(0, 20):
 
         need_draw = 0
         if not button_U.value:
-            if need_draw == 0:
-                draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.polygon([(20, 20/2), (30, 2/2), (40, 20/2)], outline=255, fill=0)  #Up
+
+            #disp2 = adafruit_ssd1306.SSD1306_I2C(128, 64, i2c)
+            #disp2.fill(0)
+            #disp2.show()
+            #width2 = disp2.width
+            #height2 = disp2.height
+            #image2 = Image.new('1', (width2, height2))
+            #draw2 = ImageDraw.Draw(image2)
+            #draw2.rectangle((0, 0, width2, height2), outline=0, fill=0)
+            qrimage = Image.open('toxid2.png').convert('1')
+            disp.image(qrimage)
+            #disp2.show()
+
+            custom_image = 1
             need_draw = 1
 
         if not button_L.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.polygon([(0, 30/2), (18, 21/2), (18, 41/2)], outline=255, fill=0)  #left
+            draw.polygon([(0, 30), (18, 21), (18, 41)], outline=255, fill=0)  #left
             need_draw = 1
 
         if not button_R.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.polygon([(60, 30/2), (42, 21/2), (42, 41/2)], outline=255, fill=0) #right
+            draw.polygon([(60, 30), (42, 21), (42, 41)], outline=255, fill=0) #right
             need_draw = 1
 
         if not button_D.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.polygon([(30, 60/2), (40, 42/2), (20, 42/2)], outline=255, fill=0) #down
+            draw.polygon([(30, 60), (40, 42), (20, 42)], outline=255, fill=0) #down
             need_draw = 1
 
         if not button_C.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.rectangle((20, 22/2, 40, 40/2), outline=255, fill=0) #center
+            draw.rectangle((20, 22, 40, 40), outline=255, fill=0) #center
             send_event("hangup:\n")
             need_draw = 1
 
         if not button_A.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.ellipse((70, 40/2, 90, 60/2), outline=255, fill=0) #A button
+            draw.ellipse((70, 40, 90, 60), outline=255, fill=0) #A button
             send_event("call:2\n")
             need_draw = 1
 
         if not button_B.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.ellipse((100, 20/2, 120, 40/2), outline=255, fill=0) #B button
+            draw.ellipse((100, 20, 120, 40), outline=255, fill=0) #B button
             send_event("call:1\n")
             need_draw = 1
 
 
         if need_draw == 1:
-            disp.image(image)
+            if custom_image == 0:
+                disp.image(image)
             disp.show()
+            custom_image = 0
             need_draw = 0
 
-        time.sleep(0.2)
+        time.sleep(0.5)
 
