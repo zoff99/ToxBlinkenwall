@@ -139,6 +139,7 @@ font = ImageFont.load_default()
 toggle = 0
 toggle_char = ["+","*"]
 need_draw = 0
+custom_image = 0
 
 while True:
 
@@ -186,19 +187,8 @@ while True:
 
         need_draw = 0
         if not button_U.value:
-
-            #disp2 = adafruit_ssd1306.SSD1306_I2C(128, 64, i2c)
-            #disp2.fill(0)
-            #disp2.show()
-            #width2 = disp2.width
-            #height2 = disp2.height
-            #image2 = Image.new('1', (width2, height2))
-            #draw2 = ImageDraw.Draw(image2)
-            #draw2.rectangle((0, 0, width2, height2), outline=0, fill=0)
             qrimage = Image.open('toxid2.png').convert('1')
             disp.image(qrimage)
-            #disp2.show()
-
             custom_image = 1
             need_draw = 1
 
