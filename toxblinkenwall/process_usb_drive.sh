@@ -286,7 +286,8 @@ function import_data_name
 
         # tell ToxBlinkenwall to reload the name
         if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
-            echo "reload_name:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+            exec 4<>"/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo"
+            echo "reload_name:" | tee >&4
         fi
 
         return 0
@@ -301,7 +302,8 @@ function import_data_toxsave
     if [ -f "$mount_dir""/"savedata.tox ]; then
         # tell ToxBlinkenwall to restart
         if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
-            echo "restart:" > /home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo
+            exec 4<>"/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo"
+            echo "restart:" | tee >&4
         fi
 
         sleep 3 # wait for ToxBlinkenwall to shutdown (it will write toxsave on shudown!) # TODO: make more exact!
