@@ -143,7 +143,8 @@ custom_image = 0
 
 while True:
 
-    if button_A.value and button_B.value and button_C.value and button_U.value and button_L.value and button_R.value and button_D.value:
+    # if button_A.value and button_B.value and button_C.value and button_U.value and button_L.value and button_R.value and button_D.value:
+    if button_A.value and button_B.value and button_U.value and button_L.value and button_R.value and button_D.value:
         # Draw a black filled box to clear the image.
         draw.rectangle((0, 0, width, height), outline=0, fill=0)
 
@@ -208,14 +209,14 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(30, 60), (40, 42), (20, 42)], outline=255, fill=0) #down
-            need_draw = 1
-
-        if not button_C.value:
-            if need_draw == 0:
-                draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.rectangle((20, 22, 40, 40), outline=255, fill=0) #center
             send_event("hangup:\n")
             need_draw = 1
+
+        #if not button_C.value:
+        #    if need_draw == 0:
+        #        draw.rectangle((0, 0, width, height), outline=0, fill=0)
+        #    draw.rectangle((20, 22, 40, 40), outline=255, fill=0) #center
+        #    need_draw = 1
 
         if not button_A.value:
             if need_draw == 0:
