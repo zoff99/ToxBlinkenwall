@@ -197,12 +197,14 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(0, 30), (18, 21), (18, 41)], outline=255, fill=0)  #left
+            send_event("play-vol:down\n")
             need_draw = 1
 
         if not button_R.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(60, 30), (42, 21), (42, 41)], outline=255, fill=0) #right
+            send_event("play-vol:up\n")
             need_draw = 1
 
         if not button_D.value:
