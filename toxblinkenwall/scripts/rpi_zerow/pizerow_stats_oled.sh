@@ -153,7 +153,7 @@ while True:
         cmd = "hostname -I | cut -d\' \' -f1"
         IP = subprocess.check_output(cmd, shell=True).decode("utf-8")
         # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
-        cmd = "top -bn1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
+        cmd = "top -bn1 | head -1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
         CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
         cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
         MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
