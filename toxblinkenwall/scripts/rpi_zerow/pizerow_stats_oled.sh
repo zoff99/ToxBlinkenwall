@@ -161,14 +161,20 @@ while True:
         SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
         cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
         Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "date '+%Y.%m.%d %H:%M:%S'"
+        datetime_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "date '+%A'"
+        dayname_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
 
         toggle = 1 - toggle
 
         # Write four lines of text.
         draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
-        draw.text((x, top+8), CPU, font=font, fill=255)
-        draw.text((x, top+16), MemUsage, font=font, fill=255)
-        draw.text((x, top+25), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
+        draw.text((x, top+9*1), CPU, font=font, fill=255)
+        draw.text((x, top+9*2), MemUsage, font=font, fill=255)
+        draw.text((x, top+9*3), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
+        draw.text((x, top+9*4), datetime_str, font=font, fill=255)
+        draw.text((x, top+9*5), dayname_str, font=font, fill=255)
 
         # Display image.
         disp.image(image)
