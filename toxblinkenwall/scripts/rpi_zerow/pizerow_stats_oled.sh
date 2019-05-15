@@ -203,20 +203,27 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(0, 30), (18, 21), (18, 41)], outline=255, fill=0)  #left
+            draw.text((x, top+0), "VOL: -", font=font, fill=255)
             send_event("play-vol:down\n")
+            vol_current = subprocess.check_output("./alsa_mixer_ctrl.sh 2", shell=True).decode("utf-8")
+            draw.text((x, top+9*1), ""+vol_current, font=font, fill=255)
             need_draw = 1
 
         if not button_R.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(60, 30), (42, 21), (42, 41)], outline=255, fill=0) #right
+            draw.text((x, top+0), "VOL: +", font=font, fill=255)
             send_event("play-vol:up\n")
+            vol_current = subprocess.check_output("./alsa_mixer_ctrl.sh 2", shell=True).decode("utf-8")
+            draw.text((x, top+9*1), ""+vol_current, font=font, fill=255)
             need_draw = 1
 
         if not button_D.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.polygon([(30, 60), (40, 42), (20, 42)], outline=255, fill=0) #down
+            draw.text((x, top+0), "END Call", font=font, fill=255)
             send_event("hangup:\n")
             need_draw = 1
 
@@ -230,6 +237,7 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.ellipse((70, 40, 90, 60), outline=255, fill=0) #A button
+            draw.text((x, top+0), "CALL: 2", font=font, fill=255)
             send_event("call:2\n")
             need_draw = 1
 
@@ -237,6 +245,7 @@ while True:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
             draw.ellipse((100, 20, 120, 40), outline=255, fill=0) #B button
+            draw.text((x, top+0), "CALL: 1", font=font, fill=255)
             send_event("call:1\n")
             need_draw = 1
 
