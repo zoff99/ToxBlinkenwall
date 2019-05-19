@@ -8899,7 +8899,7 @@ char *get_bitmap_from_font(int font_char_num)
 #if 1
     else if ((font_char_num >= 0xA0) && (font_char_num <= 0xFF))
     {
-        dbg(9, "UTF8 ext:%d:%d\n", (int)font_char_num, (int)(font_char_num - 0xA0));
+        // dbg(9, "UTF8 ext:%d:%d\n", (int)font_char_num, (int)(font_char_num - 0xA0));
         ret_bitmap = font8x8_ext_latin[font_char_num - 0xA0];
     }
 
@@ -9719,6 +9719,104 @@ void toggle_quality()
     }
 }
 
+void write_toxname_to_file(uint8_t *toxname, int entry_num)
+{
+    if (!toxname)
+    {
+        return;
+    }
+
+    char entry_toxid_filename[300];
+    snprintf(entry_toxid_filename, 299, "./db/book_name_%d.txt", entry_num);
+    FILE *fp = fopen(entry_toxid_filename, "wb");
+
+    if (fp == NULL)
+    {
+        dbg(1, "Warning: failed to write %s file\n", entry_toxid_filename);
+        return;
+    }
+
+    fputs(toxname, fp);
+
+    fclose(fp);
+}
+
+void write_phonebook_names_to_files(Tox *tox)
+{
+    int j3;
+    for (j3 = 1; j3 < 10; j3++)
+    {
+        uint8_t *entry_bin_toxid = NULL;
+        read_pubkey_from_file(&entry_bin_toxid, j3);
+
+        if (entry_bin_toxid != NULL)
+        {
+            int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+
+            if (is_already_friendnum > -1)
+            {
+                int friendlistnum = find_friend_in_friendlist((uint32_t)is_already_friendnum);
+
+                if (friendlistnum > -1)
+                {
+                    if (Friends.list[friendlistnum].active == false)
+                    {
+                        continue;
+                    }
+
+                    static char *fr_conn_status_offline = "OFFLINE";
+                    static char *fr_conn_status_online_udp = "ONLINE (udp)";
+                    static char *fr_conn_status_online_tcp = "ONLINE (TCP)";
+                    static char *fr_conn_status_unknown = "*unknown*";
+                    
+                    static const int max_text_len = 30;
+                    char *fr_conn_stats = NULL;
+                    char text_line[max_text_len + 1];
+                    CLEAR(text_line);
+
+                    if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_NONE)
+                    {
+                        fr_conn_stats = fr_conn_status_offline;
+                    }
+                    else if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_TCP)
+                    {
+                        fr_conn_stats = fr_conn_status_online_tcp;
+                    }
+                    else if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_UDP)
+                    {
+                        fr_conn_stats = fr_conn_status_online_udp;
+                    }
+                    else
+                    {
+                        fr_conn_stats = fr_conn_status_unknown;
+                    }
+
+                    if (Friends.list[friendlistnum].namelength > 0)
+                    {
+                        size_t max_len = max_text_len;
+
+                        if ((int64_t)Friends.list[friendlistnum].namelength < (int64_t)max_len)
+                        {
+                            max_len = Friends.list[friendlistnum].namelength;
+                        }
+
+                        snprintf(text_line, max_text_len, "%s", Friends.list[friendlistnum].name);
+                    }
+                    else
+                    {
+                        snprintf(text_line, max_text_len, "%s %d", "Phonebook", j3);
+                    }
+
+                    write_toxname_to_file(text_line, j3);
+
+                }
+            }
+        }
+    }
+
+}
+
+
 void *thread_phonebook_invite(void *data)
 {
     Tox *tox = (Tox *)data;
@@ -9750,9 +9848,13 @@ void *thread_phonebook_invite(void *data)
             show_tox_id_qrcode(tox);
         }
 
+        write_phonebook_names_to_files(tox);
+
+
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
 }
+
 
 #ifdef HAVE_EXTERNAL_KEYS
 void *thread_ext_keys(void *data)
