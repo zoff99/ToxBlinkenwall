@@ -236,9 +236,18 @@ while True:
         if not button_A.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.ellipse((70, 40, 90, 60), outline=255, fill=0) #A button
-            draw.text((x, top+0), "CALL: 2", font=font, fill=255)
-            send_event("call:2\n")
+
+
+
+            draw.text((x, top+0), "BT:", font=font, fill=255)
+            bt_mac = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_mac.sh", shell=True).decode("utf-8")
+            bt_name = "NO CONN"
+            if bt_mac in (None, '') or not bt_mac.strip():
+                bt_name = "NO CONN"
+            else:
+                bt_name = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_name.sh", shell=True).decode("utf-8")
+            draw.text((x, top+9*1), ""+bt_mac, font=font, fill=255)
+            draw.text((x, top+9*2), ""+bt_name, font=font, fill=255)
             need_draw = 1
 
         if not button_B.value:
