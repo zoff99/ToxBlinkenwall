@@ -942,6 +942,8 @@ uint32_t global_av_iterate_ms = 4;
 uint32_t global_iterate_ms = 4;
 int global_opengl_iterate_ms = 2;
 
+
+int friend_names_were_updated = 1;
 int incoming_filetransfers = 0;
 uint32_t incoming_filetransfers_friendnumber = -1;
 uint32_t incoming_filetransfers_filenumber = -1;
@@ -3145,6 +3147,8 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 
             free(f_name);
         }
+
+        friend_names_were_updated = 1;
     }
 
     update_friend_last_online(num, t);
@@ -4085,6 +4089,8 @@ void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_
     {
         CLEAR(Friends.list[j].name);
     }
+    
+    friend_names_were_updated = 1;
 
     if (global_is_qrcode_showing_on_screen == 1)
     {
@@ -9848,7 +9854,11 @@ void *thread_phonebook_invite(void *data)
             show_tox_id_qrcode(tox);
         }
 
-        write_phonebook_names_to_files(tox);
+        if (friend_names_were_updated == 1)
+        {
+            write_phonebook_names_to_files(tox);
+            friend_names_were_updated = 0;
+        }
 
 
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
