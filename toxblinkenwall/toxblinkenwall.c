@@ -9791,14 +9791,7 @@ void write_phonebook_names_to_files(Tox *tox)
 
                     if (Friends.list[friendlistnum].namelength > 0)
                     {
-                        size_t max_len = max_text_len;
-
-                        if ((int64_t)Friends.list[friendlistnum].namelength < (int64_t)max_text_len)
-                        {
-                            max_len = Friends.list[friendlistnum].namelength;
-                        }
-
-                        snprintf(text_line, max_len, "%s", Friends.list[friendlistnum].name);
+                        snprintf(text_line, max_text_len, "%s", Friends.list[friendlistnum].name);
                     }
                     else
                     {
