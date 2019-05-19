@@ -236,9 +236,6 @@ while True:
         if not button_A.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-
-
-
             draw.text((x, top+0), "BT:", font=font, fill=255)
             bt_mac = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_mac.sh", shell=True).decode("utf-8")
             bt_name = "NO CONN"
@@ -251,12 +248,50 @@ while True:
             need_draw = 1
 
         if not button_B.value:
-            if need_draw == 0:
+            draw.rectangle((0, 0, width, height), outline=0, fill=0)
+            disp.image(image)
+            disp.show()
+
+            p_book_num = 1
+            menu1 = True
+            while menu1 == True:
+                if not button_R.value:
+                    if p_book_num < 9:
+                        p_book_num = p_book_num + 1
+                    else:
+                        p_book_num = 1
+
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.ellipse((100, 20, 120, 40), outline=255, fill=0) #B button
-            draw.text((x, top+0), "CALL: 1", font=font, fill=255)
-            send_event("call:1\n")
-            need_draw = 1
+                draw.text((x, top+0), "CALL: ?", font=font, fill=255)
+                draw.text((x, top+9*1), "P-"+ str(p_book_num), font=font, fill=255)
+                p_book_name = subprocess.check_output("cat ./db/book_name_"+str(p_book_num)+".txt 2>/dev/null||echo \"\"", shell=True).decode("utf-8")
+                draw.text((x, top+9*2), ""+ p_book_name, font=font, fill=255)
+                disp.image(image)
+                disp.show()
+
+                if not button_D.value:
+                    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+                    draw.polygon([(30, 60), (40, 42), (20, 42)], outline=255, fill=0) #down (call number)
+                    draw.text((x, top+0), "Calling:", font=font, fill=255)
+                    draw.text((x, top+9*1), "P-"+ str(p_book_num), font=font, fill=255)
+                    draw.text((x, top+9*2), ""+ p_book_name, font=font, fill=255)
+                    disp.image(image)
+                    disp.show()
+                    send_event("call:"+str(p_book_num)+"\n")
+                    need_draw = 1
+                    menu1 = False
+                    time.sleep(0.8)
+
+                if not button_A.value:
+                    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+                    draw.text((x, top+0), "... not calling", font=font, fill=255)
+                    disp.image(image)
+                    disp.show()
+                    need_draw = 1
+                    menu1 = False
+                    time.sleep(0.8)
+
+                time.sleep(0.1)
 
 
         if need_draw == 1:
