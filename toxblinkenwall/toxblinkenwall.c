@@ -9767,7 +9767,7 @@ void write_phonebook_names_to_files(Tox *tox)
                     static char *fr_conn_status_online_udp = "ONLINE (udp)";
                     static char *fr_conn_status_online_tcp = "ONLINE (TCP)";
                     static char *fr_conn_status_unknown = "*unknown*";
-                    static const int max_text_len = 30;
+                    static const int max_text_len = 33; // must be more than 32 or snprintf will give an error below
                     char *fr_conn_stats = NULL;
                     char text_line[max_text_len + 1];
                     CLEAR(text_line);
