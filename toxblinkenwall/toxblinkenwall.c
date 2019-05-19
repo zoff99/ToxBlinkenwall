@@ -3153,7 +3153,6 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 
     update_friend_last_online(num, t);
     Friends.max_idx++;
-
     update_savedata_file(m);
 
     if (global_is_qrcode_showing_on_screen == 1)
@@ -4091,7 +4090,7 @@ void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_
     {
         CLEAR(Friends.list[j].name);
     }
-    
+
     friend_names_were_updated = 1;
     update_savedata_file(tox);
 
@@ -6562,8 +6561,8 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         void *user_data)
 {
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
-
 #ifndef RPIZEROW
+
     if (pcm)
     {
         if (sample_count > 0)
@@ -6579,6 +6578,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             }
         }
     }
+
 #endif
 
     if (global_video_active == 1)
@@ -7811,7 +7811,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
-
 #ifdef RPIZEROW
     // ignore video on the PI Zero W
     return;
@@ -8202,7 +8201,6 @@ void *thread_av(void *data)
     dbg(2, "--- accepting calls NOW ---\n");
     global_timespan_video_out = 0;
     h264_bufcounter = 0;
-
 #ifdef RPIZEROW
     uint8_t *black_yuv_y = (uint8_t *)calloc(1, 200 * 200);
 #endif
@@ -8211,9 +8209,7 @@ void *thread_av(void *data)
     {
         if (global_video_active == 1)
         {
-
 #ifdef RPIZEROW
-
             TOXAV_ERR_SEND_FRAME error = 0;
 
             if (friend_to_send_video_to > -1)
@@ -8229,7 +8225,6 @@ void *thread_av(void *data)
             }
 
             yieldcpu(1000); /* ~1 frame per second */
-
 #else
 
             if (hw_encoder_wanted_prev != hw_encoder_wanted)
@@ -9509,8 +9504,8 @@ void audio_record__(int16_t *buf_pointer)
         {
             size_t sample_count = (size_t)((audio_record_bytes_ / 2) / DEFAULT_AUDIO_CAPTURE_CHANNELS);
             global_audio_out_vu = AUDIO_VU_MIN_VALUE;
-
 #ifndef RPIZEROW
+
             if (sample_count > 0)
             {
                 float vu_value = audio_vu(audio_buf_orig, sample_count);
@@ -9523,15 +9518,14 @@ void audio_record__(int16_t *buf_pointer)
                     }
                 }
             }
-#endif
 
+#endif
             TOXAV_ERR_SEND_FRAME error;
             bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                               sample_count,
                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
             // dbg(9, "record_device:006 TOXAV_ERR_SEND_FRAME=%d res=%d\n", (int)error, (int)res);
         }
-
     }
 }
 
@@ -9563,9 +9557,6 @@ void *thread_record_alsa_audio(void *data)
     display_thread_sched_attr("Scheduler attributes of [3]: thread_record_alsa_audio");
 #endif
     // ------ thread priority ------
-
-
-
 #if 0
     // ------- generate noise ----------
     uint8_t *stream = malloc((size_t)(AUDIO_RECORD_BUFFER_BYTES * 2));
@@ -9575,9 +9566,9 @@ void *thread_record_alsa_audio(void *data)
     {
         stream[i] = rand();
     }
+
     // ------- generate noise ----------
 #endif
-
     int16_t *audio_buf_l = (int16_t *)calloc(1, (size_t)AUDIO_RECORD_BUFFER_BYTES);
 
     while (do_audio_recording == 1)
@@ -9630,7 +9621,6 @@ void *thread_record_alsa_audio(void *data)
 #if 0
     free(stream);
 #endif
-
     close_sound_device();
 }
 
@@ -9746,13 +9736,13 @@ void write_toxname_to_file(uint8_t *toxname, int entry_num)
     }
 
     fputs(toxname, fp);
-
     fclose(fp);
 }
 
 void write_phonebook_names_to_files(Tox *tox)
 {
     int j3;
+
     for (j3 = 1; j3 < 10; j3++)
     {
         uint8_t *entry_bin_toxid = NULL;
@@ -9777,7 +9767,6 @@ void write_phonebook_names_to_files(Tox *tox)
                     static char *fr_conn_status_online_udp = "ONLINE (udp)";
                     static char *fr_conn_status_online_tcp = "ONLINE (TCP)";
                     static char *fr_conn_status_unknown = "*unknown*";
-                    
                     static const int max_text_len = 30;
                     char *fr_conn_stats = NULL;
                     char text_line[max_text_len + 1];
@@ -9817,12 +9806,10 @@ void write_phonebook_names_to_files(Tox *tox)
                     }
 
                     write_toxname_to_file(text_line, j3);
-
                 }
             }
         }
     }
-
 }
 
 
@@ -9862,7 +9849,6 @@ void *thread_phonebook_invite(void *data)
             write_phonebook_names_to_files(tox);
             friend_names_were_updated = 0;
         }
-
 
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
