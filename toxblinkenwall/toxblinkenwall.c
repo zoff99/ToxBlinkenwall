@@ -3154,6 +3154,8 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
     update_friend_last_online(num, t);
     Friends.max_idx++;
 
+    update_savedata_file(m);
+
     if (global_is_qrcode_showing_on_screen == 1)
     {
         show_tox_id_qrcode(m);
@@ -4091,6 +4093,7 @@ void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_
     }
     
     friend_names_were_updated = 1;
+    update_savedata_file(tox);
 
     if (global_is_qrcode_showing_on_screen == 1)
     {
