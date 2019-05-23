@@ -1452,6 +1452,78 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
     dbg(9, "%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
 }
 
+
+static void write_audio_in_vu_to_file(float vu)
+{
+    float vu2 = vu - AUDIO_VU_MIN_VALUE;
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/audio_in_vu.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fprintf(fp, "%f\n", vu2);
+    fclose(fp);
+}
+
+static void write_audio_out_vu_to_file(float vu)
+{
+    float vu2 = vu - AUDIO_VU_MIN_VALUE;
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/audio_out_vu.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fprintf(fp, "%f\n", vu2);
+    fclose(fp);
+}
+
+
+
+static void write_rtt_to_file(uint32_t value)
+{
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/rtt.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fprintf(fp, "%d\n", value);
+    fclose(fp);
+}
+
+
+static void write_delay_to_file(int64_t value)
+{
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/delay.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fprintf(fp, "%lld\n", (long long)value);
+    fclose(fp);
+}
+
+
+
 void toggle_own_cam(int on_off)
 {
     // TODO: make this better, and also select the correct camera device, if more than 1 camera
@@ -2764,9 +2836,12 @@ static int find_friend_in_friendlist(uint32_t friendnum)
 
     for (i = 0; i <= Friends.max_idx; ++i)
     {
-        if (Friends.list[i].num == friendnum)
+        if (Friends.list)
         {
-            return i;
+            if (Friends.list[i].num == friendnum)
+            {
+                return i;
+            }
         }
     }
 
@@ -6132,6 +6207,7 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     else if (comm_value == TOXAV_CALL_COMM_NETWORK_ROUND_TRIP_MS)
     {
         global_network_round_trip_ms = (uint32_t)comm_number;
+        write_rtt_to_file(global_network_round_trip_ms);
     }
     else if (comm_value == TOXAV_CALL_COMM_PLAY_DELAY)
     {
@@ -6146,6 +6222,7 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
             global_play_delay_ms = 20000;
         }
 
+        write_delay_to_file(global_play_delay_ms);
         // dbg(9, "vplay_delay=%d\n", (int)global_play_delay_ms);
     }
     else if (comm_value == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES)
@@ -6579,6 +6656,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         }
     }
 
+    // write_audio_in_vu_to_file(global_audio_in_vu);
 #endif
 
     if (global_video_active == 1)
@@ -9519,6 +9597,7 @@ void audio_record__(int16_t *buf_pointer)
                 }
             }
 
+            // write_audio_out_vu_to_file(global_audio_out_vu);
 #endif
             TOXAV_ERR_SEND_FRAME error;
             bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
