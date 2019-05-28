@@ -158,13 +158,23 @@ while True:
         cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
         MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
         cmd = "iwgetid -r 2>/dev/null"
-        SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        SSID = ""
+        try:
+            SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        except:
+            SSID = ""
         cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
         Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
         cmd = "date '+%Y.%m.%d %H:%M:%S'"
         datetime_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        cmd = "date '+%A'"
-        dayname_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        # cmd = "date '+%A'"
+        # dayname_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/online_status.txt 2>/dev/null"
+        online_status_str = ""
+        try:
+            online_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        except:
+            online_status_str = ""
 
         toggle = 1 - toggle
 
@@ -174,7 +184,7 @@ while True:
         draw.text((x, top+9*2), MemUsage, font=font, fill=255)
         draw.text((x, top+9*3), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
         draw.text((x, top+9*4), datetime_str, font=font, fill=255)
-        draw.text((x, top+9*5), dayname_str, font=font, fill=255)
+        draw.text((x, top+9*5), online_status_str, font=font, fill=255)
 
         # Display image.
         disp.image(image)

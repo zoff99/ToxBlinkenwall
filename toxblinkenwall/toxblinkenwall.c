@@ -11844,6 +11844,7 @@ int main(int argc, char *argv[])
     // init toxutil callbacks ----------------------------------
     update_savedata_file(tox);
     load_friendlist(tox);
+    write_phonebook_names_to_files(tox);
     char path[300];
     snprintf(path, sizeof(path), "%s", my_avatar_filename);
     int len = strlen(path) - 1;
