@@ -9839,6 +9839,7 @@ void write_phonebook_names_to_files(Tox *tox)
                 {
                     if (Friends.list[friendlistnum].active == false)
                     {
+                        write_toxname_to_file("", j3);
                         continue;
                     }
 
@@ -9879,7 +9880,19 @@ void write_phonebook_names_to_files(Tox *tox)
 
                     write_toxname_to_file(text_line, j3);
                 }
+                else
+                {
+                    write_toxname_to_file("", j3);
+                }
             }
+            else
+            {
+                write_toxname_to_file("", j3);
+            }
+        }
+        else
+        {
+            write_toxname_to_file("", j3);
         }
     }
 }
