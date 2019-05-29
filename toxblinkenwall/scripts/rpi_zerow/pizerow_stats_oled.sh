@@ -267,11 +267,12 @@ while True:
                 except:
                     cmd_str = ""
 
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
                 draw.text((x, top+0), "delay / RTT", font=font, fill=255)
                 draw.text((x, top+9*1), ""+cmd_str, font=font, fill=255)
                 disp.image(image)
                 disp.show()
-                time.sleep(0.1)
+                time.sleep(0.3)
 
                 if not button_D.value:
                     draw.rectangle((0, 0, width, height), outline=0, fill=0)
