@@ -246,16 +246,41 @@ while True:
         if not button_A.value:
             if need_draw == 0:
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            draw.text((x, top+0), "BT:", font=font, fill=255)
-            bt_mac = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_mac.sh", shell=True).decode("utf-8")
-            bt_name = "NO CONN"
-            if bt_mac in (None, '') or not bt_mac.strip():
-                bt_name = "NO CONN"
-            else:
-                bt_name = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_name.sh", shell=True).decode("utf-8")
-            draw.text((x, top+9*1), ""+bt_mac, font=font, fill=255)
-            draw.text((x, top+9*2), ""+bt_name, font=font, fill=255)
-            need_draw = 1
+            #draw.text((x, top+0), "BT:", font=font, fill=255)
+            #bt_mac = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_mac.sh", shell=True).decode("utf-8")
+            #bt_name = "NO CONN"
+            #if bt_mac in (None, '') or not bt_mac.strip():
+            #    bt_name = "NO CONN"
+            #else:
+            #    bt_name = subprocess.check_output("./scripts/rpi_zerow/get_bt_connected_name.sh", shell=True).decode("utf-8")
+            #draw.text((x, top+9*1), ""+bt_mac, font=font, fill=255)
+            #draw.text((x, top+9*2), ""+bt_name, font=font, fill=255)
+            #need_draw = 1
+
+            cmd = "echo $(cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/delay.txt)\" / \"$(cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/rtt.txt) 2>/dev/null"
+
+            menu2 = True
+            while menu2 == True:
+                cmd_str = ""
+                try:
+                    cmd_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+                except:
+                    cmd_str = ""
+
+                draw.text((x, top+0), "delay / RTT", font=font, fill=255)
+                draw.text((x, top+9*1), ""+cmd_str, font=font, fill=255)
+                disp.image(image)
+                disp.show()
+                time.sleep(0.1)
+
+                if not button_D.value:
+                    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+                    draw.text((x, top+0), "... back", font=font, fill=255)
+                    disp.image(image)
+                    disp.show()
+                    need_draw = 1
+                    menu2 = False
+                    time.sleep(0.8)
 
         if not button_B.value:
             draw.rectangle((0, 0, width, height), outline=0, fill=0)
