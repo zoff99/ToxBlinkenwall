@@ -1452,6 +1452,38 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
     dbg(9, "%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
 }
 
+void write_ownname_to_file(Tox *tox)
+{
+    char ownname[500];
+    CLEAR(ownname);
+
+    if (!tox)
+    {
+        return;
+    }
+
+    if ((tox_self_get_name_size(tox) < 1) || (tox_self_get_name_size(tox) > 498))
+    {
+    }
+    else
+    {
+        tox_self_get_name(tox, ownname);
+    }
+
+    char this_filename[300];
+    snprintf(this_filename, 299, "./db/ownname.txt");
+    FILE *fp = fopen(this_filename, "wb");
+
+    if (fp == NULL)
+    {
+        dbg(1, "Warning: failed to write %s file\n", this_filename);
+        return;
+    }
+
+    fputs(ownname, fp);
+    fclose(fp);
+}
+
 
 static void write_audio_in_vu_to_file(float vu)
 {
@@ -3777,6 +3809,7 @@ void reload_name_from_file(Tox *tox)
                     dbg(9, "setting new name to:%s\n", (uint8_t *)self_name);
                     tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
                     update_savedata_file(tox);
+                    write_ownname_to_file(tox);
                 }
 
                 free(line);
@@ -4610,6 +4643,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         tox_self_set_name(tox, (uint8_t *)message + 7, strlen(message + 7), NULL);
                         update_savedata_file(tox);
+                        write_ownname_to_file(tox);
                     }
                 }
             }
@@ -9797,6 +9831,7 @@ void toggle_quality()
     }
 }
 
+
 void write_toxname_to_file(uint8_t *toxname, int entry_num)
 {
     if (!toxname)
@@ -11809,6 +11844,8 @@ int main(int argc, char *argv[])
         snprintf(self_name, (self_name_max_len - 1), "%s-%s", default_tox_name, self_name_random_part);
         tox_self_set_name(tox, (uint8_t *)self_name, strlen(self_name), NULL);
     }
+
+    write_ownname_to_file(tox);
 
     if (tox_self_get_status_message_size(tox) == 0)
     {

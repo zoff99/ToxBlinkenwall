@@ -163,6 +163,14 @@ while True:
             SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
         except:
             SSID = ""
+
+        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/db/ownname.txt 2>/dev/null"
+        ownname = ""
+        try:
+            ownname = subprocess.check_output(cmd, shell=True).decode("utf-8")
+        except:
+            ownname = ""
+
         cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
         Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
         cmd = "date '+%Y.%m.%d %H:%M:%S'"
@@ -179,12 +187,13 @@ while True:
         toggle = 1 - toggle
 
         # Write four lines of text.
-        draw.text((x, top+0), "IP: "+IP, font=font, fill=255)
-        draw.text((x, top+9*1), CPU, font=font, fill=255)
-        draw.text((x, top+9*2), MemUsage, font=font, fill=255)
-        draw.text((x, top+9*3), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
-        draw.text((x, top+9*4), datetime_str, font=font, fill=255)
-        draw.text((x, top+9*5), online_status_str, font=font, fill=255)
+        draw.text((x, top+0), ""+ownname, font=font, fill=255)
+        draw.text((x, top+9*1), "IP: "+IP, font=font, fill=255)
+        draw.text((x, top+9*2), CPU, font=font, fill=255)
+        draw.text((x, top+9*3), MemUsage, font=font, fill=255)
+        draw.text((x, top+9*4), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
+        draw.text((x, top+9*5), datetime_str, font=font, fill=255)
+        draw.text((x, top+9*6), online_status_str, font=font, fill=255)
 
         # Display image.
         disp.image(image)
