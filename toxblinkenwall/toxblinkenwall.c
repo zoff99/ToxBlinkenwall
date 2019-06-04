@@ -225,6 +225,11 @@ static const char global_version_string[] = "0.99.40";
 
 // --------- automatically pickup incoming calls ---------
 #define AV_AUTO_PICKUP_CALL 1
+
+#ifdef RPIZEROW
+    #undef AV_AUTO_PICKUP_CALL  // on the PizeroW you always have to actively pick up a call
+#endif
+
 // --------- automatically pickup incoming calls ---------
 
 // --------- change nospam ---------
@@ -861,6 +866,9 @@ int vid_height = 144; // ------- blinkenwall resolution -------
     #define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.1)
     #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
+
+pthread_t ringtone_thread;
+int ringtone_thread_stop = 0;
 
 
 #define AUDIO_VU_MIN_VALUE -20
@@ -1778,6 +1786,153 @@ void on_start_call()
     }
 }
 
+
+void *play_ringtone(void *data)
+{
+#define PI 3.14159265359
+    int beep_fequency1 = 784; // Hz sinus
+    int beep_fequency2 = 660; // Hz sinus
+    int beep_fequency = beep_fequency1;
+    int samplesize          = 16; // 16 bit PCM
+    unsigned int samplerate = libao_sampling_rate;
+    int duration            = 1; // seconds
+    int channels            = libao_channels;
+    long samples            = samplerate * duration; // per channel
+    long total_samples      = samples * channels; // all channels
+    int every_ms_switch_freq = 180;
+    int beep_freq_change_every_x_samples = ((samplerate / 1000) * every_ms_switch_freq);
+    // Create test input buffer
+    int16_t input[total_samples];
+
+    // Initialize test buffer with zeros
+    for (int i = 0; i < total_samples; ++i)
+    {
+        input[i] = 0;
+    }
+
+    int total_index = 0;
+
+    for (long i = 0; i < samples; ++i)
+    {
+        // amplitude = 0.8 * max range; max range = 0x8000 = 32768 ( max value for 16 Bit signed int )
+        int sinus    = 0.8 * 0x8000 * sin(2 * PI * beep_fequency * i / samplerate);
+        input[total_index] = sinus;
+        total_index++;
+
+        if (ringtone_thread_stop == 1)
+        {
+            break;
+        }
+
+        if (channels == 2)
+        {
+            input[total_index] = sinus;
+            total_index++;
+        }
+
+        if ((i % beep_freq_change_every_x_samples) == 0)
+        {
+            if (beep_fequency == beep_fequency1)
+            {
+                beep_fequency = beep_fequency2;
+            }
+            else
+            {
+                beep_fequency = beep_fequency1;
+            }
+        }
+    }
+
+    // -------- PLAY ---------
+#ifdef HAVE_ALSA_PLAY
+
+    while (ringtone_thread_stop == 0)
+    {
+        long idx = 0;
+        int frame_sample_count = 100;
+
+        for (long i = 0; i < (samples / frame_sample_count); ++i)
+        {
+            int16_t *pcm = &input[idx];
+            size_t sample_count = frame_sample_count;
+            idx += frame_sample_count;
+
+            if (channels == 2)
+            {
+                idx += frame_sample_count;
+                sample_count = 2 * frame_sample_count;
+            }
+
+            if (ringtone_thread_stop == 1)
+            {
+                break;
+            }
+
+            int err;
+            int has_error = 0;
+            err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+            has_error = 0;
+
+            if (err != (int)sample_count)
+            {
+                if (err == -EAGAIN)
+                {
+                    yieldcpu(2);
+                    err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                }
+                else if (err < 0)
+                {
+                    if (err == -EPIPE)
+                    {
+                        snd_pcm_prepare(audio_play_handle);
+                        err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                    }
+
+                    if (err < 0)
+                    {
+                        sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                    }
+                }
+            }
+
+            uint64_t delay_ = (1000.0f * 1000.0f) / ((float)samplerate / (float)sample_count);
+            // dbg(9, "delay_=%d\n", (int)delay_);
+            usleep_usec(delay_);
+        }
+
+        if (ringtone_thread_stop == 1)
+        {
+            break;
+        }
+
+        usleep_usec(1000 * 300); // pause 300ms between rings
+    }
+
+#endif
+    // -------- PLAY ---------
+    dbg(2, "Ringtone:Clean thread exit!\n");
+}
+
+void start_play_ringtone()
+{
+    ringtone_thread_stop = 0;
+
+    if (pthread_create(&ringtone_thread, NULL, play_ringtone, (void *)NULL) != 0)
+    {
+        dbg(0, "Ringtone Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(ringtone_thread, "t_ringtone");
+        dbg(2, "Ringtone Thread successfully created\n");
+    }
+}
+
+void stop_play_ringtone()
+{
+    ringtone_thread_stop = 1;
+    pthread_join(ringtone_thread, NULL);
+}
 
 #ifdef HAVE_PORTAUDIO
 
@@ -6176,6 +6331,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
         update_status_line_1_text();
         call_waiting_for_answer = 1;
+        start_play_ringtone();
         call_waiting_friend_num = friend_number;
         call_waiting_audio_enabled = audio_enabled;
         call_waiting_video_enabled = video_enabled;
@@ -8702,6 +8858,7 @@ void reset_toxav_call_waiting()
     {
         call_waiting_for_answer = 0;
         call_waiting_friend_num = -1;
+        stop_play_ringtone();
     }
 }
 
@@ -11788,7 +11945,9 @@ int main(int argc, char *argv[])
 
 #endif
 #ifdef HAVE_ALSA_PLAY
-    init_sound_play_device(1, 48000);
+    libao_channels = 1;
+    libao_sampling_rate = 48000;
+    init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
     count_audio_play_threads_int = 0;
     playback_volume_get_current();
 
@@ -12140,6 +12299,7 @@ int main(int argc, char *argv[])
 
     toxav_video_thread_stop = 1;
     toxav_audioiterate_thread_stop = 1;
+    ringtone_thread_stop = 1;
 #ifdef HAVE_OUTPUT_OPENGL
     opengl_shutdown = 1;
     yieldcpu(100);
