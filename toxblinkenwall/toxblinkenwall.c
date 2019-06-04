@@ -10211,14 +10211,15 @@ void *thread_ext_keys(void *data)
             else if (strncmp((char *)buf, "hangup:", strlen((char *)"hangup:")) == 0)
             {
                 dbg(2, "ExtKeys: HANGUP:\n");
+                disconnect_all_calls(tox);
+            }
+            else if (strncmp((char *)buf, "pickup:", strlen((char *)"pickup:")) == 0)
+            {
+                dbg(2, "ExtKeys: PICKUP:\n");
 
                 if (call_waiting_for_answer == 1)
                 {
                     pick_up_call();
-                }
-                else
-                {
-                    disconnect_all_calls(tox);
                 }
             }
             else if (strncmp((char *)buf, "toggle_quality:", strlen((char *)"toggle_quality:")) == 0)

@@ -213,6 +213,7 @@ while True:
 
         need_draw = 0
         if not button_U.value:
+            send_event("pickup:\n")
             qrimage = Image.open('toxid2.png').convert('1')
             disp.image(qrimage)
             custom_image = 1
