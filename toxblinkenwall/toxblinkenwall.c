@@ -1021,6 +1021,11 @@ extern int global_h264_enc_profile_high_enabled_switch;
 // ------- zoxcore debug settings !! ------------
 int global_tbw_enc_profile_high_enabled = 0;
 
+// ---- DEBUG ----
+static struct timeval tm_incoming_video_frames;
+int first_incoming_video_frame = 1;
+// ---- DEBUG ----
+
 
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 FILE *logfile = NULL;
@@ -1754,6 +1759,8 @@ void on_end_call()
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallend);
 
     if (system(cmd_str));
+
+    first_incoming_video_frame = 1;
 }
 
 // stuff to do then we start a call
@@ -8068,11 +8075,6 @@ static void *video_play(void *dummy)
 }
 
 
-// ---- DEBUG ----
-static struct timeval tm_incoming_video_frames;
-int first_incoming_video_frame = 1;
-// ---- DEBUG ----
-
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
@@ -8126,6 +8128,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     }
     else
     {
+        fb_fill_black(); // clear framebuffer on first incoming video frame
         first_incoming_video_frame = 0;
         global_timespan_video_in = 0;
     }
