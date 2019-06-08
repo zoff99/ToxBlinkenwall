@@ -125,6 +125,28 @@ def send_event(txt):
     os.write(fifo_write, txt.encode('UTF8'))
     os.close(fifo_write)
 
+def is_ringing():
+    cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/ringstatus.txt 2>/dev/null"
+    ring_status_str = ""
+    try:
+        ring_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+    except:
+        ring_status_str = ""
+
+    if ring_status_str != "1":
+        return 0
+
+    return 1
+
+def get_caller_name():
+    cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt 2>/dev/null"
+    cn_str = ""
+    try:
+        cn_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+    except:
+        cn_str = ""
+
+    return cn_str
 
 # Load default font.
 font = ImageFont.load_default()
@@ -140,7 +162,6 @@ toggle = 0
 toggle_char = ["+","*"]
 need_draw = 0
 custom_image = 0
-ring_status_str = ""
 callername_str = ""
 
 
@@ -149,7 +170,7 @@ while True:
     # if button_A.value and button_B.value and button_C.value and button_U.value and button_L.value and button_R.value and button_D.value:
     if button_A.value and button_B.value and button_U.value and button_L.value and button_R.value and button_D.value:
 
-        if ring_status_str != "1":
+        if is_ringing() == 0:
 
             # Draw a black filled box to clear the image.
             draw.rectangle((0, 0, width, height), outline=0, fill=0)
@@ -215,18 +236,9 @@ while True:
             cmd = "mogrify -extent 128x64 -gravity Center -background black toxid2.png"
             subprocess.check_output(cmd, shell=True).decode("utf-8")
 
-        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/ringstatus.txt 2>/dev/null"
-        try:
-            ring_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
-        except:
-            ring_status_str = ""
 
-        if ring_status_str == "1":
-            cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt 2>/dev/null"
-            try:
-                callername_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
-            except:
-                callername_str = ""
+        else: # if is_ringing() == 1:
+            callername_str = get_caller_name()
 
             # Draw a black filled box to clear the image.
             draw.rectangle((0, 0, width, height), outline=0, fill=0)
@@ -241,10 +253,12 @@ while True:
             disp.image(image)
             disp.show()
 
-        # print("X"+str(ring_status_str) + "X Y" + callername_str + "Y");
-
 
     for xy in range(0, 20):
+
+        if ((xy % 4) == 0):
+            if is_ringing() == 1:
+                break
 
         need_draw = 0
 
