@@ -14,6 +14,12 @@
 // LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
 /*
 
+
+
+# strace -f -e verbose=all -s1000 -qq -v -o st.txt -T -p $(pgrep -f toxblinkenwall)
+# strace -f -e verbose=all -s1000 -qq -v -e trace=getrandom -T -p $(pgrep -f toxblinkenwall)
+
+
 # run:
 #   cat /proc/asound/cards
 # or:
@@ -1567,6 +1573,42 @@ static void write_delay_to_file(int64_t value)
     fclose(fp);
 }
 
+static void write_caller_name_to_file(char *caller_name)
+{
+    if (!caller_name)
+    {
+        return;
+    }
+
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fputs(caller_name, fp);
+    fclose(fp);
+}
+
+static void write_ring_status_to_file(uint8_t ringstatus)
+{
+    char filename[300];
+    CLEAR(filename);
+    snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/ringstatus.txt");
+    FILE *fp = fopen(filename, "wb");
+
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    fprintf(fp, "%d\n", (int)ringstatus);
+    fclose(fp);
+}
 
 
 void toggle_own_cam(int on_off)
@@ -1761,6 +1803,7 @@ void on_end_call()
     if (system(cmd_str));
 
     first_incoming_video_frame = 1;
+    write_caller_name_to_file("");
 }
 
 // stuff to do then we start a call
@@ -1923,6 +1966,7 @@ void *play_ringtone(void *data)
 void start_play_ringtone()
 {
     ringtone_thread_stop = 0;
+    write_ring_status_to_file(1);
 
     if (pthread_create(&ringtone_thread, NULL, play_ringtone, (void *)NULL) != 0)
     {
@@ -1938,6 +1982,7 @@ void start_play_ringtone()
 void stop_play_ringtone()
 {
     ringtone_thread_stop = 1;
+    write_ring_status_to_file(0);
     pthread_join(ringtone_thread, NULL);
 }
 
@@ -2496,6 +2541,7 @@ void show_video_calling(uint32_t fnum, bool with_delay)
                 char text_line[150];
                 CLEAR(text_line);
                 snprintf(text_line, sizeof(text_line), "Calling: %s", temp_caller_name);
+                write_caller_name_to_file(temp_caller_name);
                 unsigned char *bf_out_real_fb = framebuffer_mappedmem;
                 text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                       var_framebuffer_fix_info.line_length, bf_out_real_fb,
@@ -11731,6 +11777,8 @@ int main(int argc, char *argv[])
     snprintf(v4l2_device, 399, "%s", "/dev/video0");
     framebuffer_device = calloc(1, 400);
     snprintf(framebuffer_device, 399, "%s", "/dev/fb0");
+    write_caller_name_to_file("");
+    write_ring_status_to_file(0);
     int aflag = 0;
     char *cvalue = NULL;
     int index;

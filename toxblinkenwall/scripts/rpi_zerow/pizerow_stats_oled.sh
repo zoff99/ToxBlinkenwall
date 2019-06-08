@@ -140,78 +140,114 @@ toggle = 0
 toggle_char = ["+","*"]
 need_draw = 0
 custom_image = 0
+ring_status_str = ""
+callername_str = ""
+
 
 while True:
 
     # if button_A.value and button_B.value and button_C.value and button_U.value and button_L.value and button_R.value and button_D.value:
     if button_A.value and button_B.value and button_U.value and button_L.value and button_R.value and button_D.value:
-        # Draw a black filled box to clear the image.
-        draw.rectangle((0, 0, width, height), outline=0, fill=0)
 
-        # Shell scripts for system monitoring from here:
-        # https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
-        cmd = "hostname -I | cut -d\' \' -f1"
-        IP = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
-        cmd = "top -bn1 | head -1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
-        CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
-        MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        cmd = "iwgetid -r 2>/dev/null"
-        SSID = ""
-        try:
-            SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        except:
+        if ring_status_str != "1":
+
+            # Draw a black filled box to clear the image.
+            draw.rectangle((0, 0, width, height), outline=0, fill=0)
+
+            # Shell scripts for system monitoring from here:
+            # https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
+            cmd = "hostname -I | cut -d\' \' -f1"
+            IP = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            # cmd = "top -bn1 | grep load | awk '{printf \"CPU Load: \" $(NF-2)}' | sed -e 's#,$##'"
+            cmd = "top -bn1 | head -1 | grep load |sed -e 's#^.*load average: ##'|cut -d\" \" -f1|sed -e 's#,$##'|awk '{ printf \"CPU Load: \" $0 }'"
+            CPU = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            cmd = "free -m | awk 'NR==2{printf \"Mem: %s/%s MB\", $3,$2 }'"
+            MemUsage = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            cmd = "iwgetid -r 2>/dev/null"
             SSID = ""
+            try:
+                SSID = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            except:
+                SSID = ""
 
-        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/db/ownname.txt 2>/dev/null"
-        ownname = ""
-        try:
-            ownname = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        except:
+            cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/db/ownname.txt 2>/dev/null"
             ownname = ""
+            try:
+                ownname = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            except:
+                ownname = ""
 
-        cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
-        Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        cmd = "date '+%Y.%m.%d %H:%M:%S'"
-        datetime_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        # cmd = "date '+%A'"
-        # dayname_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/online_status.txt 2>/dev/null"
-        online_status_str = ""
-        try:
-            online_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
-        except:
+            cmd = "df -h | awk '$NF==\"/\"{printf \"Disk: %d/%d GB  %s\", $3,$2,$5}'"
+            Disk = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            cmd = "date '+%Y.%m.%d %H:%M:%S'"
+            datetime_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            # cmd = "date '+%A'"
+            # dayname_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/online_status.txt 2>/dev/null"
             online_status_str = ""
+            try:
+                online_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8")
+            except:
+                online_status_str = ""
 
-        toggle = 1 - toggle
+            toggle = 1 - toggle
 
-        # Write four lines of text.
-        draw.text((x, top+0), ""+ownname, font=font, fill=255)
-        draw.text((x, top+9*1), "IP: "+IP, font=font, fill=255)
-        draw.text((x, top+9*2), CPU, font=font, fill=255)
-        draw.text((x, top+9*3), MemUsage, font=font, fill=255)
-        draw.text((x, top+9*4), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
-        draw.text((x, top+9*5), datetime_str, font=font, fill=255)
-        draw.text((x, top+9*6), online_status_str, font=font, fill=255)
+            # Write four lines of text.
+            draw.text((x, top+0), ""+ownname, font=font, fill=255)
+            draw.text((x, top+9*1), "IP: "+IP, font=font, fill=255)
+            draw.text((x, top+9*2), CPU, font=font, fill=255)
+            draw.text((x, top+9*3), MemUsage, font=font, fill=255)
+            draw.text((x, top+9*4), measure_temp() + "" + toggle_char[toggle]  + " " + SSID, font=font, fill=255)
+            draw.text((x, top+9*5), datetime_str, font=font, fill=255)
+            draw.text((x, top+9*6), online_status_str, font=font, fill=255)
 
-        # Display image.
-        disp.image(image)
-        disp.show()
+            # Display image.
+            disp.image(image)
+            disp.show()
 
-        # --foreground=FFFFFF --background=000000
-        cmd = "qrencode -s2 -m1 -o toxid2.png $(cat toxid.txt)"
-        subprocess.check_output(cmd, shell=True).decode("utf-8")
+            # --foreground=FFFFFF --background=000000
+            cmd = "qrencode -s2 -m1 -o toxid2.png $(cat toxid.txt)"
+            subprocess.check_output(cmd, shell=True).decode("utf-8")
 
-        # cmd = "convert toxid2.png -crop 106x106+8+8 toxid2.png ; convert toxid2.png -resize 64x64 toxid2.png"
-        # subprocess.check_output(cmd, shell=True).decode("utf-8")
+            # cmd = "convert toxid2.png -crop 106x106+8+8 toxid2.png ; convert toxid2.png -resize 64x64 toxid2.png"
+            # subprocess.check_output(cmd, shell=True).decode("utf-8")
 
-        cmd = "mogrify -extent 128x64 -gravity Center -background black toxid2.png"
-        subprocess.check_output(cmd, shell=True).decode("utf-8")
+            cmd = "mogrify -extent 128x64 -gravity Center -background black toxid2.png"
+            subprocess.check_output(cmd, shell=True).decode("utf-8")
+
+        cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/ringstatus.txt 2>/dev/null"
+        try:
+            ring_status_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+        except:
+            ring_status_str = ""
+
+        if ring_status_str == "1":
+            cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt 2>/dev/null"
+            try:
+                callername_str = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+            except:
+                callername_str = ""
+
+            # Draw a black filled box to clear the image.
+            draw.rectangle((0, 0, width, height), outline=0, fill=0)
+
+            # Write text.
+            draw.text((x, top+0),   "=====================", font=font, fill=255)
+            draw.text((x, top+9*1), "  CALL incoming", font=font, fill=255)
+            draw.text((x, top+9*2), "  "+callername_str, font=font, fill=255)
+            draw.text((x, top+9*3), "=====================", font=font, fill=255)
+
+            # Display image.
+            disp.image(image)
+            disp.show()
+
+        # print("X"+str(ring_status_str) + "X Y" + callername_str + "Y");
+
 
     for xy in range(0, 20):
 
         need_draw = 0
+
         if not button_U.value:
             send_event("pickup:\n")
             qrimage = Image.open('toxid2.png').convert('1')
