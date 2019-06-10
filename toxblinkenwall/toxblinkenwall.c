@@ -884,10 +884,11 @@ pthread_t ringtone_thread;
 int ringtone_thread_stop = 0;
 
 pthread_t networktraffic_thread;
-int networktraffic_thread_stop = 0;
-#define DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY 10
-uint32_t debug_network_lan_bar_values[10];
-uint32_t debug_network_wifi_bar_values[10];
+int networktraffic_thread_stop = 1;
+#define DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY 60
+#define DEBUG_NETWORK_GRAPH_READ_INTERVAL_SECS 1
+uint32_t debug_network_lan_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
+uint32_t debug_network_wifi_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 
 
 #define AUDIO_VU_MIN_VALUE -20
@@ -2010,7 +2011,7 @@ void move_network_wifi_bar_values()
 
 void *calc_network_traffic(void *data)
 {
-    int interval_secs = 2;
+    int interval_secs = DEBUG_NETWORK_GRAPH_READ_INTERVAL_SECS;
     const char *lan_rx_file = "/sys/class/net/eth0/statistics/rx_bytes";
     const char *lan_tx_file = "/sys/class/net/eth0/statistics/tx_bytes";
     const char *wifi_rx_file = "/sys/class/net/wlan0/statistics/rx_bytes";
@@ -4327,6 +4328,8 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
     send_text_message_to_friend(tox, friend_number, " .tpr           --> toggle H264 profile base / high");
+    send_text_message_to_friend(tox, friend_number, " .ntm1          --> start net traffic monitor");
+    send_text_message_to_friend(tox, friend_number, " .ntm0          --> stop net traffic monitor");
     send_text_message_to_friend(tox, friend_number, " .thr           --> toggle HD 720p / 1080p");
     send_text_message_to_friend(tox, friend_number, " .xqt <num>     --> set max q: 8 .. 60");
     send_text_message_to_friend(tox, friend_number, " .hwenc <0|1>   --> use hw encoder");
@@ -4662,6 +4665,14 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             }
 
 #endif
+            else if (strncmp((char *)message, ".ntm1", strlen((char *)".ntm1")) == 0)
+            {
+                start_calc_network_traffic();
+            }
+            else if (strncmp((char *)message, ".ntm0", strlen((char *)".ntm0")) == 0)
+            {
+                stop_calc_network_traffic();
+            }
             else if (strncmp((char *)message, ".thd", strlen((char *)".thd")) == 0) // toggle cam HD
             {
                 button_d();
@@ -8041,7 +8052,12 @@ static void *video_play(void *dummy)
     update_omx_osd_counter++;
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
-    prepare_omx_osd_network_bars_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+
+    if (networktraffic_thread_stop == 0)
+    {
+        prepare_omx_osd_network_bars_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+    }
+
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
@@ -12220,7 +12236,6 @@ int main(int argc, char *argv[])
     }
 
 #endif
-    start_calc_network_traffic();
 #ifdef HAVE_ALSA_PLAY
     libao_channels = 1;
     libao_sampling_rate = 48000;
