@@ -7519,6 +7519,7 @@ void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstr
     int bar_width = ((int)((float)dw * 0.8f)) / DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY;
     int bar_x = 0;
     int bar_y = 0;
+    int bar_y_prev = 0;
     int height_max_for_bar = (int)((float)dh * 0.85f);
     int i;
 
@@ -7534,13 +7535,34 @@ void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstr
         // 2500 --> y = 0
         //    0 --> y = dh * 0.85
         bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
-        bar_y = (height_max_for_bar + 1) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        bar_y = (height_max_for_bar + 2) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         bar_x, bar_y, bar_width, 4,
                                         0, 0, 0); // black
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         bar_x, (bar_y + 1), bar_width, 2,
                                         0, 255, 0); // green
+
+        // draw the vertical bar if the y-distance is great enough
+        if (i > 0)
+        {
+            if (bar_y > (bar_y_prev + 4))
+            {
+                int bar_y_delta = bar_y - bar_y_prev;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y_prev + 1), 2, (bar_y_delta - 2),
+                                                0, 255, 0); // green
+            }
+            else if ((bar_y + 4) < bar_y_prev)
+            {
+                int bar_y_delta = bar_y_prev - bar_y;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y + 1), 2, (bar_y_delta - 2),
+                                                0, 255, 0); // green
+            }
+        }
+
+        bar_y_prev = bar_y;
     }
 
     for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
@@ -7553,13 +7575,34 @@ void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstr
         }
 
         bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
-        bar_y = (height_max_for_bar + 1) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        bar_y = (height_max_for_bar + 2) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         bar_x, bar_y, bar_width, 4,
                                         0, 0, 0); // black
         left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
                                         bar_x, (bar_y + 1), bar_width, 2,
                                         255, 255, 0); // yellow
+
+        // draw the vertical bar if the y-distance is great enough
+        if (i > 0)
+        {
+            if (bar_y > (bar_y_prev + 4))
+            {
+                int bar_y_delta = bar_y - bar_y_prev;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y_prev + 1), 2, (bar_y_delta - 2),
+                                                255, 255, 0); // yellow
+            }
+            else if ((bar_y + 4) < bar_y_prev)
+            {
+                int bar_y_delta = bar_y_prev - bar_y;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y + 1), 2, (bar_y_delta - 2),
+                                                255, 255, 0); // yellow
+            }
+        }
+
+        bar_y_prev = bar_y;
     }
 
 #endif
