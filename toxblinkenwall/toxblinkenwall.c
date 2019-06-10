@@ -238,6 +238,13 @@ static const char global_version_string[] = "0.99.41";
 
 // --------- automatically pickup incoming calls ---------
 
+// --------- play annoying ringtone ---------
+#define AV_PLAY_RINGTONE 1
+#ifdef HW_CODEC_CONFIG_RPI3_TBW_TV
+    #undef AV_PLAY_RINGTONE
+#endif
+// --------- play annoying ringtone ---------
+
 // --------- change nospam ---------
 #define CHANGE_NOSPAM_REGULARLY 1
 // --------- change nospam ---------
@@ -876,6 +883,12 @@ int vid_height = 144; // ------- blinkenwall resolution -------
 pthread_t ringtone_thread;
 int ringtone_thread_stop = 0;
 
+pthread_t networktraffic_thread;
+int networktraffic_thread_stop = 0;
+#define DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY 10
+uint32_t debug_network_lan_bar_values[10];
+uint32_t debug_network_wifi_bar_values[10];
+
 
 #define AUDIO_VU_MIN_VALUE -20
 #define AUDIO_VU_MED_VALUE 110
@@ -1020,6 +1033,7 @@ uint32_t global_tox_video_incoming_fps = 0;
 uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
 uint32_t global_playback_volume_in_percent = 50;
+uint32_t my_last_online_ts = 0;
 
 // ------- zoxcore debug settings !! ------------
 extern int global_h264_enc_profile_high_enabled;
@@ -1654,6 +1668,8 @@ void on_offline()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onoffline);
 
+    my_last_online_ts = (uint32_t)get_unix_time();
+
     if (system(cmd_str));
 }
 
@@ -1963,10 +1979,149 @@ void *play_ringtone(void *data)
     dbg(2, "Ringtone:Clean thread exit!\n");
 }
 
+void move_network_lan_bar_values()
+{
+    int i;
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        debug_network_lan_bar_values[i] = debug_network_lan_bar_values[i + 1];
+    }
+}
+
+void move_network_wifi_bar_values()
+{
+    int i;
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        debug_network_wifi_bar_values[i] = debug_network_wifi_bar_values[i + 1];
+    }
+}
+
+void *calc_network_traffic(void *data)
+{
+    int interval_secs = 2;
+    const char *lan_rx_file = "/sys/class/net/eth0/statistics/rx_bytes";
+    const char *lan_tx_file = "/sys/class/net/eth0/statistics/tx_bytes";
+    const char *wifi_rx_file = "/sys/class/net/wlan0/statistics/rx_bytes";
+    const char *wifi_tx_file = "/sys/class/net/wlan0/statistics/tx_bytes";
+    long long unsigned int lan_rx_value = 0;
+    long long unsigned int lan_tx_value = 0;
+    long long unsigned int wifi_rx_value = 0;
+    long long unsigned int wifi_tx_value = 0;
+    long long unsigned int lan_rx_value_prev = 0;
+    long long unsigned int lan_tx_value_prev = 0;
+    long long unsigned int wifi_rx_value_prev = 0;
+    long long unsigned int wifi_tx_value_prev = 0;
+    FILE *file1;
+    long long unsigned int delta = 0;
+    float delta_per_second = 0;
+    int i = 0;
+    int cur_bar = DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1;
+
+    for (i = 0; i < DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY; i++)
+    {
+        debug_network_lan_bar_values[i] = 0;
+        debug_network_wifi_bar_values[i] = 0;
+    }
+
+    while (networktraffic_thread_stop == 0)
+    {
+        lan_rx_value_prev = lan_rx_value;
+        lan_tx_value_prev = lan_tx_value;
+        wifi_rx_value_prev = wifi_rx_value;
+        wifi_tx_value_prev = wifi_tx_value;
+        file1 = fopen(lan_rx_file, "rb");
+
+        if (file1)
+        {
+            fscanf(file1, "%llu", &lan_rx_value);
+            fclose(file1);
+        }
+
+        file1 = fopen(lan_tx_file, "rb");
+
+        if (file1)
+        {
+            fscanf(file1, "%llu", &lan_tx_value);
+            fclose(file1);
+        }
+
+        file1 = fopen(wifi_rx_file, "rb");
+
+        if (file1)
+        {
+            fscanf(file1, "%llu", &wifi_rx_value);
+            fclose(file1);
+        }
+
+        file1 = fopen(wifi_tx_file, "rb");
+
+        if (file1)
+        {
+            fscanf(file1, "%llu", &wifi_tx_value);
+            fclose(file1);
+        }
+
+        // ------------
+        delta = lan_rx_value - lan_rx_value_prev;
+        delta_per_second = (float)delta / (float)interval_secs;
+        delta_per_second = delta_per_second / 1000;
+        // dbg(9, "net-traffic:eth0:rx:kbytes/s=%.2f\n", delta_per_second);
+        move_network_lan_bar_values();
+        debug_network_lan_bar_values[cur_bar] = (uint32_t)delta_per_second;
+        // ------------
+        delta = lan_tx_value - lan_tx_value_prev;
+        delta_per_second = (float)delta / (float)interval_secs;
+        delta_per_second = delta_per_second / 1000;
+        // dbg(9, "net-traffic:eth0:tx:kbytes/s=%.2f\n", delta_per_second);
+        // ------------
+        delta = wifi_rx_value - wifi_rx_value_prev;
+        delta_per_second = (float)delta / (float)interval_secs;
+        delta_per_second = delta_per_second / 1000;
+        // dbg(9, "net-traffic:wlan0:rx:kbytes/s=%.2f\n", delta_per_second);
+        move_network_wifi_bar_values();
+        debug_network_wifi_bar_values[cur_bar] = (uint32_t)delta_per_second;
+        // ------------
+        delta = wifi_tx_value - wifi_tx_value_prev;
+        delta_per_second = (float)delta / (float)interval_secs;
+        delta_per_second = delta_per_second / 1000;
+        // dbg(9, "net-traffic:wlan0:tx:kbytes/s=%.2f\n", delta_per_second);
+        // ------------
+        usleep_usec(1000 * 1000 * interval_secs); // pause x s between measurements
+    }
+
+    dbg(2, "Network Traffic:Clean thread exit!\n");
+}
+
+void start_calc_network_traffic()
+{
+    networktraffic_thread_stop = 0;
+
+    if (pthread_create(&networktraffic_thread, NULL, calc_network_traffic, (void *)NULL) != 0)
+    {
+        dbg(0, "Network Traffic Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(networktraffic_thread, "t_net_trf");
+        dbg(2, "Network Traffic Thread successfully created\n");
+    }
+}
+
+void stop_calc_network_traffic()
+{
+    networktraffic_thread_stop = 1;
+    pthread_join(networktraffic_thread, NULL);
+}
+
+
 void start_play_ringtone()
 {
     ringtone_thread_stop = 0;
     write_ring_status_to_file(1);
+#ifdef AV_PLAY_RINGTONE
 
     if (pthread_create(&ringtone_thread, NULL, play_ringtone, (void *)NULL) != 0)
     {
@@ -1977,13 +2132,17 @@ void start_play_ringtone()
         pthread_setname_np(ringtone_thread, "t_ringtone");
         dbg(2, "Ringtone Thread successfully created\n");
     }
+
+#endif
 }
 
 void stop_play_ringtone()
 {
     ringtone_thread_stop = 1;
     write_ring_status_to_file(0);
+#ifdef AV_PLAY_RINGTONE
     pthread_join(ringtone_thread, NULL);
+#endif
 }
 
 #ifdef HAVE_PORTAUDIO
@@ -7331,6 +7490,61 @@ void crop_yuv_frame(uint8_t **y, uint32_t frame_width_px1, uint32_t frame_height
     *y = y_result;
 }
 
+void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstride)
+{
+#ifndef RPIZEROW
+#define MAX_KBYTES_BAR_DISPLAY 1200
+    uint8_t *dis_buf_save = dis_buf;
+    uint32_t value = 0;
+    int bar_width = ((int)((float)dw * 0.8f)) / DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY;
+    int bar_x = 0;
+    int bar_y = 0;
+    int height_max_for_bar = (int)((float)dh * 0.85f);
+    int i;
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        value = debug_network_lan_bar_values[i];
+
+        if (value > MAX_KBYTES_BAR_DISPLAY)
+        {
+            value = MAX_KBYTES_BAR_DISPLAY;
+        }
+
+        // 2500 --> y = 0
+        //    0 --> y = dh * 0.85
+        bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
+        bar_y = (height_max_for_bar + 1) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, bar_y, bar_width, 4,
+                                        0, 0, 0); // black
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, (bar_y + 1), bar_width, 2,
+                                        0, 255, 0); // green
+    }
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        value = debug_network_wifi_bar_values[i];
+
+        if (value > MAX_KBYTES_BAR_DISPLAY)
+        {
+            value = MAX_KBYTES_BAR_DISPLAY;
+        }
+
+        bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
+        bar_y = (height_max_for_bar + 1) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, bar_y, bar_width, 4,
+                                        0, 0, 0); // black
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, (bar_y + 1), bar_width, 2,
+                                        255, 255, 0); // yellow
+    }
+
+#endif
+}
+
 void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstride)
 {
     uint8_t *dis_buf_save = dis_buf;
@@ -7818,6 +8032,7 @@ static void *video_play(void *dummy)
     update_omx_osd_counter++;
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+    prepare_omx_osd_network_bars_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
@@ -11936,7 +12151,7 @@ int main(int argc, char *argv[])
     dbg(9, "set priority of process with sudo command [no output]:%s\n", cmd_001);
 #endif
     // -- set priority of process with sudo command --
-    pthread_setname_np(pthread_self(), "standard thread");
+    pthread_setname_np(pthread_self(), "standard_thread");
     int WANTED_MAX_DECODER_FPS = 40;
     global__MAX_DECODE_TIME_US = (1000000 / WANTED_MAX_DECODER_FPS); // to allow x fps
     dbg(9, "global__MAX_DECODE_TIME_US=%d\n",
@@ -11996,6 +12211,7 @@ int main(int argc, char *argv[])
     }
 
 #endif
+    start_calc_network_traffic();
 #ifdef HAVE_ALSA_PLAY
     libao_channels = 1;
     libao_sampling_rate = 48000;
@@ -12176,7 +12392,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[0], "t_av");
+        pthread_setname_np(tid[0], "t_av_send");
         dbg(2, "AV iterate Thread successfully created\n");
     }
 
@@ -12188,7 +12404,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[1], "t_video_av");
+        pthread_setname_np(tid[1], "t_toxav_v_iter");
         dbg(2, "AV video Thread successfully created\n");
     }
 
@@ -12200,7 +12416,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[6], "t_audio_av");
+        pthread_setname_np(tid[6], "t_toxav_a_iter");
         dbg(2, "AV audio Thread successfully created\n");
     }
 
@@ -12225,7 +12441,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        pthread_setname_np(tid[2], "t_rec_alsa_audio");
+        pthread_setname_np(tid[2], "t_rec_audio");
         dbg(2, "AV Audio Thread successfully created\n");
     }
 
@@ -12305,6 +12521,36 @@ int main(int argc, char *argv[])
 
 #endif
 
+        // check if we are offline for a while            
+            int am_i_online = 0;
+            
+   switch (my_connection_status)
+    {
+        case TOX_CONNECTION_NONE:
+            break;
+
+        case TOX_CONNECTION_TCP:
+        am_i_online = 1;
+            break;
+
+        case TOX_CONNECTION_UDP:
+        am_i_online = 1;
+            break;
+
+        default:
+            break;
+    }
+
+        if (am_i_online == 0)
+        {
+            if ((my_last_online_ts + 1000) < (uint32_t)get_unix_time())
+            {
+            }
+        }
+    
+            // then bootstap again
+
+
         if (global_video_active == 1)
         {
             usleep_usec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
@@ -12352,6 +12598,7 @@ int main(int argc, char *argv[])
     toxav_video_thread_stop = 1;
     toxav_audioiterate_thread_stop = 1;
     ringtone_thread_stop = 1;
+    networktraffic_thread_stop = 1;
 #ifdef HAVE_OUTPUT_OPENGL
     opengl_shutdown = 1;
     yieldcpu(100);
