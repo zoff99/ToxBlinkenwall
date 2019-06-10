@@ -1034,6 +1034,7 @@ uint32_t global_last_change_nospam_ts = 0;
 #define CHANGE_NOSPAM_REGULAR_INTERVAL_SECS (3600) // 1h
 uint32_t global_playback_volume_in_percent = 50;
 uint32_t my_last_online_ts = 0;
+#define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 
 // ------- zoxcore debug settings !! ------------
 extern int global_h264_enc_profile_high_enabled;
@@ -1668,9 +1669,17 @@ void on_offline()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onoffline);
 
-    my_last_online_ts = (uint32_t)get_unix_time();
-
     if (system(cmd_str));
+
+    // if we go offline, immediately bootstrap again. maybe we can go online faster
+    // set last online timestamp into the past
+    uint32_t my_last_online_ts_ = (uint32_t)get_unix_time();
+
+    if (my_last_online_ts_ > (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000))
+    {
+        // give tbw 2 seconds to go online by itself, otherwise we bootstrap again
+        my_last_online_ts = my_last_online_ts_ - ((BOOTSTRAP_AFTER_OFFLINE_SECS - 2) * 1000);
+    }
 }
 
 void playback_volume_get_current()
@@ -12329,6 +12338,9 @@ int main(int argc, char *argv[])
     long long unsigned int cur_time = time(NULL);
     uint8_t off = 1;
     long long loop_counter = 0;
+    int max_tries = 2;
+
+    int try = 0;
 
     while (1)
     {
@@ -12348,10 +12360,19 @@ int main(int argc, char *argv[])
 
         if (loop_counter > (50 * 20))
         {
+            try++;
+
             loop_counter = 0;
             // if not yet online, bootstrap every 20 seconds
             dbg(2, "Tox NOT online yet, bootstrapping again\n");
             bootstrap(tox);
+
+            if (try >= max_tries)
+                {
+                    // break the loop and start anyway
+                    // we will bootstrap again later if we are not online every few seconds
+                    break;
+                }
         }
     }
 
@@ -12520,36 +12541,37 @@ int main(int argc, char *argv[])
         }
 
 #endif
+        // check if we are offline for a while (more than 30 seconds)
+        int am_i_online = 0;
 
-        // check if we are offline for a while            
-            int am_i_online = 0;
-            
-   switch (my_connection_status)
-    {
-        case TOX_CONNECTION_NONE:
-            break;
+        switch (my_connection_status)
+        {
+            case TOX_CONNECTION_NONE:
+                break;
 
-        case TOX_CONNECTION_TCP:
-        am_i_online = 1;
-            break;
+            case TOX_CONNECTION_TCP:
+                am_i_online = 1;
+                break;
 
-        case TOX_CONNECTION_UDP:
-        am_i_online = 1;
-            break;
+            case TOX_CONNECTION_UDP:
+                am_i_online = 1;
+                break;
 
-        default:
-            break;
-    }
+            default:
+                break;
+        }
 
         if (am_i_online == 0)
         {
-            if ((my_last_online_ts + 1000) < (uint32_t)get_unix_time())
+            if ((my_last_online_ts + (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000)) < (uint32_t)get_unix_time())
             {
+                // then bootstap again
+                dbg(2, "Tox NOT online, bootstrapping again\n");
+                bootstrap(tox);
+                // reset timestamp, that we do not bootstrap on every tox_iterate() loop
+                my_last_online_ts = (uint32_t)get_unix_time();
             }
         }
-    
-            // then bootstap again
-
 
         if (global_video_active == 1)
         {
