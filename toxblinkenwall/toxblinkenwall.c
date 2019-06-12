@@ -885,10 +885,11 @@ int ringtone_thread_stop = 0;
 
 pthread_t networktraffic_thread;
 int networktraffic_thread_stop = 1;
-#define DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY 60
-#define DEBUG_NETWORK_GRAPH_READ_INTERVAL_SECS 1
+#define DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY 120
+#define DEBUG_NETWORK_GRAPH_READ_INTERVAL_MILLI_SECS 1000
 uint32_t debug_network_lan_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 uint32_t debug_network_wifi_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
+uint32_t debug_network_incoming_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 
 
 #define AUDIO_VU_MIN_VALUE -20
@@ -2009,13 +2010,24 @@ void move_network_wifi_bar_values()
     }
 }
 
+void move_network_incoming_vbitrate_bar_values()
+{
+    int i;
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        debug_network_incoming_vbitrate_bar_values[i] = debug_network_incoming_vbitrate_bar_values[i + 1];
+    }
+}
+
 void *calc_network_traffic(void *data)
 {
-    int interval_secs = DEBUG_NETWORK_GRAPH_READ_INTERVAL_SECS;
+    int interval_msecs = DEBUG_NETWORK_GRAPH_READ_INTERVAL_MILLI_SECS;
     const char *lan_rx_file = "/sys/class/net/eth0/statistics/rx_bytes";
     const char *lan_tx_file = "/sys/class/net/eth0/statistics/tx_bytes";
     const char *wifi_rx_file = "/sys/class/net/wlan0/statistics/rx_bytes";
     const char *wifi_tx_file = "/sys/class/net/wlan0/statistics/tx_bytes";
+    const int kbytes_per_byte = 1024;
     long long unsigned int lan_rx_value = 0;
     long long unsigned int lan_tx_value = 0;
     long long unsigned int wifi_rx_value = 0;
@@ -2034,6 +2046,7 @@ void *calc_network_traffic(void *data)
     {
         debug_network_lan_bar_values[i] = 0;
         debug_network_wifi_bar_values[i] = 0;
+        debug_network_incoming_vbitrate_bar_values[i] = 0;
     }
 
     while (networktraffic_thread_stop == 0)
@@ -2075,31 +2088,41 @@ void *calc_network_traffic(void *data)
         }
 
         // ------------
-        delta = lan_rx_value - lan_rx_value_prev;
-        delta_per_second = (float)delta / (float)interval_secs;
-        delta_per_second = delta_per_second / 1000;
-        // dbg(9, "net-traffic:eth0:rx:kbytes/s=%.2f\n", delta_per_second);
+        move_network_incoming_vbitrate_bar_values();
+        // ------------
+        delta = (int)((float)global_decoder_video_bitrate / 8.0f);
+        delta_per_second = (float)(delta * 1024) / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
+        // dbg(9, "net-traffic:inc_vbitrate:rx:kbytes/s=%.2f\n", delta_per_second);
+        debug_network_incoming_vbitrate_bar_values[cur_bar] = (uint32_t)delta_per_second;
+        // ------------
         move_network_lan_bar_values();
+        // ------------
+        delta = lan_rx_value - lan_rx_value_prev;
+        delta_per_second = (float)delta / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
+        // dbg(9, "net-traffic:eth0:rx:kbytes/s=%.2f\n", delta_per_second);
         debug_network_lan_bar_values[cur_bar] = (uint32_t)delta_per_second;
         // ------------
         delta = lan_tx_value - lan_tx_value_prev;
-        delta_per_second = (float)delta / (float)interval_secs;
-        delta_per_second = delta_per_second / 1000;
+        delta_per_second = (float)delta / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
         // dbg(9, "net-traffic:eth0:tx:kbytes/s=%.2f\n", delta_per_second);
         // ------------
-        delta = wifi_rx_value - wifi_rx_value_prev;
-        delta_per_second = (float)delta / (float)interval_secs;
-        delta_per_second = delta_per_second / 1000;
-        // dbg(9, "net-traffic:wlan0:rx:kbytes/s=%.2f\n", delta_per_second);
         move_network_wifi_bar_values();
+        // ------------
+        delta = wifi_rx_value - wifi_rx_value_prev;
+        delta_per_second = (float)delta / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
+        // dbg(9, "net-traffic:wlan0:rx:kbytes/s=%.2f\n", delta_per_second);
         debug_network_wifi_bar_values[cur_bar] = (uint32_t)delta_per_second;
         // ------------
         delta = wifi_tx_value - wifi_tx_value_prev;
-        delta_per_second = (float)delta / (float)interval_secs;
-        delta_per_second = delta_per_second / 1000;
+        delta_per_second = (float)delta / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
         // dbg(9, "net-traffic:wlan0:tx:kbytes/s=%.2f\n", delta_per_second);
         // ------------
-        usleep_usec(1000 * 1000 * interval_secs); // pause x s between measurements
+        usleep_usec(1000 * interval_msecs); // pause x ms between measurements
     }
 
     dbg(2, "Network Traffic:Clean thread exit!\n");
@@ -7522,6 +7545,72 @@ void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstr
     int bar_y_prev = 0;
     int height_max_for_bar = (int)((float)dh * 0.85f);
     int i;
+    int j;
+
+    // Y axis [every 100k from 100k to 700k] ----------------------
+    for (j = 1; j < 8; j++)
+    {
+        for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+        {
+            value = j * 100;
+
+            if (value > MAX_KBYTES_BAR_DISPLAY)
+            {
+                value = MAX_KBYTES_BAR_DISPLAY;
+            }
+
+            bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
+            bar_y = (height_max_for_bar + 2) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+            left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                            bar_x, (bar_y + 1), bar_width, 2,
+                                            130, 130, 130); // grey
+        }
+    }
+
+    // Y axis ----------------------
+
+    // incoming V bitrate ----------
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        value = debug_network_incoming_vbitrate_bar_values[i];
+
+        if (value > MAX_KBYTES_BAR_DISPLAY)
+        {
+            value = MAX_KBYTES_BAR_DISPLAY;
+        }
+
+        bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
+        bar_y = (height_max_for_bar + 2) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, bar_y, bar_width, 4,
+                                        0, 0, 0); // black
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, (bar_y + 1), bar_width, 2,
+                                        36, 113, 163); // blue
+
+        // draw the vertical bar if the y-distance is great enough
+        if (i > 0)
+        {
+            if (bar_y > (bar_y_prev + 4))
+            {
+                int bar_y_delta = bar_y - bar_y_prev;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y_prev + 1), 2, (bar_y_delta - 2),
+                                                36, 113, 163); // blue
+            }
+            else if ((bar_y + 4) < bar_y_prev)
+            {
+                int bar_y_delta = bar_y_prev - bar_y;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y + 1), 2, (bar_y_delta - 2),
+                                                36, 113, 163); // blue
+            }
+        }
+
+        bar_y_prev = bar_y;
+    }
+
+    // incoming V bitrate ----------
 
     for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
     {
