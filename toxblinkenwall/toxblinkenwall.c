@@ -890,6 +890,7 @@ int networktraffic_thread_stop = 1;
 uint32_t debug_network_lan_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 uint32_t debug_network_wifi_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 uint32_t debug_network_incoming_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
+uint32_t debug_network_outgoing_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 
 
 #define AUDIO_VU_MIN_VALUE -20
@@ -2020,6 +2021,16 @@ void move_network_incoming_vbitrate_bar_values()
     }
 }
 
+void move_network_outgoing_vbitrate_bar_values()
+{
+    int i;
+
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        debug_network_outgoing_vbitrate_bar_values[i] = debug_network_outgoing_vbitrate_bar_values[i + 1];
+    }
+}
+
 void *calc_network_traffic(void *data)
 {
     int interval_msecs = DEBUG_NETWORK_GRAPH_READ_INTERVAL_MILLI_SECS;
@@ -2047,6 +2058,7 @@ void *calc_network_traffic(void *data)
         debug_network_lan_bar_values[i] = 0;
         debug_network_wifi_bar_values[i] = 0;
         debug_network_incoming_vbitrate_bar_values[i] = 0;
+        debug_network_outgoing_vbitrate_bar_values[i] = 0;
     }
 
     while (networktraffic_thread_stop == 0)
@@ -2096,6 +2108,14 @@ void *calc_network_traffic(void *data)
         // dbg(9, "net-traffic:inc_vbitrate:rx:kbytes/s=%.2f\n", delta_per_second);
         debug_network_incoming_vbitrate_bar_values[cur_bar] = (uint32_t)delta_per_second;
         // ------------
+        move_network_outgoing_vbitrate_bar_values();
+        // ------------
+        delta = (int)((float)global_encoder_video_bitrate / 8.0f);
+        delta_per_second = (float)(delta * 1024) / ((float)interval_msecs / 1000.0f);
+        delta_per_second = delta_per_second / kbytes_per_byte;
+        // dbg(9, "net-traffic:inc_vbitrate:rx:kbytes/s=%.2f\n", delta_per_second);
+        debug_network_outgoing_vbitrate_bar_values[cur_bar] = (uint32_t)delta_per_second;
+        // ------------
         move_network_lan_bar_values();
         // ------------
         delta = lan_rx_value - lan_rx_value_prev;
@@ -2134,7 +2154,7 @@ void start_calc_network_traffic()
     {
         return;
     }
-    
+
     networktraffic_thread_stop = 0;
 
     if (pthread_create(&networktraffic_thread, NULL, calc_network_traffic, (void *)NULL) != 0)
@@ -7573,6 +7593,49 @@ void prepare_omx_osd_network_bars_yuv(uint8_t *dis_buf, int dw, int dh, int dstr
     }
 
     // Y axis ----------------------
+
+    // outgoing V bitrate ----------
+    for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
+    {
+        value = debug_network_outgoing_vbitrate_bar_values[i];
+
+        if (value > MAX_KBYTES_BAR_DISPLAY)
+        {
+            value = MAX_KBYTES_BAR_DISPLAY;
+        }
+
+        bar_x = ((int)((float)dw * 0.1f)) + (bar_width * i);
+        bar_y = (height_max_for_bar + 2) - (int)((height_max_for_bar / (float)(MAX_KBYTES_BAR_DISPLAY)) * (float)value);
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, bar_y, bar_width, 4,
+                                        0, 0, 0); // black
+        left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                        bar_x, (bar_y + 1), bar_width, 2,
+                                        216, 26, 128); // purple
+
+        // draw the vertical bar if the y-distance is great enough
+        if (i > 0)
+        {
+            if (bar_y > (bar_y_prev + 4))
+            {
+                int bar_y_delta = bar_y - bar_y_prev;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y_prev + 1), 2, (bar_y_delta - 2),
+                                                216, 26, 128); // purple
+            }
+            else if ((bar_y + 4) < bar_y_prev)
+            {
+                int bar_y_delta = bar_y_prev - bar_y;
+                left_top_bar_into_yuv_frame_ptr(dis_buf, dstride, dh,
+                                                bar_x - 1, (bar_y + 1), 2, (bar_y_delta - 2),
+                                                216, 26, 128); // purple
+            }
+        }
+
+        bar_y_prev = bar_y;
+    }
+
+    // outgoing V bitrate ----------
 
     // incoming V bitrate ----------
     for (i = 0; i < (DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY - 1); i++)
