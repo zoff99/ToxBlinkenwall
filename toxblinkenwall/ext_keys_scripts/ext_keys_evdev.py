@@ -87,6 +87,8 @@ keymap = {
     ecodes.KEY_D: "display-orient:turn-right\n",
     ecodes.KEY_Q: "toggle_quality:\n",
     ecodes.KEY_P: "pickup:\n",
+    ecodes.KEY_X: "debug-on:\n",
+    ecodes.KEY_Y: "debug-off:\n",
 }
 
 keyboards = []

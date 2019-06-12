@@ -2130,6 +2130,11 @@ void *calc_network_traffic(void *data)
 
 void start_calc_network_traffic()
 {
+    if (networktraffic_thread_stop == 0)
+    {
+        return;
+    }
+    
     networktraffic_thread_stop = 0;
 
     if (pthread_create(&networktraffic_thread, NULL, calc_network_traffic, (void *)NULL) != 0)
@@ -10639,6 +10644,16 @@ void *thread_ext_keys(void *data)
                 {
                     pick_up_call();
                 }
+            }
+            else if (strncmp((char *)buf, "debug-on:", strlen((char *)"debug-on:")) == 0)
+            {
+                dbg(2, "ExtKeys: DEBUG ON:\n");
+                start_calc_network_traffic();
+            }
+            else if (strncmp((char *)buf, "debug-off:", strlen((char *)"debug-off:")) == 0)
+            {
+                dbg(2, "ExtKeys: DEBUG OFF:\n");
+                stop_calc_network_traffic();
             }
             else if (strncmp((char *)buf, "toggle_quality:", strlen((char *)"toggle_quality:")) == 0)
             {
