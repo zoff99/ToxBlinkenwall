@@ -2177,6 +2177,7 @@ void stop_calc_network_traffic()
 
 void start_play_ringtone()
 {
+    dbg(2, "start_play_ringtone\n");
     ringtone_thread_stop = 0;
     write_ring_status_to_file(1);
 #ifdef AV_PLAY_RINGTONE
@@ -2196,6 +2197,7 @@ void start_play_ringtone()
 
 void stop_play_ringtone()
 {
+    dbg(2, "stop_play_ringtone\n");
     ringtone_thread_stop = 1;
     write_ring_status_to_file(0);
 #ifdef AV_PLAY_RINGTONE
@@ -6551,6 +6553,7 @@ void close_cam()
 // ------------------ Tox AV stuff --------------------
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
 {
+    dbg(9, "answer_incoming_av_call\n");
     TOXAV_ERR_ANSWER err;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     update_status_line_1_text();
@@ -6582,6 +6585,8 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
+    dbg(9, "t_toxav_call_cb\n");
+
     if ((accepting_calls != 1) || (call_waiting_for_answer == 1))
     {
         dbg(2, "Not accepting calls yet\n");
@@ -6758,6 +6763,8 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
+    dbg(9, "t_toxav_call_state_cb:%d\n", state);
+
     if (accepting_calls != 1)
     {
         dbg(2, "Not accepting call state changes yet\n");
