@@ -135,8 +135,8 @@ def is_ringing():
 
     if ring_status_str != "1":
         return 0
-
-    return 1
+    else:
+        return 1
 
 def get_caller_name():
     cmd = "cat /home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt 2>/dev/null"
@@ -256,9 +256,9 @@ while True:
 
     for xy in range(0, 20):
 
-        if ((xy % 4) == 0):
-            if is_ringing() == 1:
-                break
+        #if ((xy % 4) == 0):
+        #    if is_ringing() == 1:
+        #        break
 
         need_draw = 0
 
