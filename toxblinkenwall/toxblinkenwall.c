@@ -10341,39 +10341,46 @@ void *thread_record_alsa_audio(void *data)
     {
         if ((friend_to_send_video_to >= 0) && (global_video_active == 1))
         {
-            if (have_input_sound_device == 1)
+            if (audio_capture_handle)
             {
-                //*record*lock*// sem_wait(&audio_record_lock);
-                // snd_pcm_reset(audio_capture_handle);
-                if ((err = snd_pcm_readi(audio_capture_handle, audio_buf_l, AUDIO_RECORD_BUFFER_FRAMES)) != AUDIO_RECORD_BUFFER_FRAMES)
+                if (have_input_sound_device == 1)
                 {
-                    dbg(1, "record_device:read from audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
-
-                    if ((int)err == -11) // -> Resource temporarily unavailable
+                    //*record*lock*// sem_wait(&audio_record_lock);
+                    // snd_pcm_reset(audio_capture_handle);
+                    if ((err = snd_pcm_readi(audio_capture_handle, audio_buf_l, AUDIO_RECORD_BUFFER_FRAMES)) != AUDIO_RECORD_BUFFER_FRAMES)
                     {
-                        dbg(0, "record_device:yield a bit (2)\n");
+                        dbg(1, "record_device:read from audio interface failed (err=%d) (%s)\n", (int)err, snd_strerror(err));
+
+                        if ((int)err == -11) // -> Resource temporarily unavailable
+                        {
+                            dbg(0, "record_device:yield a bit (2)\n");
+                            yieldcpu(2);
+                        }
+
+                        sem_wait(&audio_record_lock);
+                        close_sound_device();
+                        dbg(9, "record_device:close_sound_device\n");
                         yieldcpu(2);
+                        init_sound_device();
+                        sem_post(&audio_record_lock);
+                    }
+                    else
+                    {
+                        // dbg(1, "record_device:read from audio interface OK (frames=%d)\n", (int)err);
+                        audio_record__(audio_buf_l);
+                        // audio_record__(stream);
                     }
 
-                    sem_wait(&audio_record_lock);
-                    close_sound_device();
-                    dbg(9, "record_device:close_sound_device\n");
-                    yieldcpu(2);
-                    init_sound_device();
-                    sem_post(&audio_record_lock);
+                    //*record*lock*// sem_post(&audio_record_lock);
                 }
                 else
                 {
-                    // dbg(1, "record_device:read from audio interface OK (frames=%d)\n", (int)err);
-                    audio_record__(audio_buf_l);
-                    // audio_record__(stream);
+                    yieldcpu(500);
                 }
-
-                //*record*lock*// sem_post(&audio_record_lock);
             }
             else
             {
-                yieldcpu(500);
+                yieldcpu(100);
             }
         }
         else
