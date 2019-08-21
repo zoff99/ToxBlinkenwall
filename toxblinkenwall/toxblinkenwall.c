@@ -2072,7 +2072,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            fscanf(file1, "%llu", &lan_rx_value);
+            if (fscanf(file1, "%llu", &lan_rx_value)){};
             fclose(file1);
         }
 
@@ -2080,7 +2080,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            fscanf(file1, "%llu", &lan_tx_value);
+            if(fscanf(file1, "%llu", &lan_tx_value)){};
             fclose(file1);
         }
 
@@ -2088,7 +2088,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            fscanf(file1, "%llu", &wifi_rx_value);
+            if(fscanf(file1, "%llu", &wifi_rx_value)){};
             fclose(file1);
         }
 
@@ -2096,7 +2096,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            fscanf(file1, "%llu", &wifi_tx_value);
+            if(fscanf(file1, "%llu", &wifi_tx_value)){};
             fclose(file1);
         }
 
