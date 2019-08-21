@@ -15,6 +15,7 @@
 /*
 
 
+# sudo dpkg --configure -a # to correct after dpkg was interrupted!!
 
 # strace -f -e verbose=all -s1000 -qq -v -o st.txt -T -p $(pgrep -f toxblinkenwall)
 # strace -f -e verbose=all -s1000 -qq -v -e trace=getrandom -T -p $(pgrep -f toxblinkenwall)
