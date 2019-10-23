@@ -987,8 +987,8 @@ int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
 int toxav_audioiterate_thread_stop = 0;
 
-uint32_t global_av_iterate_ms = 4;
-uint32_t global_iterate_ms = 4;
+uint32_t global_av_iterate_ms = 2;
+uint32_t global_iterate_ms = 2;
 int global_opengl_iterate_ms = 2;
 
 
