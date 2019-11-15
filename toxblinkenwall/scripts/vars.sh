@@ -30,7 +30,18 @@ stride_=$(cat /sys/class/graphics/fb0/stride)
 bits_per_pixel_=$(cat /sys/class/graphics/fb0/bits_per_pixel)
 virtual_size=$(cat /sys/class/graphics/fb0/virtual_size)
 # TODO: dont hardcode "fb0" here!!
-tmp1=$[ $bits_per_pixel_ / 8 ]
+
+if [[ $bits_per_pixel_ -lt 8 ]]; then
+  # TODO: the result will be wrong, but its not DIV by zero error!
+  tmp1=1
+  export FB_WIDTH=640
+  export FB_HEIGHT=480
+  export BKWALL_WIDTH=640
+  export BKWALL_HEIGHT=480
+else
+  tmp1=$[ $bits_per_pixel_ / 8 ]
+fi
+
 export real_width=$[ $stride_ / $tmp1 ]
 ##### -------------------------------------
 
