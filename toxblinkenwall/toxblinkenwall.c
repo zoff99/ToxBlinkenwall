@@ -739,6 +739,7 @@ void fb_fill_black();
 void fb_fill_xxx();
 void show_video_calling(uint32_t fnum, bool with_delay);
 void show_text_as_image_stop();
+void show_tox_id_qrcode_real(Tox *tox);
 void show_tox_id_qrcode(Tox *tox);
 void show_tox_client_application_download_links();
 void show_help_image();
