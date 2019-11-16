@@ -31,6 +31,15 @@ bits_per_pixel_=$(cat /sys/class/graphics/fb0/bits_per_pixel)
 virtual_size=$(cat /sys/class/graphics/fb0/virtual_size)
 # TODO: dont hardcode "fb0" here!!
 
+# change values to actual framebuffer resolution --------
+if [ "$IS_ON""x" == "RASPI""x" ]; then
+  export BKWALL_WIDTH=$(echo $virtual_size |cut -d"," -f1)
+  export BKWALL_HEIGHT=$(echo $virtual_size |cut -d"," -f2)
+  export FB_WIDTH=$BKWALL_WIDTH
+  export FB_HEIGHT=$BKWALL_HEIGHT
+fi
+# change values to actual framebuffer resolution --------
+
 if [[ $bits_per_pixel_ -lt 8 ]]; then
   # TODO: the result will be wrong, but its not DIV by zero error!
   tmp1=1
@@ -38,11 +47,12 @@ if [[ $bits_per_pixel_ -lt 8 ]]; then
   export FB_HEIGHT=480
   export BKWALL_WIDTH=640
   export BKWALL_HEIGHT=480
+  export real_width=640
 else
   tmp1=$[ $bits_per_pixel_ / 8 ]
+  export real_width=$[ $stride_ / $tmp1 ]
 fi
 
-export real_width=$[ $stride_ / $tmp1 ]
 ##### -------------------------------------
 
 #####################################################
