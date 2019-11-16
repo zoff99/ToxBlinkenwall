@@ -1789,13 +1789,14 @@ void button_a()
 {
     if (global_video_active == 0)
     {
+        fb_fill_black();
         if (mytox_av)
         {
-            show_tox_id_qrcode(toxav_get_tox(mytox_av));
+            show_tox_id_qrcode_real(toxav_get_tox(mytox_av));
         }
         else
         {
-            show_tox_id_qrcode(NULL);
+            show_tox_id_qrcode_real(NULL);
         }
     }
 }
@@ -2972,6 +2973,20 @@ int is_qrcode_generated()
     }
 
     return is_ready;
+}
+
+void show_tox_id_qrcode_real(Tox *tox)
+{
+    show_text_as_image_stop();
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
+
+    if (system(cmd_str));
+
+    dbg(2, "show_tox_id_qrcode()\n");
+
+    global_is_qrcode_showing_on_screen = 1;
 }
 
 void show_tox_id_qrcode(Tox *tox)
