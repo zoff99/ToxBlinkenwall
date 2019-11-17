@@ -8311,7 +8311,7 @@ static void *video_play(void *dummy)
 #endif
 #ifdef HAVE_FRAMEBUFFER
 
-    // -- prepare OSD for framebuffer output --
+    // -- draw OSD for framebuffer output --
     if (omx_osd_y == NULL)
     {
         omx_osd_w = OVERLAY_WIDTH_PX;
@@ -8328,7 +8328,14 @@ static void *video_play(void *dummy)
 
     update_omx_osd_counter++;
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, y, frame_width_px1, frame_height_px1, ystride);
-    // -- prepare OSD for framebuffer output --
+
+    prepare_omx_osd_audio_level_yuv(y, frame_width_px1, frame_height_px1, ystride);
+
+    if (networktraffic_thread_stop == 0)
+    {
+        prepare_omx_osd_network_bars_yuv(y, frame_width_px1, frame_height_px1, ystride);
+    }
+    // -- draw OSD for framebuffer output --
 
 
     full_width = var_framebuffer_info.xres;
