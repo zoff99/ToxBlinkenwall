@@ -742,6 +742,7 @@ void show_video_calling(uint32_t fnum, bool with_delay);
 void show_text_as_image_stop();
 void show_tox_id_qrcode_real(Tox *tox);
 void show_tox_id_qrcode(Tox *tox);
+void show_toxid_text_on_fb(Tox *tox);
 void show_tox_client_application_download_links();
 void show_help_image();
 void fully_stop_cam();
@@ -1816,7 +1817,7 @@ void button_c()
 {
     if (global_video_active == 0)
     {
-        show_help_image();
+        show_toxid_text_on_fb(toxav_get_tox(mytox_av));
     }
 }
 
@@ -3295,6 +3296,103 @@ void show_help_image()
     if (system(cmd_str));
 }
 
+void show_toxid_text_on_fb(Tox *tox)
+{
+    char tox_id_hex[TOX_ADDRESS_SIZE * 2 + 1];
+    CLEAR(tox_id_hex);
+    get_my_toxid(tox, tox_id_hex);
+
+    char line_text[30];
+
+    // fill fb with all black
+    fb_fill_black();
+
+    // draw toxid in readable format to fb
+    // 76 chars -> 38 groups of 2 chars -> in 5 lines
+
+    // text screen layout:
+    // "Current ID:"
+    // G1 G2 G3   G4 G5 G6   G7 G8 G9
+    // G1 G2 G3   G4 G5 G6   G7 G8 G9
+    //
+    // G1 G2 G3   G4 G5 G6   G7 G8 G9
+    // G1 G2 G3   G4 G5 G6   G7 G8 G9
+    //
+    // G1 G2
+
+    unsigned char *bf_out_real_fb = framebuffer_mappedmem;
+    uint32_t line_add = 18;
+    uint32_t lineposition = 20;
+    uint32_t lineposition_add = 20;
+    char *tox_id_hex_p = tox_id_hex;
+
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "Current ID:");
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    lineposition = lineposition + lineposition_add;
+    lineposition = lineposition + lineposition_add;
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+    lineposition = lineposition + lineposition_add;
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+    lineposition = lineposition + lineposition_add;
+
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+}
 
 int is_friend_online(Tox *tox, uint32_t num)
 {
