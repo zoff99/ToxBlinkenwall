@@ -3386,8 +3386,8 @@ void show_toxid_text_on_fb(Tox *tox)
     lineposition = lineposition + lineposition_add;
 
     CLEAR(line_text);
-    snprintf(line_text, sizeof(line_text), "%c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1]
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c",
+            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3]
             );
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
