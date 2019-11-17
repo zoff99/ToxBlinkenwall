@@ -4613,21 +4613,26 @@ void disconnect_all_calls(Tox *tox)
 
 void update_status_line_1_text()
 {
+#if 0
     snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s CPU:%dC",
              (int)global_video_in_fps, (int)global_video_out_fps, (int)global_video_bit_rate,
              global_upscaling_str, global_decoder_string, read_cpu_temp());
     // dbg(9, "update_status_line_1_text:global_video_bit_rate=%d\n", (int)global_video_bit_rate);
+#endif
 }
 
 void update_status_line_1_text_arg(int vbr_)
 {
+#if 0
     snprintf(status_line_1_str, sizeof(status_line_1_str), "V: I/O/OB %d/%d/%d%s%s CPU:%dC",
              (int)global_video_in_fps, (int)global_video_out_fps, vbr_, global_upscaling_str,
              global_decoder_string, read_cpu_temp());
+#endif
 }
 
 void update_status_line_2_text()
 {
+#if 0
     if (speaker_out_num == 0)
     {
         snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_0,
@@ -4638,6 +4643,7 @@ void update_status_line_2_text()
         snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_1,
                  (int)global_audio_bit_rate, (int)global_video_in_w, (int)global_video_in_h);
     }
+#endif
 }
 
 void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_t length, void *user_data)
@@ -8493,12 +8499,14 @@ static void *video_play(void *dummy)
             bf_out_data = NULL;
         }
 
+#if 0
         text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                               var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
                               10, var_framebuffer_info.yres - 50, status_line_1_str);
         text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                               var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
                               10, var_framebuffer_info.yres - 30, status_line_2_str);
+#endif
 
         if (bf_out_data_upscaled != NULL)
         {
@@ -8581,12 +8589,14 @@ static void *video_play(void *dummy)
             }
         }
 
+#if 0
         text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                               var_framebuffer_fix_info.line_length, bf_out_data,
                               10, var_framebuffer_info.yres - 50, status_line_1_str);
         text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                               var_framebuffer_fix_info.line_length, bf_out_data,
                               10, var_framebuffer_info.yres - 30, status_line_2_str);
+#endif
 
         if (bf_out_data != NULL)
         {
