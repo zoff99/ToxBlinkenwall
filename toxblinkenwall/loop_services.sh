@@ -147,7 +147,11 @@ while [ 1 == 1 ]; do
     #fi
     # ---- only for RASPI ----
 
+    # turn off visual cursor
 	setterm -cursor off
+    # turn off audible bell
+    setterm -blength 0
+
     mkdir -p ./db/
 
     tor_option=" "
