@@ -79,8 +79,8 @@ keymap = {
     # normal keys
     ecodes.KEY_A: "BT-A:\n",
     ecodes.KEY_B: "BT-B:\n",
-    ecodes.KEY_C: "BT-C:\n",
-    ecodes.KEY_D: "BT-D:\n",
+    ecodes.KEY_G: "BT-C:\n", # C key is taken
+    ecodes.KEY_H: "BT-D:\n", # D key is taken
     ecodes.KEY_L: "play-vol:up\n",
     ecodes.KEY_K: "play-vol:down\n",
     ecodes.KEY_C: "camera-orient:turn-right\n",
