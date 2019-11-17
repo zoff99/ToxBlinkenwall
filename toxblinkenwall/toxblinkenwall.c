@@ -364,11 +364,12 @@ int show_own_cam = 1;
     uint8_t omx_initialized = 0;
     uint32_t omx_w = 0;
     uint32_t omx_h = 0;
-    uint8_t *omx_osd_y = NULL;
-    uint32_t omx_osd_w = 0;
-    uint32_t omx_osd_h = 0;
-    uint32_t update_omx_osd_counter = 999;
 #endif
+
+uint8_t *omx_osd_y = NULL; // TODO: free at end of program!
+uint32_t omx_osd_w = 0;
+uint32_t omx_osd_h = 0;
+uint32_t update_omx_osd_counter = 999;
 
 #ifdef HAVE_OUTPUT_OPENGL
 #include "openGL/esUtil.h"
@@ -7534,6 +7535,8 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 void update_status_line_on_fb()
 {
 #ifdef HAVE_FRAMEBUFFER
+
+#if 0
     unsigned char *bf_out_real_fb = framebuffer_mappedmem;
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
@@ -7541,6 +7544,8 @@ void update_status_line_on_fb()
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
                           10, var_framebuffer_info.yres - 30, status_line_2_str);
+#endif
+
 #else
     global_update_opengl_status_text = 1;
 #endif
@@ -8305,6 +8310,27 @@ static void *video_play(void *dummy)
     //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER
+
+    // -- prepare OSD for framebuffer output --
+    if (omx_osd_y == NULL)
+    {
+        omx_osd_w = OVERLAY_WIDTH_PX;
+        omx_osd_h = OVERLAY_HEIGHT_PX;
+        omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
+    }
+
+    if (update_omx_osd_counter > 20)
+    {
+        prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                            global_video_in_fps);
+        update_omx_osd_counter = 0;
+    }
+
+    update_omx_osd_counter++;
+    draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, y, frame_width_px1, frame_height_px1, ystride);
+    // -- prepare OSD for framebuffer output --
+
+
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
     // dbg(9, "frame_width_px1=%d frame_height_px1=%d vid_width=%d vid_height=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)vid_width ,(int)vid_height);
