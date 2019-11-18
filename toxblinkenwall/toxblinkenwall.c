@@ -1969,29 +1969,35 @@ void *play_ringtone(void *data)
                 break;
             }
 
-            int err;
-            int has_error = 0;
-            err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-            has_error = 0;
-
-            if (err != (int)sample_count)
+            if (have_output_sound_device == 1)
             {
-                if (err == -EAGAIN)
+                if (audio_play_handle)
                 {
-                    yieldcpu(2);
+                    int err;
+                    int has_error = 0;
                     err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-                }
-                else if (err < 0)
-                {
-                    if (err == -EPIPE)
-                    {
-                        snd_pcm_prepare(audio_play_handle);
-                        err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
-                    }
+                    has_error = 0;
 
-                    if (err < 0)
+                    if (err != (int)sample_count)
                     {
-                        sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                        if (err == -EAGAIN)
+                        {
+                            yieldcpu(2);
+                            err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                        }
+                        else if (err < 0)
+                        {
+                            if (err == -EPIPE)
+                            {
+                                snd_pcm_prepare(audio_play_handle);
+                                err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
+                            }
+
+                            if (err < 0)
+                            {
+                                sound_play_xrun_recovery(audio_play_handle, err, (int)libao_channels, (int)libao_sampling_rate);
+                            }
+                        }
                     }
                 }
             }
