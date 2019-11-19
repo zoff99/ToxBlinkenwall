@@ -44,11 +44,14 @@ async def print_events(device):
     async for event in device.async_read_loop():
         kevent = evdev.util.categorize(event)
         if isinstance(kevent, evdev.KeyEvent):
-            code = ecodes.ecodes[kevent.keycode] # map string to keycode object
-            if kevent.keystate == 1 and code in keymap: # 1 == keydown
-                if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
-                    last_button_press = int(round(time.time() * 1000))
-                    send_event(keymap[code])
+            if isinstance(kevent.keycode, dict):
+                code = ecodes.ecodes[kevent.keycode] # map string to keycode object
+                if kevent.keystate == 1 and code in keymap: # 1 == keydown
+                    if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
+                        last_button_press = int(round(time.time() * 1000))
+                        send_event(keymap[code])
+            else
+                print("-->" + kevent.keycode)
 
 devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
 
