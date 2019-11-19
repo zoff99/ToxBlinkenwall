@@ -31,7 +31,7 @@ def send_event(txt):
     #print (txt)
     try:
         fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
-        os.write(fifo_write, txt);
+        os.write(fifo_write, bytes(txt, 'UTF-8'));
         os.fsync(fifo_write);
         os.close(fifo_write);
     except OSError as err:
