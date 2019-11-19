@@ -37,14 +37,14 @@ def send_event(txt):
     except OSError as err:
         time.sleep(0.3)
 
-async def print_events(device):    
+async def print_events(device):
     last_button_press = 0
     button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
     #print ("print_events:start")
     async for event in device.async_read_loop():
         kevent = evdev.util.categorize(event)
         if isinstance(kevent, evdev.KeyEvent):
-            if isinstance(kevent.keycode, dict):
+            if not isinstance(kevent.keycode, list):
                 code = ecodes.ecodes[kevent.keycode] # map string to keycode object
                 if kevent.keystate == 1 and code in keymap: # 1 == keydown
                     if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
@@ -81,7 +81,7 @@ keymap = {
     ecodes.KEY_KP9: "call:9\n",
     ecodes.KEY_KPPLUS: "play-vol:up\n",
     ecodes.KEY_KPMINUS: "play-vol:down\n",
-    ecodes.KEY_PLUS: "play-vol:up\n",
+    # ecodes.KEY_PLUS: "play-vol:up\n", ## funny enough there is no "+" key defined
     ecodes.KEY_MINUS: "play-vol:down\n",
     ecodes.KEY_VOLUMEUP: "play-vol:up\n",
     ecodes.KEY_VOLUMEDOWN: "play-vol:down\n",
@@ -89,14 +89,27 @@ keymap = {
     # normal keys
     ecodes.KEY_A: "BT-A:\n",
     ecodes.KEY_B: "BT-B:\n",
-    ecodes.KEY_G: "BT-C:\n", # C key is taken
-    ecodes.KEY_H: "BT-D:\n", # D key is taken
-    ecodes.KEY_L: "play-vol:up\n",
-    ecodes.KEY_K: "play-vol:down\n",
     ecodes.KEY_C: "camera-orient:turn-right\n",
     ecodes.KEY_D: "display-orient:turn-right\n",
-    ecodes.KEY_Q: "toggle_quality:\n",
+    # E
+    # F
+    ecodes.KEY_G: "BT-C:\n", # C key is taken
+    ecodes.KEY_H: "BT-D:\n", # D key is taken
+    # I
+    # J
+    ecodes.KEY_K: "play-vol:down\n",
+    ecodes.KEY_L: "play-vol:up\n",
+    # M
+    # N
+    # O
     ecodes.KEY_P: "pickup:\n",
+    ecodes.KEY_Q: "toggle_quality:\n",
+    ecodes.KEY_R: "play-vol:down\n",
+    # S
+    ecodes.KEY_T: "play-vol:up\n",
+    # U
+    # V
+    # W
     ecodes.KEY_X: "debug-on:\n",
     ecodes.KEY_Y: "debug-off:\n",
 }
