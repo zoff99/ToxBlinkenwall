@@ -19,13 +19,13 @@ if [ "$want_up""x" == "2x" ]; then
     # just return current value, without setting anything
 else
     if [ "$want_up""x" == "1x" ]; then
-        amixer $mapped_volume set Master "3dB+"
+        amixer $mapped_volume sset "Master" "10%+"
     else
-        amixer $mapped_volume set Master "3dB-"
+        amixer $mapped_volume sset "Master" "10%-"
     fi
 fi
 
-current_value_percent_=$(awk -F"[][]" '/dB/ { print $2 }' <(amixer "$mapped_volume" sget Master) | sed -e s/%//)
+current_value_percent_=$(awk -F"[][]" '/%/ { print $2 }' <(amixer "$mapped_volume" sget Master) | grep '%' | head -1 | sed -e 's/%//')
 
 current_value_percent_=$[ $[ $current_value_percent_ + 1 ] - 1 ]
 # echo $current_value_percent_
