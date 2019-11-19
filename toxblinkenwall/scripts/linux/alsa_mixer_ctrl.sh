@@ -9,7 +9,7 @@ else
     want_up=1
 fi
 
-mapped_volume=" -M "
+export mapped_volume=" -M "
 
 current_value_percent=0
 
