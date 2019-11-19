@@ -25,7 +25,7 @@ else
     fi
 fi
 
-current_value_percent_=$(awk -F"[][]" '/%/ { print $2 }' <(amixer "$mapped_volume" sget Master) | grep '%' | head -1 | sed -e 's/%//')
+current_value_percent_=$(awk -F"[][]" '/%/ { print $2 }' <(amixer -M sget Master) | grep '%' | head -1 | sed -e 's/%//')
 
 current_value_percent_=$[ $[ $current_value_percent_ + 1 ] - 1 ]
 # echo $current_value_percent_
