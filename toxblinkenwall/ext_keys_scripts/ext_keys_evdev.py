@@ -50,8 +50,8 @@ async def print_events(device):
                     if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
                         last_button_press = int(round(time.time() * 1000))
                         send_event(keymap[code])
-            else
-                print("-->" + kevent.keycode)
+            # else:
+            #     print("-->" + kevent.keycode)
 
 devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
 
@@ -81,6 +81,10 @@ keymap = {
     ecodes.KEY_KP9: "call:9\n",
     ecodes.KEY_KPPLUS: "play-vol:up\n",
     ecodes.KEY_KPMINUS: "play-vol:down\n",
+    ecodes.KEY_PLUS: "play-vol:up\n",
+    ecodes.KEY_MINUS: "play-vol:down\n",
+    ecodes.KEY_VOLUMEUP: "play-vol:up\n",
+    ecodes.KEY_VOLUMEDOWN: "play-vol:down\n",
 
     # normal keys
     ecodes.KEY_A: "BT-A:\n",
