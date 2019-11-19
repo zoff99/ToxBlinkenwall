@@ -29,10 +29,13 @@ except Exception:
 
 def send_event(txt):
     #print (txt)
-    fifo_write = open(fifo_path, 'w')
-    fifo_write.write(txt)
-    fifo_write.flush()
-    fifo_write.close()
+    try:
+        fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
+        os.write(fifo_write, txt);
+        os.fsync(fifo_write);
+        os.close(fifo_write);
+    except OSError as err:
+        time.sleep(0.3)
 
 async def print_events(device):    
     last_button_press = 0
