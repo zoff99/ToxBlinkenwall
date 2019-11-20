@@ -12688,6 +12688,9 @@ int main(int argc, char *argv[])
     Tox *tox = create_tox();
     global_start_time = time(NULL);
 
+    // try to load name from file on startup
+    reload_name_from_file(tox);
+
     if (tox_self_get_name_size(tox) == 0)
     {
         uint32_t self_name_max_len = tox_max_name_length();
