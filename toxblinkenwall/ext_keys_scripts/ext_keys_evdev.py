@@ -28,7 +28,7 @@ except Exception:
 
 
 def send_event(txt):
-    #print (txt)
+    # print (txt); return
     try:
         fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
         os.write(fifo_write, bytes(txt, 'UTF-8'));
@@ -37,10 +37,10 @@ def send_event(txt):
     except OSError as err:
         time.sleep(0.3)
 
-async def print_events(device):
+async def handle_keys(device):
     last_button_press = 0
     button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
-    #print ("print_events:start")
+
     async for event in device.async_read_loop():
         kevent = evdev.util.categorize(event)
         if isinstance(kevent, evdev.KeyEvent):
@@ -50,10 +50,22 @@ async def print_events(device):
                     if (last_button_press + button_press_min_delay_ms) <  int(round(time.time() * 1000)):
                         last_button_press = int(round(time.time() * 1000))
                         send_event(keymap[code])
-            # else:
-            #     print("-->" + kevent.keycode)
 
-devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+def is_keyboard(device):
+    return True if device.capabilities().get(ecodes.EV_KEY, None) else False
+
+async def scan_for_keyboards():
+    keyboards = []
+    while True:
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        for keyboard in filter(is_keyboard, devices):
+            if keyboard not in keyboards:
+                keyboards += [keyboard]
+                print("Detected new device:", keyboard)
+                asyncio.ensure_future(handle_keys(keyboard))
+        await asyncio.sleep(1)
+
+
 
 keymap = {
     # normal keys
@@ -114,17 +126,8 @@ keymap = {
     ecodes.KEY_Y: "debug-off:\n",
 }
 
-keyboards = []
-for dev in devices:
-    keys = dev.capabilities().get(ecodes.EV_KEY, None)
-    if keys:
-        keyboards += [dev]
-        # Lock Keyboard from terminal
-        # dev.grab()
-
 try:
-    for device in keyboards:
-        asyncio.ensure_future(print_events(device))
+    asyncio.ensure_future(scan_for_keyboards())
 
     loop = asyncio.get_event_loop()
     loop.run_forever()
