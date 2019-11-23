@@ -6279,6 +6279,8 @@ int init_cam(int sleep_flag, bool h264_codec)
 
     if (setfps)
     {
+        dbg(2, "trying to set 25 fps for video capture ...\n");
+
         memset(setfps, 0, sizeof(struct v4l2_streamparm));
         setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps->parm.capture.timeperframe.numerator = 1;
@@ -12415,7 +12417,6 @@ int main(int argc, char *argv[])
     global_audio_bit_rate = DEFAULT_GLOBAL_AUD_BITRATE;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
-    video_high = 1;
     camera_res_high_wanted_prev = video_high;
     logfile = fopen(log_filename, "wb");
     setvbuf(logfile, NULL, _IONBF, 0);
