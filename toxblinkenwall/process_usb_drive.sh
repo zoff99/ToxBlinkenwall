@@ -146,8 +146,8 @@ network={
         wpa_action wlan0 reload
         systemctl restart ifup@wlan0.service
 
-        ifdown wlan0
-        ifup wlan0
+        timeout -k 15 14 ifdown wlan0
+        timeout -k 15 14 ifup wlan0
     fi
 
     return 0
