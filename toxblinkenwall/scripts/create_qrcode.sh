@@ -10,6 +10,9 @@ toxidstr="$1"
 
 . $(dirname "$0")/vars.sh
 
+# also put toxid.txt file into "db" dir
+cp $(dirname "$0")/../toxid.txt $(dirname "$0")/../db/toxid.txt
+
 rm -f "$qrcode_file_png"
 rm -f "aa""$$"".png"
 qrencode -t PNG -o "$qrcode_file_png" "$toxidstr"
