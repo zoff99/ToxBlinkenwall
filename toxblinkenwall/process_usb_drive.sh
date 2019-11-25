@@ -63,6 +63,8 @@ function import_data_phonebook_and_wlan
                 cp -v "$mount_dir""$num_entry" "$dst_dir""/" >> "$logfile" 2>&1
                 chown pi:pi "$dst_dir""/""$num_entry" # file owned by root (since this is an udev script)
                 chmod a+rw "$dst_dir""/""$num_entry" # file owned by root (since this is an udev script)
+                # also write to "db" dir
+                cp -f "$dst_dir""/""$num_entry" "$dst_dir""/db/""$num_entry"
         fi
 
     done
