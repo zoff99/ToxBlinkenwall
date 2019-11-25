@@ -4607,7 +4607,26 @@ bool file_exists(const char *path)
 void create_entry_file_if_not_exists(int entry_num)
 {
     char entry_toxid_filename[300];
+
+    CLEAR(entry_toxid_filename);
     snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+
+    if (!file_exists(entry_toxid_filename))
+    {
+        FILE *fp = fopen(entry_toxid_filename, "w");
+
+        if (fp == NULL)
+        {
+            dbg(1, "Warning: failed to create %s file\n", entry_toxid_filename);
+            return;
+        }
+
+        fclose(fp);
+        dbg(1, "Warning: creating new %s file. Did you lose the old one?\n", entry_toxid_filename);
+    }
+
+    CLEAR(entry_toxid_filename);
+    snprintf(entry_toxid_filename, 299, "db/book_entry_%d.txt", entry_num);
 
     if (!file_exists(entry_toxid_filename))
     {
@@ -4629,6 +4648,7 @@ void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
     create_entry_file_if_not_exists(entry_num);
     *toxid_str = NULL;
     char entry_toxid_filename[300];
+    CLEAR(entry_toxid_filename);
     snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
     FILE *fp = fopen(entry_toxid_filename, "r");
 
@@ -4677,6 +4697,10 @@ void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
     {
         create_entry_file_if_not_exists(entry_num);
         char entry_toxid_filename[300];
+        char toxid_pubkey_string[TOX_ADDRESS_SIZE * 2 + 1];
+
+
+        CLEAR(entry_toxid_filename);
         snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
         FILE *fp = fopen(entry_toxid_filename, "wb");
 
@@ -4686,10 +4710,26 @@ void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
             return;
         }
 
-        char toxid_pubkey_string[TOX_ADDRESS_SIZE * 2 + 1];
         CLEAR(toxid_pubkey_string);
         bin_to_hex_string(toxid_bin, (size_t) TOX_ADDRESS_SIZE, toxid_pubkey_string);
         int result = fputs(toxid_pubkey_string, fp);
+        fclose(fp);
+
+
+
+        CLEAR(entry_toxid_filename);
+        snprintf(entry_toxid_filename, 299, "db/book_entry_%d.txt", entry_num);
+        fp = fopen(entry_toxid_filename, "wb");
+
+        if (fp == NULL)
+        {
+            dbg(1, "Warning: failed to read %s file\n", entry_toxid_filename);
+            return;
+        }
+
+        CLEAR(toxid_pubkey_string);
+        bin_to_hex_string(toxid_bin, (size_t) TOX_ADDRESS_SIZE, toxid_pubkey_string);
+        result = fputs(toxid_pubkey_string, fp);
         fclose(fp);
     }
 }
