@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 51
-static const char global_version_string[] = "0.99.51";
+#define VERSION_PATCH 52
+static const char global_version_string[] = "0.99.52";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -2545,65 +2545,15 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
         i = (size_t)random_order_nodenums[j];
         res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                              nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
-        // dbg(9, "sodium_hex2bin:res=%d\n", res);
         TOX_ERR_BOOTSTRAP error;
-        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
-
-        if (res != true)
-        {
-            if (error == TOX_ERR_BOOTSTRAP_OK)
-            {
-                // dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
-            }
-            else if (error == TOX_ERR_BOOTSTRAP_NULL)
-            {
-                // dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-            }
-            else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
-            {
-                // dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-            }
-            else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
-            {
-                // dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
-            }
-        }
-        else
-        {
-            // dbg(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
-        }
 
         if ((add_as_tcp_relay == 1) || (switch_tcponly == 1))
         {
-            res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
-
-            if (res != true)
-            {
-                if (error == TOX_ERR_BOOTSTRAP_OK)
-                {
-                    // dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
-                }
-                else if (error == TOX_ERR_BOOTSTRAP_NULL)
-                {
-                    // dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-                }
-                else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST)
-                {
-                    // dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-                }
-                else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT)
-                {
-                    // dbg(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
-                }
-            }
-            else
-            {
-                // dbg(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
-            }
+            res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use as TCP relay
         }
         else
         {
-            dbg(2, "Not adding any TCP relays\n");
+            res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
         }
     }
 }
@@ -2643,7 +2593,8 @@ void bootstrap(Tox *tox)
         {"104.233.104.126", 33445, "EDEE8F2E839A57820DE3DA4156D88350E53D4161447068A3457EE8F59F362414", {0}},
         {"51.254.84.212", 33445, "AEC204B9A4501412D5F0BB67D9C81B5DB3EE6ADA64122D32A3E9B093D544327D", {0}},
         {"88.99.133.52", 33445, "2D320F971EF2CA18004416C2AAE7BA52BF7949DB34EA8E2E21AF67BD367BE211", {0}},
-        {"185.58.206.164", 33445, "24156472041E5F220D1FA11D9DF32F7AD697D59845701CDD7BE7D1785EB9DB39", {0}},        {"92.54.84.70", 33445, "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802", {0}},
+        {"185.58.206.164", 33445, "24156472041E5F220D1FA11D9DF32F7AD697D59845701CDD7BE7D1785EB9DB39", {0}},
+        {"92.54.84.70", 33445, "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802", {0}},
         {"195.93.190.6", 33445, "FB4CE0DDEFEED45F26917053E5D24BDDA0FA0A3D83A672A9DA2375928B37023D", {0}},
         {"tox.uplinklabs.net", 33445, "1A56EA3EDF5DF4C0AEABBF3C2E4E603890F87E983CAC8A0D532A335F2C6E3E1F", {0}},
         {"toxnode.nek0.net", 33445, "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639", {0}},
@@ -2670,29 +2621,13 @@ void bootstrap(Tox *tox)
         {"95.215.46.114", 33445, "5823FB947FF24CF83DDFAC3F3BAA18F96EA2018B16CC08429CB97FA502F40C23", {0}},
         {"51.15.54.207", 33445, "1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
-    // only nodes.tox.chat
-    DHT_node nodes3[] =
-    {
-        {"51.15.37.145",             33445, "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E", {0}}
-    };
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
 
-    if (switch_nodelist_2 == 0)
-    {
-        dbg(9, "nodeslist:1\n");
-        bootstap_nodes(tox, nodes1, (int)(sizeof(nodes1) / sizeof(DHT_node)), 1);
-    }
-    else if (switch_nodelist_2 == 2)
-    {
-        dbg(9, "nodeslist:3\n");
-        bootstap_nodes(tox, nodes3, (int)(sizeof(nodes3) / sizeof(DHT_node)), 0);
-    }
-    else // (switch_nodelist_2 == 1)
-    {
-        dbg(9, "nodeslist:2\n");
-        bootstap_nodes(tox, nodes2, (int)(sizeof(nodes2) / sizeof(DHT_node)), 1);
-    }
+    tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
+    bootstap_nodes(tox, nodes2, (int)(sizeof(nodes2) / sizeof(DHT_node)), 0);
+    bootstap_nodes(tox, nodes1, (int)(sizeof(nodes1) / sizeof(DHT_node)), 1);
 
 #pragma GCC diagnostic pop
 }
