@@ -17,9 +17,18 @@ from evdev import ecodes
 import time
 import os
 import signal
+import distutils.util
 
 fifo_path = '../ext_keys.fifo'
 cur_button = -1
+
+handle_exit_env = os.getenv("TBW_KILLSWITCH_ENGAGE")
+handle_exit_key = distutils.util.strtobool(handle_exit_env)
+
+def handle_exit():
+    if handle_exit_key:
+        os.system("../initscript.sh stop")
+        exit()
 
 try:
     os.mkfifo(fifo_path)
@@ -29,6 +38,8 @@ except Exception:
 
 def send_event(txt):
     # print (txt); return
+    if "exit:" in txt:
+        handle_exit()
     try:
         fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
         os.write(fifo_write, bytes(txt, 'UTF-8'));
@@ -36,7 +47,6 @@ def send_event(txt):
         os.close(fifo_write);
     except OSError as err:
         time.sleep(0.3)
-
 async def handle_keys(device):
     last_button_press = 0
     button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
@@ -55,17 +65,22 @@ def is_keyboard(device):
     return True if device.capabilities().get(ecodes.EV_KEY, None) else False
 
 async def scan_for_keyboards():
-    keyboards = []
+    keyboards = set()
+    tasks = set()
     while True:
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
-        for keyboard in filter(is_keyboard, devices):
-            if keyboard not in keyboards:
-                keyboards += [keyboard]
-                print("Detected new device:", keyboard)
-                asyncio.ensure_future(handle_keys(keyboard))
-        await asyncio.sleep(1)
+        for device in filter(is_keyboard, devices):
+            if device.phys not in keyboards:
+                keyboards.add(device.phys)
+                print("Detected new key device:", device.phys)
+                task = asyncio.ensure_future(handle_keys(device))
 
-
+                task.add_done_callback(lambda _,phys=device.phys: keyboards.remove(phys))
+                tasks.add(task)
+        done, tasks = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
+        for task in done:
+            if task.exception():
+                print(task, task.exception()))
 
 keymap = {
     # normal keys
@@ -103,7 +118,7 @@ keymap = {
     ecodes.KEY_B: "BT-B:\n",
     ecodes.KEY_C: "camera-orient:turn-right\n",
     ecodes.KEY_D: "display-orient:turn-right\n",
-    # E
+    ecodes.KEY_E: "exit:\n",
     # F
     ecodes.KEY_G: "BT-C:\n", # C key is taken
     ecodes.KEY_H: "BT-D:\n", # D key is taken
@@ -127,11 +142,16 @@ keymap = {
 }
 
 try:
-    asyncio.ensure_future(scan_for_keyboards())
+    task = asyncio.ensure_future(scan_for_keyboards())
 
     loop = asyncio.get_event_loop()
-    loop.run_forever()
 
+    def exception_handler(loop, context):
+        print("Exception in ", loop, context, "raising")
+        sys.exit()
+    #loop.set_exception_handler(exception_handler)
+
+    loop.run_until_complete(task)
 finally:                   # this block will run no matter how the try block exits
     # fifo_write.close()
     pass
