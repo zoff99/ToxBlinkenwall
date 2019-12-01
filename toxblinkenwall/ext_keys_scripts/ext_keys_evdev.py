@@ -23,6 +23,7 @@ fifo_path = '../ext_keys.fifo'
 cur_button = -1
 
 handle_exit_env = os.getenv("TBW_KILLSWITCH_ENGAGE")
+handle_debug_env = os.getenv("TBW_EXTKEYS_EVDEV_DEBUG")
 
 def handle_exit():
     if handle_exit_env != None:
@@ -36,15 +37,20 @@ except Exception:
 
 
 def send_event(txt):
-    # print (txt); return
+    if handle_debug_env != None:
+        print (txt)
+        return
+
     if "XX-dummy-exit-dummy-XX:" in txt:
         handle_exit()
+
     try:
         fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
         os.write(fifo_write, bytes(txt, 'UTF-8'));
         os.fsync(fifo_write);
         os.close(fifo_write);
-    except OSError as err:
+    except Exception:
+        print("EXCEPTION:001")
         time.sleep(0.3)
 
 
@@ -147,15 +153,14 @@ keymap = {
 
 try:
     task = asyncio.ensure_future(scan_for_keyboards())
-
     loop = asyncio.get_event_loop()
 
     def exception_handler(loop, context):
         print("Exception in ", loop, context, "raising")
         sys.exit()
-    #loop.set_exception_handler(exception_handler)
 
     loop.run_until_complete(task)
-finally:                   # this block will run no matter how the try block exits
-    # fifo_write.close()
+finally:
+    # this block will run no matter how the try block exits
     pass
+
