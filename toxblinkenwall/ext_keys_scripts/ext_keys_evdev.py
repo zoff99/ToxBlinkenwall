@@ -23,10 +23,9 @@ fifo_path = '../ext_keys.fifo'
 cur_button = -1
 
 handle_exit_env = os.getenv("TBW_KILLSWITCH_ENGAGE")
-handle_exit_key = distutils.util.strtobool(handle_exit_env)
 
 def handle_exit():
-    if handle_exit_key:
+    if handle_exit_env != None:
         os.system("../initscript.sh stop &")
         exit()
 
@@ -80,7 +79,7 @@ async def scan_for_keyboards():
         done, tasks = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
         for task in done:
             if task.exception():
-                print(task, task.exception()))
+                print(task, task.exception())
 
 keymap = {
     # normal keys
