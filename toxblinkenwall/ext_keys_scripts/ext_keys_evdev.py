@@ -27,7 +27,7 @@ handle_exit_key = distutils.util.strtobool(handle_exit_env)
 
 def handle_exit():
     if handle_exit_key:
-        os.system("../initscript.sh stop")
+        os.system("../initscript.sh stop &")
         exit()
 
 try:
@@ -38,7 +38,7 @@ except Exception:
 
 def send_event(txt):
     # print (txt); return
-    if "exit:" in txt:
+    if "XX-dummy-exit-dummy-XX:" in txt:
         handle_exit()
     try:
         fifo_write = os.open(fifo_path, os.O_WRONLY | os.O_NONBLOCK);
@@ -118,7 +118,7 @@ keymap = {
     ecodes.KEY_B: "BT-B:\n",
     ecodes.KEY_C: "camera-orient:turn-right\n",
     ecodes.KEY_D: "display-orient:turn-right\n",
-    ecodes.KEY_E: "exit:\n",
+    ecodes.KEY_E: "XX-dummy-exit-dummy-XX:\n",
     # F
     ecodes.KEY_G: "BT-C:\n", # C key is taken
     ecodes.KEY_H: "BT-D:\n", # D key is taken
