@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 52
-static const char global_version_string[] = "0.99.52";
+#define VERSION_PATCH 53
+static const char global_version_string[] = "0.99.53";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -2983,9 +2983,9 @@ void show_tox_id_qrcode(Tox *tox)
 
             left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                                         line_position_x_header, line_position_y, 126, 3,
+                                         line_position_x_header, line_position_y, 126, 8,
                                          color_r, color_g, color_b);
-            line_position_y = line_position_y + 4;
+            line_position_y = line_position_y + 9;
             // ------------------------------------
             // Display version
             CLEAR(text_line);
@@ -3004,6 +3004,29 @@ void show_tox_id_qrcode(Tox *tox)
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
+            //
+            // ------------------------------------
+            // Display own name
+            CLEAR(text_line);
+
+            if (tox)
+            {
+                if ((tox_self_get_name_size(tox) < 1) || (tox_self_get_name_size(tox) > 300))
+                {
+                }
+                else
+                {
+                    char ownname[300];
+                    CLEAR(ownname);
+                    tox_self_get_name(tox, ownname);
+                    snprintf(text_line, sizeof(text_line), "name: %s", ownname);
+
+                    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                          line_position_x_header, line_position_y, text_line);
+                    line_position_y = line_position_y + 20;
+                }
+            }
             //
             // ------------------------------------
             line_position_y = line_position_y + 20;
