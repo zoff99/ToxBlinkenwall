@@ -46,6 +46,8 @@ def send_event(txt):
         os.close(fifo_write);
     except OSError as err:
         time.sleep(0.3)
+
+
 async def handle_keys(device):
     last_button_press = 0
     button_press_min_delay_ms = 400 # 400ms until you can register the same button press again
@@ -76,10 +78,13 @@ async def scan_for_keyboards():
 
                 task.add_done_callback(lambda _,phys=device.phys: keyboards.remove(phys))
                 tasks.add(task)
-        done, tasks = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
-        for task in done:
-            if task.exception():
-                print(task, task.exception())
+        if tasks:
+            done, tasks = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
+            for task in done:
+                if task.exception():
+                    print(task, task.exception())
+        else:
+            await asyncio.sleep(2)
 
 keymap = {
     # normal keys
