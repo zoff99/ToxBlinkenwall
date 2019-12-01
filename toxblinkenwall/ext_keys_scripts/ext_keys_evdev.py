@@ -65,20 +65,22 @@ def is_keyboard(device):
     return True if device.capabilities().get(ecodes.EV_KEY, None) else False
 
 async def scan_for_keyboards():
-    keyboards = []
-    tasks = []
+    keyboards = set()
+    tasks = set()
     while True:
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
         for device in filter(is_keyboard, devices):
-            if device.phys not in [(k.phys) for k in keyboards]:
-                keyboards += [device]
-                print("Detected new key device:", device)
-                tasks += [handle_keys(device)]
-        done, pending = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
-        for task in done:
-            tasks.remove(task)
-            # TODO: also remove keyboard device
+            if device.phys not in keyboards:
+                keyboards.add(device.phys)
+                print("Detected new key device:", device.phys)
+                task = asyncio.ensure_future(handle_keys(device))
 
+                task.add_done_callback(lambda _,phys=device.phys: keyboards.remove(phys))
+                tasks.add(task)
+        done, tasks = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_EXCEPTION)
+        for task in done:
+            if task.exception():
+                print(task, task.exception()))
 
 keymap = {
     # normal keys
