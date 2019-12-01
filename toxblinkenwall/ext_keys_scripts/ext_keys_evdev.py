@@ -58,12 +58,13 @@ async def scan_for_keyboards():
     keyboards = []
     while True:
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
-        for keyboard in filter(is_keyboard, devices):
-            if keyboard not in keyboards:
-                keyboards += [keyboard]
-                print("Detected new device:", keyboard)
-                asyncio.ensure_future(handle_keys(keyboard))
-        await asyncio.sleep(1)
+        for device in filter(is_keyboard, devices):
+            if device.phys not in [(k.phys) for k in keyboards]:
+                keyboards += [device]
+                print("Detected new key device:", device)
+                asyncio.ensure_future(handle_keys(device))
+            else: print("Not new device", device)
+        await asyncio.sleep(100)
 
 
 
