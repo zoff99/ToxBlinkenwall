@@ -2561,8 +2561,8 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
 void bootstrap(Tox *tox)
 {
-    // these nodes seem to be faster!!
-    DHT_node nodes1[] =
+    // use these nodes as tcp-relays
+    DHT_node nodes_tcp_relays[] =
     {
         {"tox.abilinski.com", 33445, "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E", {0}},
         {"78.46.73.141",      33445, "02807CF4F8BB8FB390CC3794BDF1E8449E9A8392C5D3F2200019DA9F1E812E46", {0}},
@@ -2571,12 +2571,12 @@ void bootstrap(Tox *tox)
         {"185.14.30.213",       443, "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}},
         {"185.14.30.213",      3389, "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}}
     };
-    // more nodes here, but maybe some issues
-    DHT_node nodes2[] =
+    // use these nodes as bootstrap nodes
+    DHT_node nodes_bootstrap_nodes[] =
     {
-        {"178.62.250.138",             33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
-        {"136.243.141.187",             443,  "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
-        {"185.14.30.213",               443,  "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}},
+        {"178.62.250.138",  33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
+        {"136.243.141.187", 443,  "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
+        {"185.14.30.213",   443,  "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}},
         {"198.46.138.44", 33445, "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67", {0}},
         {"51.15.37.145", 33445, "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E", {0}},
         {"130.133.110.14", 33445, "461FA3776EF0FA655F1A05477DF1B3B614F7D6B124F7DB1DD4FE3C08B03B640F", {0}},
@@ -2625,9 +2625,12 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
 
+    // dummy node to bootstrap
     tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
-    bootstap_nodes(tox, nodes2, (int)(sizeof(nodes2) / sizeof(DHT_node)), 0);
-    bootstap_nodes(tox, nodes1, (int)(sizeof(nodes1) / sizeof(DHT_node)), 1);
+    // bootstrap nodes
+    bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
+    // tcp relay nodes
+    bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
 
 #pragma GCC diagnostic pop
 }
