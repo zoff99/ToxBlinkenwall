@@ -202,6 +202,8 @@ static const char global_version_string[] = "0.99.53";
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include <pthread.h>
 
@@ -776,6 +778,7 @@ float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
 void set_restart_flag();
 void reload_name_from_file(Tox *tox);
 void read_pubkey_from_file(uint8_t **toxid_str, int entry_num);
+bool file_exists(const char *path);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -789,6 +792,16 @@ const char *my_toxid_filename_rgba = "toxid.rgba";
 const char *my_toxid_filename_txt = "toxid.txt";
 const char *image_createqr_touchfile = "./toxid_ready.txt";
 const char *tox_name_filename = "toxname.txt";
+const char *bootstrap_custom_filename = "./custom_bootstrap_nodes.dat";
+
+struct tbw_bootstrap_nodes
+{
+    uint32_t    s_addr;                    /* uint32_t -> ipv4 address in network byte order */
+    uint16_t    sin_port;                  /* uint16_t -> port in network byte order */
+    uint8_t key_hex[TOX_PUBLIC_KEY_SIZE];  /* 32 bytes -> DHT pubkey of bootstrap node, in ??? order */
+    uint8_t     node_type;                 /* uint8_t  -> 0..bootstrapnode, 1..tcprelay */
+} __attribute__((packed));
+
 
 static char *v4l2_device = NULL; // video device filename
 char *framebuffer_device = NULL; // framebuffer device filename
@@ -2563,7 +2576,6 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
     }
 }
 
-
 void bootstrap(Tox *tox)
 {
     // use these nodes as tcp-relays
@@ -2637,6 +2649,57 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic pop
 }
 
+void bootstrap_wrapper(Tox *tox)
+{
+    int custom_file_ok = 0;
+
+    if (bootstrap_custom_filename)
+    {
+        if (file_exists(bootstrap_custom_filename))
+        {
+            FILE *fp = fopen(bootstrap_custom_filename, "rb");
+
+            if (fp != NULL)
+            {
+                struct tbw_bootstrap_nodes tbw_nd;
+                memset(&tbw_nd, 0, sizeof(struct tbw_bootstrap_nodes));
+
+                while (fread(&tbw_nd, sizeof(struct tbw_bootstrap_nodes), 1, fp))
+                {
+                    struct in_addr ipv4addr;
+                    ipv4addr.s_addr = tbw_nd.s_addr; // uint32_t -> ipv4 addr
+                    char ipv4_str[INET_ADDRSTRLEN];
+                    CLEAR(ipv4_str);
+                    const char *result = inet_ntop(AF_INET, &ipv4addr, ipv4_str, sizeof(ipv4_str));
+
+                    if (result != 0)
+                    {
+                        if (tbw_nd.node_type == 0)
+                        {
+                            bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
+
+                            if (res)
+                            {
+                                custom_file_ok = 1;
+                            }
+                        }
+                        else
+                        {
+                            tox_add_tcp_relay(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL); // use as TCP relay
+                        }
+                    }
+                }
+
+                fclose(fp);
+            }
+        }
+    }
+
+    if (custom_file_ok == 0)
+    {
+        bootstrap(tox);
+    }
+}
 
 // fill string with toxid in upper case hex.
 // size of toxid_str needs to be: [TOX_ADDRESS_SIZE*2 + 1] !!
@@ -12694,7 +12757,7 @@ int main(int argc, char *argv[])
     }
 
     Friends.max_idx = 0;
-    bootstrap(tox);
+    bootstrap_wrapper(tox);
     print_tox_id(tox);
     delete_qrcode_generate_touchfile();
     create_tox_id_qrcode(tox);
@@ -12766,7 +12829,7 @@ int main(int argc, char *argv[])
             loop_counter = 0;
             // if not yet online, bootstrap every 20 seconds
             dbg(2, "Tox NOT online yet, bootstrapping again\n");
-            bootstrap(tox);
+            bootstrap_wrapper(tox);
 
             if (try >= max_tries)
                 {
@@ -12968,7 +13031,7 @@ int main(int argc, char *argv[])
             {
                 // then bootstap again
                 dbg(2, "Tox NOT online, bootstrapping again\n");
-                bootstrap(tox);
+                bootstrap_wrapper(tox);
                 // reset timestamp, that we do not bootstrap on every tox_iterate() loop
                 my_last_online_ts = (uint32_t)get_unix_time();
             }
