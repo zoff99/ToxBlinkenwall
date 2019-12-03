@@ -1793,6 +1793,7 @@ void button_a()
     if (global_video_active == 0)
     {
         fb_fill_black();
+
         if (mytox_av)
         {
             show_tox_id_qrcode_real(toxav_get_tox(mytox_av));
@@ -2100,7 +2101,8 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if (fscanf(file1, "%llu", &lan_rx_value)){};
+            if (fscanf(file1, "%llu", &lan_rx_value)) {};
+
             fclose(file1);
         }
 
@@ -2108,7 +2110,8 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if(fscanf(file1, "%llu", &lan_tx_value)){};
+            if (fscanf(file1, "%llu", &lan_tx_value)) {};
+
             fclose(file1);
         }
 
@@ -2116,7 +2119,8 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if(fscanf(file1, "%llu", &wifi_rx_value)){};
+            if (fscanf(file1, "%llu", &wifi_rx_value)) {};
+
             fclose(file1);
         }
 
@@ -2124,7 +2128,8 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if(fscanf(file1, "%llu", &wifi_tx_value)){};
+            if (fscanf(file1, "%llu", &wifi_tx_value)) {};
+
             fclose(file1);
         }
 
@@ -2621,17 +2626,14 @@ void bootstrap(Tox *tox)
         {"95.215.46.114", 33445, "5823FB947FF24CF83DDFAC3F3BAA18F96EA2018B16CC08429CB97FA502F40C23", {0}},
         {"51.15.54.207", 33445, "1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239", {0}}
     };
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
-
     // dummy node to bootstrap
     tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
     // bootstrap nodes
     bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
     // tcp relay nodes
     bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
-
 #pragma GCC diagnostic pop
 }
 
@@ -2928,7 +2930,6 @@ void show_tox_id_qrcode_real(Tox *tox)
     if (system(cmd_str));
 
     dbg(2, "show_tox_id_qrcode()\n");
-
     global_is_qrcode_showing_on_screen = 1;
 }
 
@@ -3023,13 +3024,13 @@ void show_tox_id_qrcode(Tox *tox)
                     CLEAR(ownname);
                     tox_self_get_name(tox, ownname);
                     snprintf(text_line, sizeof(text_line), "name: %s", ownname);
-
                     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                           line_position_x_header, line_position_y, text_line);
                     line_position_y = line_position_y + 20;
                 }
             }
+
             //
             // ------------------------------------
             line_position_y = line_position_y + 20;
@@ -3264,15 +3265,11 @@ void show_toxid_text_on_fb(Tox *tox)
     char tox_id_hex[TOX_ADDRESS_SIZE * 2 + 1];
     CLEAR(tox_id_hex);
     get_my_toxid(tox, tox_id_hex);
-
     char line_text[30];
-
     // fill fb with all black
     fb_fill_black();
-
     // draw toxid in readable format to fb
     // 76 chars -> 38 groups of 2 chars -> in 5 lines
-
     // text screen layout:
     // "Current ID:"
     // G1 G2 G3   G4 G5 G6   G7 G8 G9
@@ -3282,14 +3279,11 @@ void show_toxid_text_on_fb(Tox *tox)
     // G1 G2 G3   G4 G5 G6   G7 G8 G9
     //
     // G1 G2
-
     unsigned char *bf_out_real_fb = framebuffer_mappedmem;
     uint32_t line_add = 18;
     uint32_t lineposition = 20;
     uint32_t lineposition_add = 20;
     char *tox_id_hex_p = tox_id_hex;
-
-
     CLEAR(line_text);
     snprintf(line_text, sizeof(line_text), "Current ID:");
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
@@ -3297,49 +3291,22 @@ void show_toxid_text_on_fb(Tox *tox)
                           10, lineposition, line_text);
     lineposition = lineposition + lineposition_add;
     lineposition = lineposition + lineposition_add;
-
     CLEAR(line_text);
     snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
-            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
-            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+             tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+             tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+             tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
             );
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
                           10, lineposition, line_text);
     tox_id_hex_p = tox_id_hex_p + line_add;
     lineposition = lineposition + lineposition_add;
-
     CLEAR(line_text);
     snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
-            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
-            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
-            );
-    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                          10, lineposition, line_text);
-    tox_id_hex_p = tox_id_hex_p + line_add;
-    lineposition = lineposition + lineposition_add;
-    lineposition = lineposition + lineposition_add;
-
-    CLEAR(line_text);
-    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
-            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
-            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
-            );
-    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                          10, lineposition, line_text);
-    tox_id_hex_p = tox_id_hex_p + line_add;
-    lineposition = lineposition + lineposition_add;
-
-    CLEAR(line_text);
-    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
-            tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
-            tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+             tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+             tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+             tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
             );
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
@@ -3347,10 +3314,32 @@ void show_toxid_text_on_fb(Tox *tox)
     tox_id_hex_p = tox_id_hex_p + line_add;
     lineposition = lineposition + lineposition_add;
     lineposition = lineposition + lineposition_add;
-
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+             tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+             tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+             tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+    CLEAR(line_text);
+    snprintf(line_text, sizeof(line_text), "%c%c %c%c %c%c  %c%c %c%c %c%c  %c%c %c%c %c%c",
+             tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3], tox_id_hex_p[4], tox_id_hex_p[5],
+             tox_id_hex_p[6], tox_id_hex_p[7], tox_id_hex_p[8], tox_id_hex_p[9], tox_id_hex_p[10], tox_id_hex_p[11],
+             tox_id_hex_p[12], tox_id_hex_p[13], tox_id_hex_p[14], tox_id_hex_p[15], tox_id_hex_p[16], tox_id_hex_p[17]
+            );
+    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                          10, lineposition, line_text);
+    tox_id_hex_p = tox_id_hex_p + line_add;
+    lineposition = lineposition + lineposition_add;
+    lineposition = lineposition + lineposition_add;
     CLEAR(line_text);
     snprintf(line_text, sizeof(line_text), "%c%c %c%c",
-            tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3]
+             tox_id_hex_p[0], tox_id_hex_p[1], tox_id_hex_p[2], tox_id_hex_p[3]
             );
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
@@ -4564,7 +4553,6 @@ bool file_exists(const char *path)
 void create_entry_file_if_not_exists(int entry_num)
 {
     char entry_toxid_filename[300];
-
     CLEAR(entry_toxid_filename);
     snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
 
@@ -4655,8 +4643,6 @@ void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
         create_entry_file_if_not_exists(entry_num);
         char entry_toxid_filename[300];
         char toxid_pubkey_string[TOX_ADDRESS_SIZE * 2 + 1];
-
-
         CLEAR(entry_toxid_filename);
         snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
         FILE *fp = fopen(entry_toxid_filename, "wb");
@@ -4671,9 +4657,6 @@ void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
         bin_to_hex_string(toxid_bin, (size_t) TOX_ADDRESS_SIZE, toxid_pubkey_string);
         int result = fputs(toxid_pubkey_string, fp);
         fclose(fp);
-
-
-
         CLEAR(entry_toxid_filename);
         snprintf(entry_toxid_filename, 299, "db/book_entry_%d.txt", entry_num);
         fp = fopen(entry_toxid_filename, "wb");
@@ -4734,6 +4717,7 @@ void update_status_line_1_text_arg(int vbr_)
 void update_status_line_2_text()
 {
 #if 0
+
     if (speaker_out_num == 0)
     {
         snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_0,
@@ -4744,6 +4728,7 @@ void update_status_line_2_text()
         snprintf(status_line_2_str, sizeof(status_line_2_str),    "A: %s OB %d (%dx%d)", speaker_out_name_1,
                  (int)global_audio_bit_rate, (int)global_video_in_w, (int)global_video_in_h);
     }
+
 #endif
 }
 
@@ -6277,7 +6262,6 @@ int init_cam(int sleep_flag, bool h264_codec)
     if (setfps)
     {
         dbg(2, "trying to set 25 fps for video capture ...\n");
-
         memset(setfps, 0, sizeof(struct v4l2_streamparm));
         setfps->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps->parm.capture.timeperframe.numerator = 1;
@@ -7644,7 +7628,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 void update_status_line_on_fb()
 {
 #ifdef HAVE_FRAMEBUFFER
-
 #if 0
     unsigned char *bf_out_real_fb = framebuffer_mappedmem;
     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
@@ -7654,7 +7637,6 @@ void update_status_line_on_fb()
                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
                           10, var_framebuffer_info.yres - 30, status_line_2_str);
 #endif
-
 #else
     global_update_opengl_status_text = 1;
 #endif
@@ -8437,16 +8419,14 @@ static void *video_play(void *dummy)
 
     update_omx_osd_counter++;
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, y, frame_width_px1, frame_height_px1, ystride);
-
     prepare_omx_osd_audio_level_yuv(y, frame_width_px1, frame_height_px1, ystride);
 
     if (networktraffic_thread_stop == 0)
     {
         prepare_omx_osd_network_bars_yuv(y, frame_width_px1, frame_height_px1, ystride);
     }
+
     // -- draw OSD for framebuffer output --
-
-
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
     // dbg(9, "frame_width_px1=%d frame_height_px1=%d vid_width=%d vid_height=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)vid_width ,(int)vid_height);
@@ -12685,7 +12665,6 @@ int main(int argc, char *argv[])
 
     Tox *tox = create_tox();
     global_start_time = time(NULL);
-
     // try to load name from file on startup
     reload_name_from_file(tox);
 
