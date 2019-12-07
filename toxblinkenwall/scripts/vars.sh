@@ -66,7 +66,7 @@ res_ok=$?
 
 if [ $res_ok -ne 0 ]; then
     # ok, most likely new linux kernel, with useless metadata devices
-    ls -1 /dev/video*|sort -n -r| while read d_try ; do
+    ls -1 /dev/video*|sort -V -r| while read d_try ; do
         v4l2-ctl -I "$d_try" > /dev/null 2> /dev/null
         res_ok=$?
         if [ $res_ok -eq 0 ]; then
