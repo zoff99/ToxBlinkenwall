@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 53
-static const char global_version_string[] = "0.99.53";
+#define VERSION_PATCH 54
+static const char global_version_string[] = "0.99.54";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -5338,6 +5338,19 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
         //        (char *)raw_message);
         dbg(9, "friend_message_v2:fn=%d res=%d msg=%s\n", (int)friend_number, (int)res,
             (char *)message_text);
+
+
+        // send msgV2 receipt
+        uint8_t *msgid_buffer = calloc(1, TOX_PUBLIC_KEY_SIZE + 1);
+        if (msgid_buffer)
+        {
+            memset(msgid_buffer, 0, TOX_PUBLIC_KEY_SIZE + 1);
+            bool res2 = tox_messagev2_get_message_id(raw_message, msgid_buffer);
+            uint32_t ts_sec = (uint32_t)time(NULL);
+            tox_util_friend_send_msg_receipt_v2(tox, (uint32_t) friend_number, msgid_buffer, ts_sec);
+            free(msgid_buffer);
+        }
+
         // now just call the old callback function
         friend_message_cb(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, (const uint8_t *)message_text,
                           (size_t)text_length, NULL);
