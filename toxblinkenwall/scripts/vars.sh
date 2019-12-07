@@ -58,6 +58,24 @@ fi
 #####################################################
 # pick last available video device
 # change for your needs here!
-export video_device=$(ls -1 /dev/video*|tail -1)
+video_device=$(ls -1 /dev/video*|tail -1)
+
+d_try="$video_device"
+v4l2-ctl -I "$d_try" > /dev/null 2> /dev/null
+res_ok=$?
+
+if [ $res_ok -ne 0 ]; then
+    # ok, most likely new linux kernel, with useless metadata devices
+    ls -1 /dev/video*|sort -n -r| while read d_try ; do
+        v4l2-ctl -I "$d_try" > /dev/null 2> /dev/null
+        res_ok=$?
+        if [ $res_ok -eq 0 ]; then
+            video_device="$d_try"
+            break
+        fi
+    done
+fi
+
+export video_device
 #
 #####################################################
