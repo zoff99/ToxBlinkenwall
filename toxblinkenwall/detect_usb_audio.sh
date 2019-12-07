@@ -307,6 +307,22 @@ if [[ "$1" =~ $re ]]; then
 
     video_device_to_use=$(ls -1r /dev/video[0-9]* 2>/dev/null|head -1 2> /dev/null|tr -d " " 2>/dev/null|tr -d '\n' 2>/dev/null | tr -d '\r' 2>/dev/null)
 
+    d_try="$video_device_to_use"
+    v4l2-ctl -I -d "$d_try" > /dev/null 2> /dev/null
+    res_ok=$?
+
+    if [ $res_ok -ne 0 ]; then
+        # ok, most likely new linux kernel, with useless metadata devices
+        while read d_try ; do
+            v4l2-ctl -I -d "$d_try" > /dev/null 2> /dev/null
+            res_ok=$?
+            if [ $res_ok -eq 0 ]; then
+                video_device_to_use="$d_try"
+                break
+            fi
+        done < <(ls -1 /dev/video*|sort -V -r)
+    fi
+
     if [ "$video_device_to_use""x" == "x" ]; then
         video_device_to_use="/dev/video0" # use default value on error or on no-cam-device-found
     fi
