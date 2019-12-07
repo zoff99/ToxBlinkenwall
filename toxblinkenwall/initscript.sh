@@ -37,5 +37,17 @@ else
 		echo kill $p
 		kill $p
 	done
-	echo "stopped"
+
+    cat /dev/zero > /dev/fb0 2> /dev/null
+    clear
+
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+	echo "                              "
+	echo "    ToxBlinkenwall stopped    "
+	echo "                              "
+	echo "                              "
 fi
