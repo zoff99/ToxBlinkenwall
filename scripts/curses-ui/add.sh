@@ -10,21 +10,19 @@ function add_friend()
 	index=$1
 
 	CHOICE=$(dialog --menu "$(hostname)" 20 100 10 \
-		Show\) "me a QR Code" \
+		Scan\) "show me a QR Code" \
 		Enter\) "ToxID manually" \
 		Cancel\) "" \
 		3>&1 1>&2 2>&3 )
 	case $CHOICE in
-		Show*)
+		Scan*)
 			QRCODE=""
-			enter_qrcode QRCODE
-			if $? ; then
-				CHOICE=$(dialog --inputbox "text" $height $width \
-					"Got QR Code. Save as Friend #$index?" \
-					 "$QRCODE" \
-					 )
+			
+			if enter_qrcode QRCODE ; then
+				CHOICE=$(dialog --inputbox "Got QR Code. Save as Friend #$index?" $height $width \
+					 "$QRCODE" )
 			else
-				dialog --msgbox "ERROR! \n $QRCODE" $height $width
+				dialog --msgbox "ERROR $?\n $QRCODE" $height $width
 			fi
 			;;
 		Exit*)
