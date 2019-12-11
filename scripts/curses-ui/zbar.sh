@@ -6,8 +6,11 @@ function enter_qrcode()
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
 
-    (zbarcam --raw > $ZBAR_STDOUT 2> $ZBAR_STDERR) &
-    zbar_pid=$!
+    coproc ZBAR { zbarcam --raw --nodisplay ; }
+
+    ZBAR_STDOUT=
+
+    zbar_pid=$ZBAR_PID
 
     while :
     do
@@ -17,16 +20,23 @@ function enter_qrcode()
         if [[ $key = q ]]
         then
             #echo exit due key event
+            reason=key
             break
         fi
         
-        QRCODE=$(head -n 1 "$ZBAR_STDOUT")
+        read -t 0.2 QRCODE <&${ZBAR[0]} # https://unix.stackexchange.com/a/354604
+        #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
         
         # just assume it's a valid ToxID
         if [[ ! $QRCODE = "" ]]
         then
             # return result via qrcode parameter
-            eval "$1='\"$QRCODE\"'"
+            # great potential for funny qrcode exploits ;D
+            # source:
+            # https://stackoverflow.com/a/3243034
+
+            eval "$1='$QRCODE'" # TODO: please someone escape this sh*t correctly
+            reason=scan
             break
         fi
 
@@ -37,17 +47,25 @@ function enter_qrcode()
         else 
             #echo exit due to zbar error
             cat $ZBAR_STDERR
+            reason=subprocess_exit
             break
         fi
     done
 
-    #echo $QRCODE
-
-    cat $ZBAR_STDERR 1>&2
-    kill $zbar_pid
-    wait $zbar_pid
-    ret=$?
+    if [ $reason = subprocess_error ]; then
+        # this might happen in display mode, when pressing 'q'
+        # or on actual erros. try to return error code in this case
+        cat $ZBAR_STDERR 1>&2
+        wait $zbar_pid 2>/dev/null
+        ret=$?
+    else
+        kill $zbar_pid
+        wait $zbar_pid 2>/dev/null
+    fi
     rm -f $ZBAR_STDOUT $ZBAR_STDERR
     pkill zbarcam
-    return $?
+
+    [ $reason = key ] && ret=0
+
+    return $ret
 }
