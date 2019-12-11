@@ -15,7 +15,7 @@ function enter_qrcode()
     while :
     do
         # TASK 1
-        read -t 0.2 -n 1 key
+        read -r -t 0.2 -n 1 key
 
         if [[ $key = q ]]
         then
@@ -23,10 +23,10 @@ function enter_qrcode()
             reason=key
             break
         fi
-        
-        read -t 0.2 QRCODE <&${ZBAR[0]} # https://unix.stackexchange.com/a/354604
+
+        read -r -t 0.2 QRCODE <&${ZBAR[0]} # https://unix.stackexchange.com/a/354604
         #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
-        
+
         # just assume it's a valid ToxID
         if [[ ! $QRCODE = "" ]]
         then
@@ -44,7 +44,7 @@ function enter_qrcode()
         if kill -s 0 $zbar_pid
         then
             :
-        else 
+        else
             #echo exit due to zbar error
             cat $ZBAR_STDERR
             reason=subprocess_exit
@@ -65,7 +65,7 @@ function enter_qrcode()
     rm -f $ZBAR_STDOUT $ZBAR_STDERR
     pkill zbarcam
 
-    [ $reason = key ] && ret=0
+    [ $reason = key ] || [ ! "$QRCODE" = 0 ] && ret=0
 
     return $ret
 }
