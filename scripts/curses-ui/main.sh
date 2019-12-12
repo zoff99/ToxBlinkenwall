@@ -18,7 +18,10 @@ main()
 
 	case $CHOICE in
 		Start)
-			~/ToxBlinkenwall/toxblinkenwall/initscript start
+			#~/ToxBlinkenwall/toxblinkenwall/initscript.sh start
+			cd ~/ToxBlinkenwall/toxblinkenwall/
+			~/ToxBlinkenwall/toxblinkenwall/toxblinkenwall
+			wait && main
 			;;
 		Add)
 			phonebook_menu
