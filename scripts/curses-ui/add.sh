@@ -5,6 +5,20 @@
 height=20
 width=100
 
+function write_qrcode() {
+	qrcode="$1"
+	index=$2
+
+	path="$(realpath ~/ToxBlinkenwall/toxblinkenwall/book_entry_$index.txt)"
+
+	if [ ! -f "$path" ]; then
+		error "$path:" file not found
+		return
+	fi
+
+	echo "$qrcode" > "$path"
+}
+
 function add_friend()
 {
 	index=$1
@@ -19,17 +33,31 @@ function add_friend()
 			QRCODE=""
 			
 			if enter_qrcode QRCODE ; then
-				CHOICE=$(dialog --inputbox "Got QR Code. Save as Friend #$index?" $height $width \
-					 "$QRCODE" )
+				tmp_toxid=$(mktemp)
+				if dialog --inputbox "Got QR Code. Save as Friend #$index?" $height $width \
+					 "$QRCODE" 2>$tmp_toxid
+				then
+					write_qrcode "$(<$tmp_toxid)" $index
+				else
+					dialog --msgbox "Abort" $height $width
+				fi
+				rm $tmp_toxid
 			else
 				dialog --msgbox "ERROR $?\n $QRCODE" $height $width
 			fi
 			;;
-		Exit*)
-			return
+		Enter*)
+			tmp_toxid=$(mktemp)
+			if dialog --inputbox "Please enter QR Code, like this: 12345890ABCDEF for #$index?" $height $width 2>$tmp_toxid
+			then
+				write_qrcode "$(<$tmp_toxid)" $index
+			else
+				dialog --msgbox "Abort" $height $width
+			fi
+			rm $tmp_toxid
 			;;
-		*)
-			add_friend $CHOICE
+		Cancel*)
+			return
 			;;
 	esac
 }
@@ -45,8 +73,8 @@ function phonebook_menu()
 	case $CHOICE in
 		Back)
 			;;
-		*)
-			add_friend $CHOICE
+		1*)
+			add_friend 1
 			;;
 	esac
 }
