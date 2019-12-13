@@ -144,6 +144,18 @@ function func_addfriend()
 
 
 function func_start() {
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo ""
+    echo ""
+    echo ""
+    echo "-- starting ToxBlinkenwall --"
+    echo ""
+    echo ""
+    echo ""
+
     $(dirname "$0")/../initscript.sh start &
     exit
 }
@@ -170,6 +182,8 @@ function func_exit() {
 }
 
 while : ; do
+
+    clear
 
     CHOICE=$(dialog --cancel-label "Start" \
     --default-item "Add" \
@@ -215,3 +229,5 @@ while : ; do
     esac
 
 done
+
+clear # but we should never get here
