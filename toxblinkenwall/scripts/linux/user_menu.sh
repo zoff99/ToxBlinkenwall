@@ -117,7 +117,8 @@ function func_addfriend()
 	case $CHOICE in
 		Scan)
 			QRCODE=""
-			
+
+            rm -f "/tmp/qrcode.txt"
 			enter_qrcode
             if [ -f "/tmp/qrcode.txt" ]; then
                 QRCODE=$(cat "/tmp/qrcode.txt" 2>/dev/null | tr -cd '[a-zA-Z0-9]' 2>/dev/null | tr '[:lower:]' '[:upper:]' 2>/dev/null )
