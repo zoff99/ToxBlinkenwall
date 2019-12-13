@@ -162,7 +162,7 @@ function func_addfriend()
 
 
 function func_start() {
-    $(dirname "$0")/../initscript start &
+    $(dirname "$0")/../initscript.sh start &
     exit
 }
 
@@ -173,7 +173,17 @@ function func_shutdown() {
 function func_exit() {
     # pwd
     # echo $(dirname "$0")
-    echo "exit"
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo "##############################"
+    echo ""
+    echo ""
+    echo ""
+    echo "         -- EXIT --"
+    echo ""
+    echo ""
+    echo ""
     exit
 }
 
