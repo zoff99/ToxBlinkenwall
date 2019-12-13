@@ -97,6 +97,9 @@ function func_addfriend()
 			enter_qrcode
             if [ -s "/tmp/qrcode.txt" ]; then
                 QRCODE=$(cat "/tmp/qrcode.txt" 2>/dev/null | tr -cd '[a-zA-Z0-9]' 2>/dev/null | tr '[:lower:]' '[:upper:]' 2>/dev/null )
+
+                dialog --msgbox "found ToxID: $QRCODE" 0 0
+
                 cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_9.txt"
                 cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt"
                 cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_6.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt"
