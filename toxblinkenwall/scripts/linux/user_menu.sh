@@ -33,7 +33,7 @@ function enter_qrcode()
 
     coproc ZBAR { zbarcam --raw --nodisplay "$video_device" ; }
 
-    ZBAR_STDOUT="/tmp/xxxx""$$" # because we rm it later, just in case do not leave it empty
+    ZBAR_STDOUT='' # "/tmp/xxxx""$$" # because we rm it later, just in case do not leave it empty
 
     zbar_pid=$ZBAR_PID
 
@@ -85,8 +85,14 @@ function enter_qrcode()
         kill -9 $zbar_pid
         wait $zbar_pid 2>/dev/null
     fi
-    rm -f "$ZBAR_STDOUT" "$ZBAR_STDERR"
-    pkill zbarcam
+
+    if [ "$ZBAR_STDOUT""x" != "x" ]; then
+        rm -f "$ZBAR_STDOUT"
+    fi
+    rm -f "$ZBAR_STDERR"
+
+    pkill zbarcam 2>/dev/null
+    pkill -9 zbarcam 2>/dev/null
 }
 
 function func_addfriend()
