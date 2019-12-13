@@ -7,7 +7,7 @@ function enter_qrcode()
 
     coproc ZBAR { zbarcam --raw --nodisplay ; }
 
-    ZBAR_STDOUT=
+    ZBAR_STDOUT="/tmp/xxxx""$$" # because we rm it later, just in case
 
     zbar_pid=$ZBAR_PID
 
