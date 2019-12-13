@@ -31,68 +31,44 @@ function enter_qrcode()
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
 
-    coproc ZBAR { zbarcam --raw --nodisplay "$video_device" ; }
-
-    ZBAR_STDOUT='' # "/tmp/xxxx""$$" # because we rm it later, just in case do not leave it empty
-
-    zbar_pid=$ZBAR_PID
+    zbarcam --raw --nodisplay "$video_device" > "$ZBAR_STDOUT" 2> "$ZBAR_STDERR" &
 
     while :
     do
-        rm -f /tmp/qrcode.txt
-
-        # TASK 1
         read -r -t 0.2 -n 1 key
 
         if [ "$key""x" == "q""x" ]; then
-            #echo exit due key event
+            # exit due key event
             reason="key"
             break
         fi
 
-        read -r -t 0.2 QRCODE <&${ZBAR[0]} # https://unix.stackexchange.com/a/354604
-        #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
-
-        # just assume it's a valid ToxID
-        if [ "$QRCODE""x" == """x" ]; then
-            reason="key"
-            break
-        else
-            echo "$QRCODE" > "/tmp/qrcode.txt" 2> /dev/null
+        if [ -s "$ZBAR_STDOUT" ]; then
+            cat "$ZBAR_STDOUT" 2>/dev/null | \
+                tr -cd '[a-zA-Z0-9]' 2>/dev/null | \
+                tr '[:lower:]' '[:upper:]' > "/tmp/qrcode.txt" 2>/dev/null
             reason="scan"
             break
         fi
 
         # check if zbarcam is still running
-        if kill -s 0 $zbar_pid
-        then
+        pgrep -f zbarcam >/dev/null 2> /dev/null
+        res_running=$?
+        if [ $res_running -eq 0 ]; then
             :
         else
-            #echo exit due to zbar error
-            cat "$ZBAR_STDERR"
+            # exit due to zbar error
+            # cat "$ZBAR_STDERR"
             reason="subprocess_exit"
             break
         fi
     done
 
-    if [ "$reason""x" == "subprocess_error""x" ]; then
-        # this might happen in display mode, when pressing 'q'
-        # or on actual erros. try to return error code in this case
-        cat "$ZBAR_STDERR" 1>&2
-        wait $zbar_pid 2>/dev/null
-        ret=$?
-    else
-        kill -9 $zbar_pid
-        wait $zbar_pid 2>/dev/null
-    fi
-
-    if [ "$ZBAR_STDOUT""x" != "x" ]; then
-        rm -f "$ZBAR_STDOUT"
-    fi
+    rm -f "$ZBAR_STDOUT"
     rm -f "$ZBAR_STDERR"
 
-    pkill zbarcam 2>/dev/null
-    pkill -9 zbarcam 2>/dev/null
+    pkill -f zbarcam 2>/dev/null
+    pkill -9 -f zbarcam 2>/dev/null
 }
 
 function func_addfriend()
@@ -119,7 +95,7 @@ function func_addfriend()
 
             rm -f "/tmp/qrcode.txt"
 			enter_qrcode
-            if [ -f "/tmp/qrcode.txt" ]; then
+            if [ -s "/tmp/qrcode.txt" ]; then
                 QRCODE=$(cat "/tmp/qrcode.txt" 2>/dev/null | tr -cd '[a-zA-Z0-9]' 2>/dev/null | tr '[:lower:]' '[:upper:]' 2>/dev/null )
                 cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_9.txt"
                 cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt"
@@ -133,6 +109,7 @@ function func_addfriend()
 			else
 				dialog --msgbox "ERROR scanning qrcode from camera" 0 0
 			fi
+            rm -f "/tmp/qrcode.txt"
 			;;
 		Enter)
 			tmp_toxid=$(mktemp)
