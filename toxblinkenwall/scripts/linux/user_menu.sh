@@ -143,7 +143,7 @@ function func_start() {
 }
 
 function func_shutdown() {
-    sudo shutdown now
+    sudo /sbin/shutdown now
 }
 
 function func_exit() {
