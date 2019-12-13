@@ -1,6 +1,7 @@
 #! /bin/bash
 
 # . $(dirname "$0")/vars.sh
+. $(dirname "$0")/user_menu_add.sh
 
 CHOICE=$(dialog --cancel-label "Start" \
 --default-item "Add" \

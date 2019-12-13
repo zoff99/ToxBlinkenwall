@@ -5,9 +5,11 @@ function enter_qrcode()
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
 
-    coproc ZBAR { zbarcam --raw --nodisplay ; }
+    . $(dirname "$0")/vars.sh
 
-    ZBAR_STDOUT="/tmp/xxxx""$$" # because we rm it later, just in case
+    coproc ZBAR { zbarcam --raw --nodisplay "$video_device" ; }
+
+    ZBAR_STDOUT="/tmp/xxxx""$$" # because we rm it later, just in case do not leave it empty
 
     zbar_pid=$ZBAR_PID
 
@@ -16,10 +18,10 @@ function enter_qrcode()
         # TASK 1
         read -r -t 0.2 -n 1 key
 
-        if [[ $key = q ]]
+        if [[ "$key""x" == "q""x" ]]
         then
             #echo exit due key event
-            reason=key
+            reason="key"
             break
         fi
 
@@ -27,7 +29,7 @@ function enter_qrcode()
         #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
 
         # just assume it's a valid ToxID
-        if [[ ! $QRCODE = "" ]]
+        if [[ ! "$QRCODE""x" == """x" ]]
         then
             # return result via qrcode parameter
             # great potential for funny qrcode exploits ;D
@@ -35,7 +37,7 @@ function enter_qrcode()
             # https://stackoverflow.com/a/3243034
 
             eval "$1='$QRCODE'" # TODO: please someone escape this sh*t correctly
-            reason=scan
+            reason="scan"
             break
         fi
 
@@ -45,28 +47,28 @@ function enter_qrcode()
             :
         else
             #echo exit due to zbar error
-            cat $ZBAR_STDERR
-            reason=subprocess_exit
+            cat "$ZBAR_STDERR"
+            reason="subprocess_exit"
             break
         fi
     done
 
-    if [ $reason = subprocess_error ]; then
+    if [ "$reason""x" == "subprocess_error""x" ]; then
         # this might happen in display mode, when pressing 'q'
         # or on actual erros. try to return error code in this case
-        cat $ZBAR_STDERR 1>&2
+        cat "$ZBAR_STDERR" 1>&2
         wait $zbar_pid 2>/dev/null
         ret=$?
     else
-        kill $zbar_pid
+        kill -9 $zbar_pid
         wait $zbar_pid 2>/dev/null
     fi
-    rm -f $ZBAR_STDOUT $ZBAR_STDERR
+    rm -f "$ZBAR_STDOUT" "$ZBAR_STDERR"
     pkill zbarcam
 
-    [ $reason = key ] || [ ! "$QRCODE" = 0 ] && ret=0
+    [ "$reason""x" == "key""x" ] || [ ! "$QRCODE""x" == "0""x" ] && ret=0
 
-    return $ret
+    return "$ret"
 }
 
 
