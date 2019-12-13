@@ -20,6 +20,19 @@ fi
 
 function enter_qrcode()
 {
+    echo "################################"
+    echo "################################"
+    echo "################################"
+    echo "################################"
+    echo "################################"
+    echo "################################"
+    echo ""
+    echo ""
+    echo "     hold QR code to camera     "
+    echo ""
+    echo ""
+    echo ""
+
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
 
@@ -33,10 +46,12 @@ function enter_qrcode()
 
     while :
     do
+        rm -f /tmp/qrcode.txt
+
         # TASK 1
         read -r -t 0.2 -n 1 key
 
-        if [[ "$key""x" == "q""x" ]]
+        if [ "$key""x" == "q""x" ]; then
         then
             #echo exit due key event
             reason="key"
@@ -47,14 +62,11 @@ function enter_qrcode()
         #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
 
         # just assume it's a valid ToxID
-        if [[ ! "$QRCODE""x" == """x" ]]
-        then
-            # return result via qrcode parameter
-            # great potential for funny qrcode exploits ;D
-            # source:
-            # https://stackoverflow.com/a/3243034
-
-            eval "$1='$QRCODE'" # TODO: please someone escape this sh*t correctly
+        if [ "$QRCODE""x" == """x" ]; then
+            reason="key"
+            break
+        else
+            echo "$QRCODE" > "/tmp/qrcode.txt" 2> /dev/null
             reason="scan"
             break
         fi
@@ -83,54 +95,66 @@ function enter_qrcode()
     fi
     rm -f "$ZBAR_STDOUT" "$ZBAR_STDERR"
     pkill zbarcam
-
-    [ "$reason""x" == "key""x" ] || [ ! "$QRCODE""x" == "0""x" ] && ret=0
-
-    return "$ret"
-}
-
-
-function write_qrcode() {
-	echo "$1" > "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt"
 }
 
 function func_addfriend()
 {
 	CHOICE=$(dialog --menu "ToxBlinkenwall - add Friend" 0 0 0 \
-		Scan\) "show me a QR Code" \
-		Enter\) "ToxID manually" \
-		Cancel\) "" \
+		Scan "show me a QR Code" \
+		Enter "ToxID manually" \
+		Cancel "" \
 		3>&1 1>&2 2>&3 )
 
+    res2=$?
+    clear
+
+    # Return status of non-zero indicates cancel
+    if [ $res2 != 0 ]; then
+        CHOICE="Cancel"
+    fi
+
+    clear
+
 	case $CHOICE in
-		Scan*)
+		Scan)
 			QRCODE=""
 			
-			if enter_qrcode QRCODE ; then
-				tmp_toxid=$(mktemp)
-				if dialog --inputbox "Got QR Code. Save as Friend" 0 0 \
-					 "$QRCODE" 2>"$tmp_toxid"
-				then
-					write_qrcode "$(<$tmp_toxid)"
-				else
-					dialog --msgbox "Abort" 0 0
-				fi
-				rm -f "$tmp_toxid"
+			enter_qrcode
+            if [ -f "/tmp/qrcode.txt" ]; then
+                QRCODE=$(cat "/tmp/qrcode.txt" 2>/dev/null | tr -cd '[a-zA-Z0-9]' 2>/dev/null | tr '[:lower:]' '[:upper:]' 2>/dev/null )
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_9.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_6.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_5.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_6.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_4.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_5.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_3.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_4.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_2.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_3.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_2.txt"
+                echo "$QRCODE" > "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt"
 			else
-				dialog --msgbox "ERROR $?\n $QRCODE" 0 0
+				dialog --msgbox "ERROR scanning qrcode from camera" 0 0
 			fi
 			;;
-		Enter*)
+		Enter)
 			tmp_toxid=$(mktemp)
-			if dialog --inputbox "Please enter QR Code, like this: 12345890ABCDEF for #$index?" 0 0 2>"$tmp_toxid"
+			if dialog --inputbox "Please enter QR Code, like this: 12345890ABCDEF" 0 0 2>"$tmp_toxid"
 			then
-				write_qrcode "$(<$tmp_toxid)"
+                QRCODE=$(cat "$tmp_toxid" 2>/dev/null | tr -cd '[a-zA-Z0-9]' 2>/dev/null | tr '[:lower:]' '[:upper:]' 2>/dev/null )
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_9.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_8.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_6.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_7.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_5.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_6.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_4.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_5.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_3.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_4.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_2.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_3.txt"
+                cp "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt" "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_2.txt"
+                echo "$QRCODE" > "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt"
 			else
-				dialog --msgbox "Abort" 0 0
+				dialog --msgbox "ERROR entering qrcode" 0 0
 			fi
 			rm -f $tmp_toxid
 			;;
-		Cancel*)
+		Cancel)
 			return
 			;;
 	esac
