@@ -27,7 +27,8 @@ handle_debug_env = os.getenv("TBW_EXTKEYS_EVDEV_DEBUG")
 
 def handle_exit():
     if handle_exit_env != None:
-        os.system("(../initscript.sh stop ; sleep 1 ; cd ../ ; ./scripts/user_menu.sh )&")
+        os.system("(cd ../ ; ./start_user_menu.sh )&")
+        os.system("../initscript.sh stop &")
         exit()
 
 try:
