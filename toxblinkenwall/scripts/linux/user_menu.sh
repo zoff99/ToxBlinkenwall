@@ -52,7 +52,6 @@ function enter_qrcode()
         read -r -t 0.2 -n 1 key
 
         if [ "$key""x" == "q""x" ]; then
-        then
             #echo exit due key event
             reason="key"
             break
