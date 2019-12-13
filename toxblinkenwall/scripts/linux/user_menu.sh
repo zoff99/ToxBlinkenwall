@@ -15,10 +15,21 @@ function enter_qrcode()
     echo ""
     echo ""
 
+    . $(dirname "$0")/vars.sh
+
+    echo ""
+    echo "  using camera: $video_device"
+    echo ""
+
+    echo -n '  starting in 6 seconds '
+    for _ in {1..6}; do
+        sleep 1
+        echo -n '.'
+    done
+    echo ""
+
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
-
-    . $(dirname "$0")/vars.sh
 
     coproc ZBAR { zbarcam --raw --nodisplay "$video_device" ; }
 
