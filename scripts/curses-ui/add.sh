@@ -1,80 +1,117 @@
-#!/bin/bash -ex
+#! /bin/bash
 
-. ./zbar.sh
+function enter_qrcode()
+{
+    ZBAR_STDOUT=$(mktemp)
+    ZBAR_STDERR=$(mktemp)
 
-height=20
-width=100
+    coproc ZBAR { zbarcam --raw --nodisplay ; }
 
-function write_qrcode() {
-	qrcode="$1"
-	index=$2
+    ZBAR_STDOUT=
 
-	path="$(realpath ~/ToxBlinkenwall/toxblinkenwall/book_entry_$index.txt)"
+    zbar_pid=$ZBAR_PID
 
-	if [ ! -f "$path" ]; then
-		error "$path:" file not found
-		return
-	fi
+    while :
+    do
+        # TASK 1
+        read -r -t 0.2 -n 1 key
 
-	echo "$qrcode" > "$path"
+        if [[ $key = q ]]
+        then
+            #echo exit due key event
+            reason=key
+            break
+        fi
+
+        read -r -t 0.2 QRCODE <&${ZBAR[0]} # https://unix.stackexchange.com/a/354604
+        #QRCODE=$(head -n 1 "$ZBAR_STDOUT")
+
+        # just assume it's a valid ToxID
+        if [[ ! $QRCODE = "" ]]
+        then
+            # return result via qrcode parameter
+            # great potential for funny qrcode exploits ;D
+            # source:
+            # https://stackoverflow.com/a/3243034
+
+            eval "$1='$QRCODE'" # TODO: please someone escape this sh*t correctly
+            reason=scan
+            break
+        fi
+
+        # check if zbarcam is still running
+        if kill -s 0 $zbar_pid
+        then
+            :
+        else
+            #echo exit due to zbar error
+            cat $ZBAR_STDERR
+            reason=subprocess_exit
+            break
+        fi
+    done
+
+    if [ $reason = subprocess_error ]; then
+        # this might happen in display mode, when pressing 'q'
+        # or on actual erros. try to return error code in this case
+        cat $ZBAR_STDERR 1>&2
+        wait $zbar_pid 2>/dev/null
+        ret=$?
+    else
+        kill $zbar_pid
+        wait $zbar_pid 2>/dev/null
+    fi
+    rm -f $ZBAR_STDOUT $ZBAR_STDERR
+    pkill zbarcam
+
+    [ $reason = key ] || [ ! "$QRCODE" = 0 ] && ret=0
+
+    return $ret
 }
 
-function add_friend()
-{
-	index=$1
 
-	CHOICE=$(dialog --menu "$(hostname)" 20 100 10 \
+function write_qrcode() {
+	echo "$1" > "/home/pi/ToxBlinkenwall/toxblinkenwall/book_entry_1.txt"
+}
+
+function func_addfriend()
+{
+	CHOICE=$(dialog --menu "ToxBlinkenwall - add Friend" 0 0 0 \
 		Scan\) "show me a QR Code" \
 		Enter\) "ToxID manually" \
 		Cancel\) "" \
 		3>&1 1>&2 2>&3 )
+
 	case $CHOICE in
 		Scan*)
 			QRCODE=""
 			
 			if enter_qrcode QRCODE ; then
 				tmp_toxid=$(mktemp)
-				if dialog --inputbox "Got QR Code. Save as Friend #$index?" $height $width \
-					 "$QRCODE" 2>$tmp_toxid
+				if dialog --inputbox "Got QR Code. Save as Friend" 0 0 \
+					 "$QRCODE" 2>"$tmp_toxid"
 				then
-					write_qrcode "$(<$tmp_toxid)" $index
+					write_qrcode "$(<$tmp_toxid)"
 				else
-					dialog --msgbox "Abort" $height $width
+					dialog --msgbox "Abort" 0 0
 				fi
-				rm $tmp_toxid
+				rm -f "$tmp_toxid"
 			else
-				dialog --msgbox "ERROR $?\n $QRCODE" $height $width
+				dialog --msgbox "ERROR $?\n $QRCODE" 0 0
 			fi
 			;;
 		Enter*)
 			tmp_toxid=$(mktemp)
-			if dialog --inputbox "Please enter QR Code, like this: 12345890ABCDEF for #$index?" $height $width 2>$tmp_toxid
+			if dialog --inputbox "Please enter QR Code, like this: 12345890ABCDEF for #$index?" 0 0 2>"$tmp_toxid"
 			then
-				write_qrcode "$(<$tmp_toxid)" $index
+				write_qrcode "$(<$tmp_toxid)"
 			else
-				dialog --msgbox "Abort" $height $width
+				dialog --msgbox "Abort" 0 0
 			fi
-			rm $tmp_toxid
+			rm -f $tmp_toxid
 			;;
 		Cancel*)
 			return
-			;;
-	esac
-}
-
-function phonebook_menu()
-{
-	CHOICE=$(dialog --menu "$(hostname)" 20 100 10 \
-		1\) "Phonebook Slot #1" \
-		2\) "$PHONEBOOK_SLOT2" \
-		Back\) "To Main Menu" \
-		3>&1 1>&2 2>&3 )
-
-	case $CHOICE in
-		Back)
-			;;
-		1*)
-			add_friend 1
 			;;
 	esac
 }

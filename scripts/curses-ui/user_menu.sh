@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# . $(dirname "$0")/vars.sh
+. $(dirname "$0")/vars.sh
 
 CHOICE=$(dialog --cancel-label "Start" \
 --default-item "Add" \
@@ -20,21 +20,39 @@ if [ $res != 0 ]; then
     CHOICE="Start"
 fi
 
+function func_start() {
+    $(dirname "$0")/../initscript start &
+    exit
+}
+
+function func_shutdown() {
+    sudo shutdown now
+}
+
+function func_exit() {
+    exit
+}
+
 case $CHOICE in
     Start)
-        echo "start ....."
+        # echo "start ....."
+        func_start
         ;;
     Add)
-        echo "phonebook_menu"
+        # echo "phonebook_menu"
+        func_addfriend
         ;;
     Shutdown)
-        echo "shutdown"
+        # echo "shutdown"
+        func_shutdown
         ;;
     Exit)
-        echo "exit"
+        # echo "exit"
+        func_exit
         ;;
     *)
-        echo "++default++"
+        # echo "++default++"
+        func_exit
         ;;
 esac
 
