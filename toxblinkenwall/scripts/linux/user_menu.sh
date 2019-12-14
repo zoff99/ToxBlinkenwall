@@ -31,7 +31,7 @@ function enter_qrcode()
     ZBAR_STDOUT=$(mktemp)
     ZBAR_STDERR=$(mktemp)
 
-    zbarcam --raw --nodisplay "$video_device" > "$ZBAR_STDOUT" 2> "$ZBAR_STDERR" &
+    zbarcam --raw "$video_device" > "$ZBAR_STDOUT" 2> "$ZBAR_STDERR" &
 
     while :
     do
