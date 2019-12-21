@@ -108,9 +108,9 @@ make install
 
 cd $_SRC_
 # rm -Rf x264
-git clone git://git.videolan.org/x264.git
+git clone https://code.videolan.org/videolan/x264.git
 cd x264
-git checkout 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+git checkout 1771b556ee45207f8711744ccbd5d42a3949b14c # stable
 ./configure --prefix=$_INST_ --disable-opencl --enable-static \
 --disable-avs --disable-cli --enable-pic
 #make clean
