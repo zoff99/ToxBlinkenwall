@@ -938,7 +938,7 @@ sem_t video_in_frame_copy_sem;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 3
+#define MAX_VIDEO_PLAY_THREADS 1
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -8253,22 +8253,11 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
-#ifdef HAVE_OUTPUT_OPENGL
-#else
-    //PL// sem_wait(&video_play_lock);
-#endif
+
     // struct timeval tm_01;
     // __utimer_start(&tm_01);
     //dbg(9, "VP-DEBUG:002\n");
-#if 0
-    int num = get_video_t_counter();
-    char thread_name_str[15];
-    CLEAR(thread_name_str);
-    snprintf(thread_name_str, sizeof(thread_name_str), "v_p_thrd #%d", (int)num);
-    pthread_setname_np(pthread_self(), thread_name_str);
-#else
-    // pthread_setname_np(pthread_self(), "v_p_thrd+");
-#endif
+
     // make a local copy
     uint16_t width = video__width;
     uint16_t height = video__height;
@@ -8295,7 +8284,7 @@ static void *video_play(void *dummy)
     // dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
     // dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
     // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
-#ifndef HAVE_OUTPUT_OMX
+#ifndef HAVE_OUTPUT_OMX_XXXXXXXXXX_DEACTIVATE_____
     uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
@@ -8312,69 +8301,10 @@ static void *video_play(void *dummy)
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
 #ifndef HAVE_OUTPUT_OMX
     sem_post(&video_in_frame_copy_sem);
-#endif
-#ifdef HAVE_OUTPUT_OPENGL
-    //incoming_video_width = (int)frame_width_px;
-    //incoming_video_height = (int)frame_height_px;
-    //incoming_video_frame_y = y;
-    //incoming_video_frame_u = u;
-    //incoming_video_frame_v = v;
-
-    if (video_play_rb == NULL)
-    {
-        dbg(9, "Video: create video_play_rb ringbuffer\n");
-        video_play_rb = bw_rb_new(MAX_VIDEO_PLAY_THREADS + 1); // store max. n video frame pointers
-    }
-
-    if (y)
-    {
-        if ((bw_rb_size(video_play_rb) + 1) >= MAX_VIDEO_PLAY_THREADS)
-        {
-            // dbg(9, "Video GL: more than %d frames in ringbuffer, dropping incoming frame!\n",
-            //    (int)MAX_VIDEO_PLAY_THREADS);
-            free((void *)y);
-        }
-        else
-        {
-            struct opengl_video_frame_data *fdata = calloc(1, sizeof(struct opengl_video_frame_data));
-
-            // convert yuv frame from 1280x720 to 896x512 to gain some speed
-            if (1 == 2) // ((frame_width_px1 == 1280) && (frame_height_px1 == 720))
-            {
-                crop_yuv_frame(&y, frame_width_px1, frame_height_px1, ystride_, ustride_, vstride_, 896, 512);
-                fdata->p = y;
-                fdata->timestamp = bw_current_time_actual();
-                fdata->y_stride = 896;
-                fdata->video_width = 896;
-                frame_width_px = 896;
-                frame_height_px = 512;
-            }
-            else
-            {
-                fdata->p = y;
-                fdata->timestamp = bw_current_time_actual();
-                fdata->y_stride = ystride_;
-                fdata->video_width = frame_width_px1;
-            }
-
-            void *res = bw_rb_write(video_play_rb, fdata, frame_width_px, frame_height_px);
-
-            if (res != NULL)
-            {
-                free(((struct opengl_video_frame_data *)res)->p);
-                free(res);
-            }
-        }
-    }
-
-    // long long timspan_in_ms = 99999;
-    // timspan_in_ms = __utimer_stop(&tm_01, "video_play_stage_1:", 0);
-    // dbg(9, "VP-DEBUG:021\n");
-#endif
-#ifdef HAVE_OUTPUT_OPENGL
 #else
-    //PL// sem_post(&video_play_lock);
+    sem_post(&video_in_frame_copy_sem);
 #endif
+
 #ifdef HAVE_OUTPUT_OMX
 
     if (!omx_initialized)
@@ -8406,9 +8336,15 @@ static void *video_play(void *dummy)
         if (err)
         {
             dbg(9, "omx_display_enable ERR=%d\n", err);
-            //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
-            //*SINGLE*THREADED*// pthread_exit(0);
-            return (void *)NULL;
+            // sem_post(&video_in_frame_copy_sem);
+
+            if (y)
+            {
+                free((void *)y);
+            }
+
+            pthread_exit(0);
+            // return (void *)NULL;
         }
 
         omx_w = frame_width_px;
@@ -8444,9 +8380,19 @@ static void *video_play(void *dummy)
     }
 
     // dbg(9, "omx plen=%d\n", (int)(len));
+#if 0    
     memcpy(buf, video__y, y_layer_size);
     memcpy(buf + y_layer_size, video__u, u_layer_size);
     memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
+#else
+    memcpy(buf, y, y_layer_size);
+    memcpy(buf + y_layer_size, u, u_layer_size);
+    memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
+    if (y)
+    {
+        free((void *)y);
+    }
+#endif
 
     // OSD --------
     if (omx_osd_y == NULL)
@@ -8474,7 +8420,7 @@ static void *video_play(void *dummy)
 
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
-    //*SINGLE*THREADED*// sem_post(&video_in_frame_copy_sem);
+    //**// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER
 
@@ -8797,7 +8743,7 @@ static void *video_play(void *dummy)
 #endif
     dec_video_t_counter();
     // dbg(9, "VP-DEBUG:022-EXIT\n");
-#ifdef HAVE_OUTPUT_OMX
+#ifdef HAVE_OUTPUT_OMX_XXXXXXXXXX_DEACTIVATE_____
     //*SINGLE*THREADED*// pthread_exit(0);
 #else
     pthread_exit(0);
@@ -8899,9 +8845,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 video__ystride = ystride;
                 video__ustride = ustride;
                 video__vstride = vstride;
-#ifdef HAVE_OUTPUT_OMX
-                video_play((void *)NULL);
-#else
                 pthread_t video_play_thread;
 
                 if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
@@ -8915,6 +8858,11 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                         dec_video_t_counter();
                         sem_post(&video_in_frame_copy_sem);
                         dbg(0, "error creating video play thread ERRNO=%d\n", res_);
+                        if (update_fps_counter > 0)
+                        {
+                            // we could not display this frame
+                            update_fps_counter--;
+                        }
                     }
                     else
                     {
@@ -8931,11 +8879,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
                 else
                 {
-                    dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+                    // dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+                    if (update_fps_counter > 0)
+                    {
+                        // we could not display this frame
+                        update_fps_counter--;
+                    }
                 }
 
                 //PL// sem_post(&video_play_lock);
-#endif
             }
         }
         else
@@ -8947,12 +8899,12 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     {
     }
 
-    //long long timspan_in_ms;
-    //timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
+    // long long timspan_in_ms;
+    // timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
     // if (timspan_in_ms > 0)
-    //{
-    //    dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
-    //}
+    // {
+    //     dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
+    // }
 }
 
 void set_av_video_frame()
