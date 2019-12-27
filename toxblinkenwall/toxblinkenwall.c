@@ -8985,6 +8985,7 @@ void fully_stop_cam()
     free(av_video_frame.h264_buf);
     av_video_frame.buf_len = 0;
     av_video_frame.h264_buf = NULL;
+    vpx_img_free(&input);
     av_video_frame.w = 0;
     av_video_frame.h = 0;
     av_video_frame.h264_w = 0;
