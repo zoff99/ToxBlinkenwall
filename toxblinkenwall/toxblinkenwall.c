@@ -240,9 +240,7 @@ static const char global_version_string[] = "0.99.54";
 // --------- audio recording: choose only 1 of those! ---------
 //
 // --------- audio playing: choose only 1 of those! ---------
-// #define HAVE_LIBAO 1      // for audio playing   (a bit choppy)
 #define HAVE_ALSA_PLAY 1     // for audio playing   [* DEFAULT]
-// #define HAVE_PORTAUDIO 1  // for audio playing   --> currently broken!!
 // --------- audio playing: choose only 1 of those! ---------
 //
 
@@ -283,32 +281,6 @@ static const char global_version_string[] = "0.99.54";
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
-#if 0
-
-    extern int global__ON_THE_FLY_CHANGES;
-    extern int global__VPX_RESIZE_ALLOWED;
-    extern int global__VPX_DROPFRAME_THRESH;
-    extern int global__VPX_END_RESIZE_UP_THRESH;
-    extern int global__VPX_END_RESIZE_DOWN_THRESH;
-    extern int global__MAX_DECODE_TIME_US;
-    extern int global__MAX_ENCODE_TIME_US;
-    extern int global__VP8E_SET_CPUUSED_VALUE;
-    extern int global__VPX_END_USAGE;
-
-    extern int UTOX_DEFAULT_BITRATE_V;
-
-    // old ---
-    int global__VPX_KF_MAX_DIST;
-    int global__VPX_G_LAG_IN_FRAMES;
-    int global__VPX_ENCODER_USED;
-    int global__VPX_DECODER_USED;
-    int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
-    int global__SEND_VIDEO_LOSSLESS;
-    int global__SEND_VIDEO_RAW_YUV;
-    // old ---
-
-#else
-
     int global__ON_THE_FLY_CHANGES;
     int global__VPX_RESIZE_ALLOWED;
     int global__VPX_DROPFRAME_THRESH;
@@ -328,8 +300,6 @@ static const char global_version_string[] = "0.99.54";
     int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
     int global__SEND_VIDEO_LOSSLESS;
     int global__SEND_VIDEO_RAW_YUV;
-
-#endif
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -451,15 +421,6 @@ BWRingBuffer *video_play_rb = NULL;
 
 #if defined(HAVE_ALSA_REC) || defined(HAVE_ALSA_PLAY)
     #include <alsa/asoundlib.h>
-#endif
-
-#ifdef HAVE_LIBAO
-    #include <ao/ao.h>
-#endif
-
-#ifdef HAVE_PORTAUDIO
-    #include <portaudio.h>
-    #include "ringbuf.h"
 #endif
 
 
@@ -887,17 +848,6 @@ int vid_height = 144; // ------- blinkenwall resolution -------
     #define MAX_READ_FIFO_BUF 1000
 #endif
 
-#ifdef HAVE_LIBAO
-    int libao_cancel_pending = 0;
-    ao_device *_ao_device = NULL;
-    ao_sample_format _ao_format;
-    int _ao_default_driver = -1;
-    sem_t count_audio_play_threads;
-    int count_audio_play_threads_int;
-    #define MAX_AO_PLAY_THREADS 2
-    sem_t audio_play_lock;
-#endif
-
 #ifdef HAVE_ALSA_PLAY
     snd_pcm_t *audio_play_handle = NULL;
     const char *audio_play_device = "default";
@@ -954,13 +904,6 @@ int32_t video__vstride;
 #define MAX_VIDEO_RECORD_THREADS 1
 sem_t count_video_record_threads;
 int count_video_record_threads_int;
-
-
-
-#ifdef HAVE_PORTAUDIO
-    PaStream *portaudio_stream = NULL;
-    ringbuf_t portaudio_out_rb;
-#endif
 
 
 #define DEFAULT_AUDIO_CAPTURE_SAMPLERATE (48000)
@@ -2251,69 +2194,6 @@ void stop_play_ringtone()
     pthread_join(ringtone_thread, NULL);
 #endif
 }
-
-#ifdef HAVE_PORTAUDIO
-
-/* This routine will be called by the PortAudio engine when audio is needed */
-static int portaudio_data_callback(const void *inputBuffer,
-                                   void *outputBuffer,
-                                   unsigned long framesPerBuffer, have_frame
-                                   const PaStreamCallbackTimeInfo *timeInfo,
-                                   PaStreamCallbackFlags statusFlags,
-                                   void *userData)
-{
-#define SAMPLE_SILENCE (0)
-    int16_t *out = (int16_t *)outputBuffer;
-    size_t have_bytes_in_buffer = ringbuf_bytes_used(portaudio_out_rb);
-    size_t have_frames = (size_t)((have_bytes_in_buffer / libao_channels) / 2);
-    dbg(9, "have_bytes_in_buffer=%d framesPerBuffer=%d\n", (int)have_bytes_in_buffer, (int)framesPerBuffer);
-    dbg(9, "have_frames=%d\n", (int)have_frames);
-
-    if (have_frames <= framesPerBuffer)
-    {
-        ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)(framesPerBuffer * libao_channels * 2));
-#if 1
-        unsigned long i;
-
-        for (i = 0; i < framesPerBuffer; i++)
-        {
-            // we don't have enough data, fill up with silence ..
-            if (i > have_frames)
-            {
-                *out++ = SAMPLE_SILENCE;
-
-                if (libao_channels == 2)
-                {
-                    *out++ = SAMPLE_SILENCE;
-                }
-            }
-        }
-
-#endif
-    }
-    else
-    {
-        ringbuf_memcpy_from(out, portaudio_out_rb, (size_t)(framesPerBuffer * channels * 2));
-    }
-
-    // unsigned long i;
-    // for( i=0; i < framesPerBuffer; i++ )
-    // {
-    //  // *out++ = i % 16383;
-    // }
-    return paContinue;
-}
-
-/*
- * This routine is called by portaudio when playback is done.
- */
-static void StreamFinished(void *userData)
-{
-    dbg(2, "Audio Stream Completed\n");
-}
-#endif
-
-
 
 Tox *create_tox()
 {
@@ -6707,34 +6587,6 @@ void close_cam()
         global_framebuffer_device_fd = 0;
     }
 
-#ifdef HAVE_LIBAO
-
-    if (_ao_device != NULL)
-    {
-        ao_close(_ao_device);
-    }
-
-    ao_shutdown();
-#endif
-#ifdef HAVE_PORTAUDIO
-    ringbuf_free(&portaudio_out_rb);
-    PaError err;
-    err = Pa_StopStream(portaudio_stream);
-
-    if (err != paNoError)
-    {
-        dbg(0, "Pa_StopStream error\n");
-    }
-
-    err = Pa_CloseStream(portaudio_stream);
-
-    if (err != paNoError)
-    {
-        dbg(0, "Pa_CloseStream error\n");
-    }
-
-    Pa_Terminate();
-#endif
     v4lconvert_destroy(v4lconvert_data);
     v4lconvert_data = NULL;
     dbg(9, "v4lconvert_destroy:1\n");
@@ -7196,36 +7048,6 @@ int get_audio_t_counter()
 #endif
 
 
-#ifdef HAVE_LIBAO
-void inc_audio_t_counter()
-{
-    sem_wait(&count_audio_play_threads);
-    count_audio_play_threads_int++;
-    sem_post(&count_audio_play_threads);
-}
-
-void dec_audio_t_counter()
-{
-    sem_wait(&count_audio_play_threads);
-    count_audio_play_threads_int--;
-
-    if (count_audio_play_threads_int < 0)
-    {
-        count_audio_play_threads_int = 0;
-    }
-
-    sem_post(&count_audio_play_threads);
-}
-
-int get_audio_t_counter()
-{
-    sem_wait(&count_audio_play_threads);
-    int ret = count_audio_play_threads_int;
-    sem_post(&count_audio_play_threads);
-    return ret;
-}
-#endif
-
 void inc_video_t_counter()
 {
     sem_wait(&count_video_play_threads);
@@ -7282,36 +7104,6 @@ int get_video_trec_counter()
     return ret;
 }
 
-#ifdef HAVE_LIBAO
-void *audio_play(void *data)
-{
-    struct audio_play_data_block *adb = (struct audio_play_data_block *)data;
-#if 0
-    // ------ thread priority ------
-    struct sched_param param;
-    int policy;
-    int s;
-    display_thread_sched_attr("Scheduler attributes of [1]: audio_play thread");
-#endif
-    // make a local copy
-    char *ao_play_pcm_ = (char *)calloc(1, adb->block_size_in_bytes);
-    memcpy(ao_play_pcm_, adb->pcm, adb->block_size_in_bytes);
-
-    // this is a blocking call
-    if (libao_cancel_pending == 0)
-    {
-        sem_wait(&audio_play_lock);
-        ao_play(_ao_device, (char *)ao_play_pcm_, (uint_32)adb->block_size_in_bytes);
-        sem_post(&audio_play_lock);
-    }
-
-    free(ao_play_pcm_);
-    free(adb);
-    dec_audio_t_counter();
-    pthread_exit(0);
-}
-#endif
-
 static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
@@ -7319,6 +7111,10 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
+
+    // struct timeval tm_033;
+    // __utimer_start(&tm_033);
+
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 #ifndef RPIZEROW
 
@@ -7352,99 +7148,16 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
 #ifdef HAVE_ALSA_PLAY
             if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
             {
-#if 0
-                // ------ thread priority ------
-                struct sched_param param;
-                int policy;
-                int s;
-                display_thread_sched_attr("Scheduler attributes of [1]: alsa audio play thread");
-                get_policy('f', &policy);
-                param.sched_priority = strtol("1", NULL, 0);
-                s = pthread_setschedparam(pthread_self(), policy, &param);
-
-                if (s != 0)
-                {
-                    dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of alsa audio play thread\n");
-                }
-                else
-                {
-                }
-
-                display_thread_sched_attr("Scheduler attributes of [3]: alsa audio play thread");
-                // ------ thread priority ------
-#endif
                 sem_wait(&audio_play_lock);
                 libao_channels = (int)channels;
                 libao_sampling_rate = (int)sampling_rate;
                 // initialize sound output ------------------
                 close_sound_play_device();
                 dbg(9, "incoming audio: ch:%d rate:%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                yieldcpu(20);
+                yieldcpu(5);
                 init_sound_play_device((int)libao_channels, (int)libao_sampling_rate);
                 // initialize sound output ------------------
                 sem_post(&audio_play_lock);
-            }
-
-#endif
-#ifdef HAVE_LIBAO
-
-            if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
-            {
-#if 1
-                // ------ thread priority ------
-                struct sched_param param;
-                int policy;
-                int s;
-                display_thread_sched_attr("Scheduler attributes of [1]: audio play thread");
-                get_policy('r', &policy);
-                param.sched_priority = strtol("1", NULL, 0);
-                s = pthread_setschedparam(pthread_self(), policy, &param);
-
-                if (s != 0)
-                {
-                    dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of audio play thread\n");
-                }
-                else
-                {
-                }
-
-                display_thread_sched_attr("Scheduler attributes of [3]: audio play thread");
-                // ------ thread priority ------
-#endif
-                sem_wait(&audio_play_lock);
-                libao_cancel_pending = 1;
-                libao_channels = (int)channels;
-                libao_sampling_rate = (int)sampling_rate;
-
-                if (_ao_device != NULL)
-                {
-                    dbg(0, "closing sound output device\n");
-                    ao_close(_ao_device);
-                }
-
-                // initialize sound output via libao ------------------
-                ao_initialize();
-                _ao_default_driver = ao_default_driver_id();
-                memset(&_ao_format, 0, sizeof(_ao_format));
-                _ao_format.bits = 16;
-                _ao_format.channels = libao_channels;
-                _ao_format.rate = libao_sampling_rate;
-                _ao_format.byte_format = AO_FMT_LITTLE;
-                dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                _ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
-
-                if (_ao_device == NULL)
-                {
-                    dbg(0, "Error opening sound output device\n");
-                }
-                else
-                {
-                }
-
-                // initialize sound output via libao ------------------
-                sem_post(&audio_play_lock);
-                yieldcpu(500);
-                libao_cancel_pending = 0;
             }
 
 #endif
@@ -7545,142 +7258,6 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
 #endif
-#ifdef HAVE_LIBAO
-
-            // play audio to default audio device --------------
-            if (_ao_device != NULL)
-            {
-#if 0
-                ao_play(_ao_device, (char *)pcm, (size_t)(sample_count * libao_channels * 2));
-#else
-                ao_play_pcm = (char *)pcm;
-                ao_play_bytes = (size_t)(sample_count * libao_channels * 2);
-                struct audio_play_data_block *adb = calloc(1, sizeof(struct audio_play_data_block));
-                adb->block_size_in_bytes = ao_play_bytes;
-                adb->pcm = (char *)pcm;
-                // adb->sample_count = sample_count; // not used now
-                // adb->pcm = calloc(1, adb->block_size_in_bytes);
-                // memcpy(adb->pcm, pcm, adb->block_size_in_bytes);
-                // dbg(0, "ao_play_bytes=%d sample_count=%d channels=%d samplerate=%d\n", (int)ao_play_bytes, (int)sample_count, (int)libao_channels, (int)libao_sampling_rate);
-                pthread_t audio_play_thread;
-
-                if (get_audio_t_counter() <= MAX_AO_PLAY_THREADS)
-                {
-                    inc_audio_t_counter();
-
-                    if (pthread_create(&audio_play_thread, NULL, audio_play, (void *)adb))
-                    {
-                        dbg(0, "error creating audio play thread\n");
-                        // free(adb->pcm);
-                        free(adb);
-                        dec_audio_t_counter();
-                    }
-                    else
-                    {
-                        // dbg(0, "creating audio play thread #%d\n", get_audio_t_counter());
-                        if (pthread_detach(audio_play_thread))
-                        {
-                            dbg(0, "error detaching audio play thread\n");
-                        }
-
-                        yieldcpu(1);
-                    }
-                }
-                else
-                {
-                    dbg(1, "more than %d ao play threads already\n", (int)MAX_AO_PLAY_THREADS);
-                    // free(adb->pcm);
-                    free(adb);
-                }
-
-#endif
-            }
-
-            // play audio to default audio device --------------
-#endif
-#ifdef HAVE_PORTAUDIO
-            PaError is_stream_active = 0;
-
-            if (portaudio_stream)
-            {
-                is_stream_active = Pa_IsStreamActive(portaudio_stream);
-            }
-
-            int need_reconfig = 0;
-
-            if ((libao_channels != channels) || (libao_sampling_rate != sampling_rate))
-            {
-                libao_channels = (int)channels;
-                libao_sampling_rate = (int)sampling_rate;
-                need_reconfig = 1;
-                dbg(2, "need to reconfigure audio stream\n");
-            }
-
-            if ((need_reconfig == 1) && (is_stream_active == 1))
-            {
-                PaError err_abort = Pa_AbortStream(portaudio_stream);
-
-                if (err_abort != paNoError)
-                {
-                    dbg(0, "Error: calling Pa_AbortStream\n");
-                }
-            }
-
-            if ((need_reconfig == 1) || (is_stream_active != 1))
-            {
-                PaError err;
-
-                if (need_reconfig != 1)
-                {
-                    dbg(0, "starting sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                }
-                else
-                {
-                    dbg(0, "reconfiguring sound output device: channels=%d, rate=%d\n", (int)libao_channels, (int)libao_sampling_rate);
-                }
-
-                PaStreamParameters outputParameters;
-                outputParameters.device = Pa_GetDefaultOutputDevice(); /* default output device */
-
-                if (outputParameters.device == paNoDevice)
-                {
-                    dbg(0, "Error: No default output device\n");
-                }
-
-                outputParameters.channelCount = (int)libao_channels;       /* stereo output */
-                outputParameters.sampleFormat = paInt16; /* 16 bit output */
-                outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
-                outputParameters.hostApiSpecificStreamInfo = NULL;
-                //
-                // number of bytes   --> (size_t)(sample_count * channels * 2)
-                // number of samples --> sample_count
-                //
-                err = Pa_OpenStream(
-                          &portaudio_stream,
-                          NULL, /* no input */
-                          &outputParameters,
-                          (int)libao_sampling_rate,
-                          paFramesPerBufferUnspecified,
-                          paDitherOff, /* Clip but don't dither */
-                          portaudio_data_callback,
-                          NULL);
-
-                if (err != paNoError)
-                {
-                    dbg(0, "Error: calling Pa_OpenStream\n");
-                }
-
-                err = Pa_StartStream(portaudio_stream);
-
-                if (err != paNoError)
-                {
-                    dbg(0, "Error: calling Pa_StartStream\n");
-                }
-            }
-
-            // now actually put the audio data into the ring buffer
-            ringbuf_memcpy_into(portaudio_out_rb, (const char *)pcm, (size_t)(sample_count * channels * 2));
-#endif
         }
         else
         {
@@ -7698,6 +7275,14 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     // pthread_mutex_lock(cc->arb_mutex);
     // free(rb_write(cc->arb, f));
     // pthread_mutex_unlock(cc->arb_mutex);
+
+    //long long timspan_in_ms;
+    //timspan_in_ms = __utimer_stop(&tm_033, "toxav_receive_video_frame:", 1);
+    //if (timspan_in_ms > 0)
+    //{
+    //    dbg(9, "toxav_receive_audio_frame: %llu ms\n", timspan_in_ms);
+    //}
+
 }
 
 
@@ -9094,48 +8679,6 @@ void *thread_av(void *data)
             dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
         }
 
-#ifdef HAVE_LIBAO
-        libao_channels = 1;
-        libao_sampling_rate = 48000;
-        // initialize sound output via libao ------------------
-        ao_initialize();
-        _ao_default_driver = ao_default_driver_id();
-        memset(&_ao_format, 0, sizeof(_ao_format));
-        _ao_format.bits = 16;
-        _ao_format.channels = (int)libao_channels;
-        _ao_format.rate = (int)libao_sampling_rate;
-        _ao_format.byte_format = AO_FMT_LITTLE;
-        _ao_device = ao_open_live(_ao_default_driver, &_ao_format, NULL /* no options */);
-
-        if (_ao_device == NULL)
-        {
-            dbg(0, "Error opening sound output device\n");
-        }
-        else
-        {
-        }
-
-        // initialize sound output via libao ------------------
-#endif
-#ifdef HAVE_PORTAUDIO
-        PaError err;
-        err = Pa_Initialize();
-
-        if (err != paNoError)
-        {
-            dbg(0, "Error opening sound output device\n");
-        }
-
-        libao_channels = 1;
-        libao_sampling_rate = 48000;
-        portaudio_out_rb = ringbuf_new((size_t) 1024 * 300); // 300kbytes ring buffer
-
-        if (portaudio_out_rb == NULL)
-        {
-            dbg(0, "Error creating ringbuffer\n");
-        }
-
-#endif
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
         pthread_t id = pthread_self();
@@ -9459,7 +9002,7 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep_usec(4 * 1000);
+            usleep_usec(2 * 1000);
         }
         else
         {
@@ -11314,7 +10857,7 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
     // dbg(0, "ALSA:0010\n");
     if (err == -EPIPE)
     {
-        // dbg(9, "play_device:under-run ...\n");
+        dbg(9, "play_device:under-run ...\n");
         /* under-run */
         err = snd_pcm_recover(handle, err, 0);
 
@@ -11333,12 +10876,12 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
     }
     else if (err == -ESTRPIPE)
     {
-        // dbg(9, "play_device:snd_pcm_resume ...\n");
+        dbg(9, "play_device:snd_pcm_resume ...\n");
         while ((err = snd_pcm_resume(handle)) == -EAGAIN)
         {
-            sleep(1); /* wait until the suspend flag is released */
-            // dbg(9, "play_device:snd_pcm_resume ... SLEEP\n");
-            // yieldcpu(100);
+            // sleep(1); /* wait until the suspend flag is released */
+            dbg(9, "play_device:snd_pcm_resume ... SLEEP\n");
+            yieldcpu(8);
             //if ((err = snd_pcm_resume(handle)) == -ENOSYS)
             //{
             //  dbg(9, "play_device:ENOSYS\n");
@@ -12635,20 +12178,6 @@ int main(int argc, char *argv[])
 #endif
     display_thread_sched_attr("Scheduler attributes of [3]: main thread");
     // ------ thread priority ------
-#ifdef HAVE_LIBAO
-    count_audio_play_threads_int = 0;
-
-    if (sem_init(&count_audio_play_threads, 0, 1))
-    {
-        dbg(0, "Error in sem_init for count_audio_play_threads\n");
-    }
-
-    if (sem_init(&audio_play_lock, 0, 1))
-    {
-        dbg(0, "Error in sem_init for audio_play_lock\n");
-    }
-
-#endif
 #ifdef HAVE_ALSA_PLAY
     libao_channels = 1;
     libao_sampling_rate = 48000;
@@ -13066,10 +12595,6 @@ int main(int argc, char *argv[])
     tox_utils_kill(tox);
 #else
     tox_kill(tox);
-#endif
-#ifdef HAVE_LIBAO
-    sem_destroy(&count_audio_play_threads);
-    sem_destroy(&audio_play_lock);
 #endif
     sem_destroy(&video_in_frame_copy_sem);
     sem_destroy(&count_video_play_threads);
