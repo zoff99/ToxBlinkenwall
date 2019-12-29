@@ -8914,6 +8914,18 @@ void *thread_av(void *data)
                                                         av_video_frame.h264_buf,
                                                         av_video_frame.buf_len,
                                                         &error);
+
+                            if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+                            {
+                                yieldcpu(1);
+                                toxav_video_send_frame_h264(av, friend_to_send_video_to,
+                                                            av_video_frame.h264_w,
+                                                            av_video_frame.h264_h,
+                                                            av_video_frame.h264_buf,
+                                                            av_video_frame.buf_len,
+                                                            &error);
+                            }
+
                         }
                         else
                         {
@@ -8924,6 +8936,19 @@ void *thread_av(void *data)
                                                    av_video_frame.u,
                                                    av_video_frame.v,
                                                    &error);
+
+                            if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+                            {
+                                yieldcpu(1);
+                                toxav_video_send_frame(av, friend_to_send_video_to,
+                                                       av_video_frame.w,
+                                                       av_video_frame.h,
+                                                       av_video_frame.y,
+                                                       av_video_frame.u,
+                                                       av_video_frame.v,
+                                                       &error);
+                            }
+
                         }
                     }
 
@@ -10023,6 +10048,15 @@ void audio_record__(int16_t *buf_pointer)
             bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                               sample_count,
                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+
+            if (error == TOXAV_ERR_SEND_FRAME_SYNC)
+            {
+                yieldcpu(1);
+                res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
+                                             sample_count,
+                                             (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+            }
+
             // dbg(9, "record_device:006 TOXAV_ERR_SEND_FRAME=%d res=%d\n", (int)error, (int)res);
         }
     }
