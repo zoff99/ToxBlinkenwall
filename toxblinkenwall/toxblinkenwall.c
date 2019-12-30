@@ -1812,6 +1812,8 @@ void on_end_call()
 
     first_incoming_video_frame = 1;
     write_caller_name_to_file("");
+
+    fb_fill_black();
 }
 
 // stuff to do then we start a call
@@ -1848,21 +1850,29 @@ void on_start_call()
 void *play_ringtone(void *data)
 {
 #define PI 3.14159265359
-    int beep_fequency1 = 784; // Hz sinus
-    int beep_fequency2 = 660; // Hz sinus
-    int beep_fequency = beep_fequency1;
-    int samplesize          = 16; // 16 bit PCM
-    unsigned int samplerate = libao_sampling_rate;
-    int duration            = 1; // seconds
-    int channels            = libao_channels;
-    long samples            = samplerate * duration; // per channel
-    long total_samples      = samples * channels; // all channels
+    int beep_fequency1       = 784; // Hz sinus
+    int beep_fequency2       = 660; // Hz sinus
+    int beep_fequency        = beep_fequency1;
+    int samplesize           = 16; // 16 bit PCM
+    unsigned int samplerate  = libao_sampling_rate;
+    int duration             = 1; // seconds
+    int channels             = libao_channels;
+    long samples             = samplerate * duration; // per channel
+    long total_samples       = samples * channels; // all channels
     int every_ms_switch_freq = 180;
+    float loudness           = 0.7f; // 0.1 <-> 0.8
     int beep_freq_change_every_x_samples = ((samplerate / 1000) * every_ms_switch_freq);
-    // Create test input buffer
-    int16_t input[total_samples];
 
-    // Initialize test buffer with zeros
+
+    // Create input buffer
+    int16_t *input = calloc(total_samples, sizeof(int16_t));
+
+    if (!input)
+    {
+        pthread_exit(0);
+    }
+
+    // Initialize buffer with zeros
     for (int i = 0; i < total_samples; ++i)
     {
         input[i] = 0;
@@ -1873,7 +1883,7 @@ void *play_ringtone(void *data)
     for (long i = 0; i < samples; ++i)
     {
         // amplitude = 0.8 * max range; max range = 0x8000 = 32768 ( max value for 16 Bit signed int )
-        int sinus    = 0.8 * 0x8000 * sin(2 * PI * beep_fequency * i / samplerate);
+        int sinus    = loudness * 0x8000 * sin(2 * PI * beep_fequency * i / samplerate);
         input[total_index] = sinus;
         total_index++;
 
@@ -1973,6 +1983,13 @@ void *play_ringtone(void *data)
     }
 
 #endif
+
+    if (input)
+    {
+        free(input);
+        input = NULL;
+    }
+
     // -------- PLAY ---------
     dbg(2, "Ringtone:Clean thread exit!\n");
 }
