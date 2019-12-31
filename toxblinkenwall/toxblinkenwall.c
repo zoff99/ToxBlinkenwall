@@ -10821,6 +10821,9 @@ void init_sound_play_device(int channels, int sample_rate)
         //exit (1);
     }
 
+    dbg(9, "play_device: did set channel count:%d\n", channels);
+
+
 #if 0
     snd_pcm_uframes_t bufsize = ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES;
     err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &bufsize);
