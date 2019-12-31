@@ -899,6 +899,10 @@ uint8_t const *video__v;
 int32_t video__ystride;
 int32_t video__ustride;
 int32_t video__vstride;
+uint32_t video__received_ts;
+#define VIDEO_RECEIVED_TS_MEAN_NUM 10
+uint32_t video__received_ts_pos = 0;
+uint32_t video__received_ts_mean[VIDEO_RECEIVED_TS_MEAN_NUM];
 
 
 #define MAX_VIDEO_RECORD_THREADS 1
@@ -7866,6 +7870,7 @@ static void *video_play(void *dummy)
     int32_t ystride = video__ystride;
     int32_t ustride = video__ustride;
     int32_t vstride = video__vstride;
+    uint32_t received_ts = video__received_ts;
     // dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
     int frame_width_px1 = (int)width;
     int frame_height_px1 = (int)height;
@@ -8022,6 +8027,38 @@ static void *video_play(void *dummy)
 
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
+
+    uint32_t video_frame_play_delay_tbw = ((uint32_t)bw_current_time_actual() - received_ts) / 1000;
+    if ((video_frame_play_delay_tbw > 5) && (video_frame_play_delay_tbw < 50))
+    {
+        video__received_ts_mean[video__received_ts_pos] = video_frame_play_delay_tbw;
+
+        uint32_t mean_delay_ms = 0;
+        for(int jj=0;jj<VIDEO_RECEIVED_TS_MEAN_NUM;jj++)
+        {
+            mean_delay_ms = mean_delay_ms + video__received_ts_mean[jj];
+        }
+        mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
+
+#ifdef HAVE_TOXAV_OPTION_SET
+        TOXAV_ERR_OPTION_SET error;
+        
+        // dbg(9, "video_frame_play_delay_tbw:1:%d:%d\n", (int)video_frame_play_delay_tbw, (int)mean_delay_ms);
+        
+        bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                                    (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
+                                    -(mean_delay_ms), &error);
+#endif
+
+
+        video__received_ts_pos++;
+        if (video__received_ts_pos >= VIDEO_RECEIVED_TS_MEAN_NUM)
+        {
+            video__received_ts_pos = 0;
+        }
+    }
+
+
     //**// sem_post(&video_in_frame_copy_sem);
 #endif
 #ifdef HAVE_FRAMEBUFFER
@@ -8366,6 +8403,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
 
+    uint32_t rec_video_frame_ts = (uint32_t)bw_current_time_actual();
+
     // struct timeval tm_022;
     // __utimer_start(&tm_022);
 
@@ -8447,6 +8486,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 video__ystride = ystride;
                 video__ustride = ustride;
                 video__vstride = vstride;
+                video__received_ts = rec_video_frame_ts;
                 pthread_t video_play_thread;
 
                 if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
