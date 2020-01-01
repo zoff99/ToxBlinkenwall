@@ -151,7 +151,7 @@ make -j$(nproc) || exit 1
 make install
 
 cd $_SRC_
-git clone --depth=1 --branch=v1.3-rc https://github.com/xiph/opus.git
+git clone --depth=1 --branch=v1.3 https://github.com/xiph/opus.git
 cd opus
 ./autogen.sh
 export CFLAGS=" $CF2 $CF3 "
