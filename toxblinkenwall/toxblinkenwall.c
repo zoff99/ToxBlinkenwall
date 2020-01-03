@@ -6492,6 +6492,8 @@ int v4l_getframe(toxcam_av_video_frame *avfr, uint32_t *buf_len)
         return 0;
     }
 
+    // LOG_ERR("v4l", "v4l_getframe");
+
     if (global_encoder_video_bitrate_prev != global_encoder_video_bitrate)
     {
         global_encoder_video_bitrate_prev = global_encoder_video_bitrate;
@@ -8039,6 +8041,7 @@ static void *video_play(void *dummy)
             mean_delay_ms = mean_delay_ms + video__received_ts_mean[jj];
         }
         mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
+        global_bw_video_play_delay = mean_delay_ms * 1000;
 
 #ifdef HAVE_TOXAV_OPTION_SET
         TOXAV_ERR_OPTION_SET error;
