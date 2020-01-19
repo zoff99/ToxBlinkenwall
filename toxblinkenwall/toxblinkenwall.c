@@ -2459,7 +2459,6 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
     shuffle(random_order_nodenums, number_of_nodes);
 
-    int first_udp_node = 1;
     for (size_t j = 0; (int)j < (int)number_of_nodes; j++)
     {
         i = (size_t)random_order_nodenums[j];
@@ -2474,21 +2473,19 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
         else
         {
             res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
+#if 0
+            struct tbw_bootstrap_nodes tbw_nd;
+            memset(&tbw_nd, 0, sizeof(struct tbw_bootstrap_nodes));
 
-            if (first_udp_node == 1)
-            {
-                struct tbw_bootstrap_nodes tbw_nd;
-                memset(&tbw_nd, 0, sizeof(struct tbw_bootstrap_nodes));
+            int ip_ = inet_pton(AF_INET, nodes[i].ip, &tbw_nd.s_addr);
+            tbw_nd.sin_port = nodes[i].port;
+            memcpy(tbw_nd.key_hex, nodes[i].key_bin, 32);
+            tbw_nd.node_type = 0;
 
-                int ip_ = inet_pton(AF_INET, nodes[i].ip, &tbw_nd.s_addr);
-                tbw_nd.sin_port = nodes[i].port;
-                memcpy(tbw_nd.key_hex, nodes[i].key_bin, 32);
-                tbw_nd.node_type = 0;
-
-                FILE *f = fopen("./first_udp_bootstrap_node.bin", "wb");
-                fwrite(&tbw_nd, sizeof(struct tbw_bootstrap_nodes), 1, f);
-                fclose(f);
-            }
+            FILE *f = fopen("./first_udp_bootstrap_node.bin", "wb");
+            fwrite(&tbw_nd, sizeof(struct tbw_bootstrap_nodes), 1, f);
+            fclose(f);
+#endif
         }
     }
 }
