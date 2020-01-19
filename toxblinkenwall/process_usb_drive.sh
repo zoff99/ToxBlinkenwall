@@ -65,6 +65,7 @@ function import_data_phonebook_and_wlan
                 chmod a+rw "$dst_dir""/""$num_entry" # file owned by root (since this is an udev script)
                 # also write to "db" dir
                 cp -f "$dst_dir""/""$num_entry" "$dst_dir""/db/""$num_entry"
+                rm -f "$mount_dir""/""$num_entry"
         fi
 
     done
@@ -145,6 +146,10 @@ network={
         mv -v "/tmp/abc.txt" "$wpa_conf_file_location"
         rm -f "/tmp/abc.txt" # just to be safe
 
+        rm -f "$mount_dir""/""wlan_ssid.txt"
+        rm -f "$mount_dir""/""wlan_pass.txt"
+        rm -f "$mount_dir""/""wlan_public.txt"
+
         wpa_action wlan0 reload
         systemctl restart ifup@wlan0.service
 
@@ -199,6 +204,18 @@ function export_data_pipa
         cp -v "/etc/pipa.txt" "$mount_dir""/""backup/"pipa.txt >> "$logfile" 2>&1
         chmod a+r "$mount_dir""/""backup/"pipa.txt  >> "$logfile" 2>&1
     fi
+
+    return 0
+}
+
+function export_custom_nodes
+{
+    usb_device_to_use="$1"
+
+    mkdir -p "$mount_dir""/""backup/"
+    echo "backing up:CUSTOM_NODES" >> "$logfile"
+    cp -v "$dst_dir""/"custom_bootstrap_nodes.dat "$mount_dir""/""backup/"custom_bootstrap_nodes.dat >> "$logfile" 2>&1
+    chmod a+r "$mount_dir""/""backup/"custom_bootstrap_nodes.dat  >> "$logfile" 2>&1
 
     return 0
 }
@@ -287,13 +304,26 @@ function import_data_name
         # overwrite toxname
         cp -v "$mount_dir""/"toxname.txt "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
         chown pi:pi "$dst_dir""/"toxname.txt >> "$logfile" 2>&1
-
+        rm -f "$mount_dir""/"toxname.txt
         # tell ToxBlinkenwall to reload the name
         if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
             exec 4<>"/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo"
             echo "reload_name:" | tee >&4
         fi
 
+        return 0
+    fi
+
+    return 1
+}
+
+function import_custom_nodes
+{
+    if [ -f "$mount_dir""/"custom_bootstrap_nodes.dat ]; then
+        # overwrite custom_bootstrap_nodes.dat
+        cp -v "$mount_dir""/"custom_bootstrap_nodes.dat "$dst_dir""/"custom_bootstrap_nodes.dat >> "$logfile" 2>&1
+        chown pi:pi "$dst_dir""/"custom_bootstrap_nodes.dat >> "$logfile" 2>&1
+        rm -f "$mount_dir""/"custom_bootstrap_nodes.dat
         return 0
     fi
 
@@ -318,6 +348,9 @@ function import_data_toxsave
         cp -v "$mount_dir""/"savedata.tox "$dst_dir""/db/"savedata.tox >> "$logfile" 2>&1
         chown pi:pi "$dst_dir""/db/"savedata.tox >> "$logfile" 2>&1
         chown pi:pi "$dst_dir""/db/"savedata.tox.BCK* >> "$logfile" 2>&1
+
+        rm -f "$mount_dir""/"savedata.tox
+
         return 0
     fi
 
@@ -385,6 +418,10 @@ if [ "$usb_is_paired""x" == "1x" ]; then
 
     echo "export data pipa:$usb_device""1" >> "$logfile"
     export_data_pipa "$usb_device""1"
+
+    echo "export custom nodes:$usb_device""1" >> "$logfile"
+    export_custom_nodes "$usb_device""1"
+
 fi
 # --------- EXPORT ---------
 
@@ -395,6 +432,9 @@ if [ "$usb_is_paired""x" == "1x" ]; then
 
     echo "import data name:$usb_device""1" >> "$logfile"
     import_data_name "$usb_device""1"
+
+    echo "import custom nodes:$usb_device""1" >> "$logfile"
+    import_custom_nodes "$usb_device""1"
 
     echo "import data toxsave:$usb_device""1" >> "$logfile"
     import_data_toxsave "$usb_device""1"
