@@ -9100,7 +9100,7 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep_usec(2 * 1000);
+            usleep_usec(5 * 1000);
         }
         else
         {
