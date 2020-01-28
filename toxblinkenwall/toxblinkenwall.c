@@ -182,8 +182,6 @@ static const char global_version_string[] = "0.99.55";
 // ----------- version -----------
 // ----------- version -----------
 
-
-
 #include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -274,8 +272,7 @@ static const char global_version_string[] = "0.99.55";
 
 
 // #define WANT_OS_UPDATE_FULL 1
-
-
+// #define DEBUG_INCOMING_VIDEO_FRAME_TIMING 1
 
 
 // ---------- dirty hack ----------
@@ -889,6 +886,8 @@ sem_t video_in_frame_copy_sem;
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
 #define MAX_VIDEO_PLAY_THREADS 1
+uint8_t *yuv_frame_for_play = NULL;
+size_t yuv_frame_for_play_size = 0;
 sem_t video_play_lock;
 
 uint16_t video__width;
@@ -1818,6 +1817,13 @@ void on_end_call()
     write_caller_name_to_file("");
 
     fb_fill_black();
+
+    if (yuv_frame_for_play)
+    {
+        free(yuv_frame_for_play);
+        yuv_frame_for_play = NULL;
+        yuv_frame_for_play_size = 0;
+    }
 }
 
 // stuff to do then we start a call
@@ -7869,15 +7875,14 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
 }
 
-
-
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
 
-    // struct timeval tm_01;
-    // __utimer_start(&tm_01);
-    //dbg(9, "VP-DEBUG:002\n");
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01;
+    __utimer_start(&tm_01);
+#endif
 
     // make a local copy
     uint16_t width = video__width;
@@ -7886,46 +7891,75 @@ static void *video_play(void *dummy)
     int32_t ustride = video__ustride;
     int32_t vstride = video__vstride;
     uint32_t received_ts = video__received_ts;
-    // dbg(0, "receive_video_frame:fnum=%d\n", (int)friend_number);
+
     int frame_width_px1 = (int)width;
     int frame_height_px1 = (int)height;
     int ystride_ = (int)ystride;
     int ustride_ = (int)ustride;
     int vstride_ = (int)vstride;
-    //dbg(9, "VP-DEBUG:003\n");
-    /*
-    * YUV420 frame with width * height
-    *
-    * @param y Luminosity plane. Size = MAX(width, abs(ystride)) * height.
-    * @param u U chroma plane. Size = MAX(width/2, abs(ustride)) * (height/2).
-    * @param v V chroma plane. Size = MAX(width/2, abs(vstride)) * (height/2).
-    */
+
     int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
     int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
     int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
-    // dbg(9, "VP-DEBUG:004:y_layer_size=%d\n", y_layer_size);
-    // dbg(9, "VP-DEBUG:004:u_layer_size=%d\n", u_layer_size);
-    // dbg(9, "VP-DEBUG:004:v_layer_size=%d\n", v_layer_size);
-#ifndef HAVE_OUTPUT_OMX_XXXXXXXXXX_DEACTIVATE_____
-    uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
+
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_006;
+    __utimer_start(&tm_01_006);
+#endif
+
+    if (yuv_frame_for_play)
+    {
+        if ((size_t)(y_layer_size + u_layer_size + v_layer_size) != yuv_frame_for_play_size)
+        {
+            free(yuv_frame_for_play);
+            yuv_frame_for_play = NULL;
+            yuv_frame_for_play_size = 0;
+        }
+    }
+
+    if (!yuv_frame_for_play)
+    {
+        yuv_frame_for_play = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
+        yuv_frame_for_play_size = y_layer_size + u_layer_size + v_layer_size;
+    }
+
+    // uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
+    uint8_t *y = yuv_frame_for_play;
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    dbg(9, "video_frame_play:size=%d\n", (int)(y_layer_size + u_layer_size + v_layer_size));
+    long long timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_006, "video_frame_play:tm_01_006:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play:tm_01_006: %llu ms\n", timspan_in_ms);
+    }
+#endif
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
-    // dbg(9, "VP-DEBUG:005:video__y=%p\n", video__y);
-    memcpy(y, video__y, y_layer_size);
-    // dbg(9, "VP-DEBUG:006:video__u=%p\n", video__u);
-    memcpy(u, video__u, u_layer_size);
-    // dbg(9, "VP-DEBUG:007:video__v=%p\n", video__v);
-    memcpy(v, video__v, v_layer_size);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_007;
+    __utimer_start(&tm_01_007);
 #endif
-    // dbg(9, "VP-DEBUG:008\n");
-    //dbg(9, "VP-DEBUG:009\n");
+    // -------------
+    memcpy(y, video__y, y_layer_size);
+    memcpy(u, video__u, u_layer_size);
+    memcpy(v, video__v, v_layer_size);
+    // -------------
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_007, "video_frame_play:tm_01_007:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play:tm_01_007: %llu ms\n", timspan_in_ms);
+    }
+#endif
+
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
-#ifndef HAVE_OUTPUT_OMX
+
+    // release lock --------------
     sem_post(&video_in_frame_copy_sem);
-#else
-    sem_post(&video_in_frame_copy_sem);
-#endif
+    // release lock --------------
 
 #ifdef HAVE_OUTPUT_OMX
 
@@ -7958,15 +7992,13 @@ static void *video_play(void *dummy)
         if (err)
         {
             dbg(9, "omx_display_enable ERR=%d\n", err);
-            // sem_post(&video_in_frame_copy_sem);
 
             if (y)
             {
-                free((void *)y);
+                // free((void *)y);
             }
 
             pthread_exit(0);
-            // return (void *)NULL;
         }
 
         omx_w = frame_width_px;
@@ -7993,7 +8025,21 @@ static void *video_play(void *dummy)
     // --- check rotation ---
     void *buf = NULL;
     uint32_t len = 0;
+
+
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_001;
+    __utimer_start(&tm_01_001);
+#endif
     omx_display_input_buffer(&omx, &buf, &len);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_001, "video_frame_play:tm_01_001:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play:tm_01_001: %llu ms\n", timspan_in_ms);
+    }
+#endif
     uint32_t yuf_data_buf_len = y_layer_size + u_layer_size + v_layer_size;
 
     if (yuf_data_buf_len > len)
@@ -8001,20 +8047,25 @@ static void *video_play(void *dummy)
         dbg(9, "OMX: Error buffer too small !!!!!!\n");
     }
 
-    // dbg(9, "omx plen=%d\n", (int)(len));
-#if 0    
-    memcpy(buf, video__y, y_layer_size);
-    memcpy(buf + y_layer_size, video__u, u_layer_size);
-    memcpy(buf + y_layer_size + u_layer_size, video__v, v_layer_size);
-#else
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_002;
+    __utimer_start(&tm_01_002);
+#endif
     memcpy(buf, y, y_layer_size);
     memcpy(buf + y_layer_size, u, u_layer_size);
     memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
-    if (y)
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_002, "video_frame_play:tm_01_002:", 1);
+    if (timspan_in_ms > 0)
     {
-        free((void *)y);
+        dbg(9, "video_frame_play:tm_01_002: %llu ms\n", timspan_in_ms);
     }
 #endif
+    if (y)
+    {
+        // free((void *)y);
+    }
 
     // OSD --------
     if (omx_osd_y == NULL)
@@ -8026,14 +8077,51 @@ static void *video_play(void *dummy)
 
     if (update_omx_osd_counter > 20)
     {
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+        struct timeval tm_01_003;
+        __utimer_start(&tm_01_003);
+#endif
         prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
                             global_video_in_fps);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+        timspan_in_ms;
+        timspan_in_ms = __utimer_stop(&tm_01_003, "video_frame_play:tm_01_003:", 1);
+        if (timspan_in_ms > 0)
+        {
+            dbg(9, "video_frame_play:tm_01_003: %llu ms\n", timspan_in_ms);
+        }
+#endif
         update_omx_osd_counter = 0;
     }
 
     update_omx_osd_counter++;
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_004;
+    __utimer_start(&tm_01_004);
+#endif
     draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_004, "video_frame_play:tm_01_004:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play:tm_01_004: %llu ms\n", timspan_in_ms);
+    }
+#endif
+
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    struct timeval tm_01_005;
+    __utimer_start(&tm_01_005);
+#endif
     prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01_005, "video_frame_play:tm_01_005:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play:tm_01_005: %llu ms\n", timspan_in_ms);
+    }
+#endif
 
     if (networktraffic_thread_stop == 0)
     {
@@ -8075,8 +8163,8 @@ static void *video_play(void *dummy)
     }
 
 
-    //**// sem_post(&video_in_frame_copy_sem);
 #endif
+// -
 #ifdef HAVE_FRAMEBUFFER
 
     // -- draw OSD for framebuffer output --
@@ -8377,32 +8465,23 @@ static void *video_play(void *dummy)
 
     if (y)
     {
-        free((void *)y);
+        // free((void *)y);
     }
-
-    // dbg(9, "VP-DEBUG:019\n");
-    /*
-        if (u)
-        {
-            free((void *)u);
-        }
-
-        dbg(9, "VP-DEBUG:020\n");
-
-        if (v)
-        {
-            free((void *)v);
-        }
-    */
-    // dbg(9, "VP-DEBUG:021\n");
 #endif
+
+//-
     dec_video_t_counter();
-    // dbg(9, "VP-DEBUG:022-EXIT\n");
-#ifdef HAVE_OUTPUT_OMX_XXXXXXXXXX_DEACTIVATE_____
-    //*SINGLE*THREADED*// pthread_exit(0);
-#else
-    pthread_exit(0);
+
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_01, "video_frame_play:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "video_frame_play: %llu ms\n", timspan_in_ms);
+    }
 #endif
+
+    pthread_exit(0);
 }
 
 
@@ -8421,8 +8500,11 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     uint32_t rec_video_frame_ts = (uint32_t)bw_current_time_actual();
 
-    // struct timeval tm_022;
-    // __utimer_start(&tm_022);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    dbg(9, "VP-DEBUG:===========\n");
+    struct timeval tm_022;
+    __utimer_start(&tm_022);
+#endif
 
     // ---- DEBUG ----
     if (first_incoming_video_frame == 0)
@@ -8436,15 +8518,18 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         }
 
         update_fps_counter++;
-
         // dbg(9, "fps counter=%d\n", (int)update_fps_counter);
+
         if (update_fps_counter > update_fps_every)
         {
             if (global_timespan_video_in > 0)
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
-                // dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
-                // dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+                dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
+                dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
+                dbg(9, "timspan_in_ms:%d\n", (int)timspan_in_ms);
+#endif
             }
             else
             {
@@ -8544,8 +8629,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                         update_fps_counter--;
                     }
                 }
-
-                //PL// sem_post(&video_play_lock);
             }
         }
         else
@@ -8557,12 +8640,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     {
     }
 
-    // long long timspan_in_ms;
-    // timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
-    // if (timspan_in_ms > 0)
-    // {
-    //     dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
-    // }
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    long long timspan_in_ms;
+    timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
+    if (timspan_in_ms > 0)
+    {
+        dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
+    }
+#endif
+
 }
 
 void set_av_video_frame()
