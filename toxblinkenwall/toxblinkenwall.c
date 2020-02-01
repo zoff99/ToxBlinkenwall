@@ -8131,38 +8131,6 @@ static void *video_play(void *dummy)
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
 
-    uint32_t video_frame_play_delay_tbw = ((uint32_t)bw_current_time_actual() - received_ts) / 1000;
-    if ((video_frame_play_delay_tbw > 5) && (video_frame_play_delay_tbw < 50))
-    {
-        video__received_ts_mean[video__received_ts_pos] = video_frame_play_delay_tbw;
-
-        uint32_t mean_delay_ms = 0;
-        for(int jj=0;jj<VIDEO_RECEIVED_TS_MEAN_NUM;jj++)
-        {
-            mean_delay_ms = mean_delay_ms + video__received_ts_mean[jj];
-        }
-        mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
-        global_bw_video_play_delay = mean_delay_ms * 1000;
-
-#ifdef HAVE_TOXAV_OPTION_SET
-        TOXAV_ERR_OPTION_SET error;
-        
-        // dbg(9, "video_frame_play_delay_tbw:1:%d:%d\n", (int)video_frame_play_delay_tbw, (int)mean_delay_ms);
-        
-        bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
-                                    (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
-                                    -(mean_delay_ms), &error);
-#endif
-
-
-        video__received_ts_pos++;
-        if (video__received_ts_pos >= VIDEO_RECEIVED_TS_MEAN_NUM)
-        {
-            video__received_ts_pos = 0;
-        }
-    }
-
-
 #endif
 // -
 #ifdef HAVE_FRAMEBUFFER
@@ -8461,13 +8429,27 @@ static void *video_play(void *dummy)
         // dbg(9, "VP-DEBUG:017\n");
     }
 
-    // dbg(9, "VP-DEBUG:018\n");
-
-    if (y)
-    {
-        // free((void *)y);
-    }
 #endif
+
+    uint32_t video_frame_play_delay_tbw = ((uint32_t)bw_current_time_actual() - received_ts) / 1000;
+    if ((video_frame_play_delay_tbw > 5) && (video_frame_play_delay_tbw < 50))
+    {
+        video__received_ts_mean[video__received_ts_pos] = video_frame_play_delay_tbw;
+
+        uint32_t mean_delay_ms = 0;
+        for(int jj=0;jj<VIDEO_RECEIVED_TS_MEAN_NUM;jj++)
+        {
+            mean_delay_ms = mean_delay_ms + video__received_ts_mean[jj];
+        }
+        mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
+        global_bw_video_play_delay = mean_delay_ms * 1000;
+
+        video__received_ts_pos++;
+        if (video__received_ts_pos >= VIDEO_RECEIVED_TS_MEAN_NUM)
+        {
+            video__received_ts_pos = 0;
+        }
+    }
 
 //-
     dec_video_t_counter();
@@ -8617,7 +8599,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
                         sem_wait(&video_in_frame_copy_sem);
                         sem_post(&video_in_frame_copy_sem);
-                        // yieldcpu(1);
                     }
                 }
                 else
@@ -9233,6 +9214,9 @@ void *thread_video_av(void *data)
     // ------ thread priority ------
 #endif
 
+    uint32_t update_video_delay_every_ms_counter = 0;
+    const uint32_t update_video_delay_every_counter = 800;
+
     while (toxav_video_thread_stop != 1)
     {
         // pthread_mutex_lock(&av_thread_lock);
@@ -9254,6 +9238,20 @@ void *thread_video_av(void *data)
             usleep_usec((500 * 1000));
 #else
             usleep_usec((global_av_iterate_ms * 1000));
+
+#ifdef HAVE_TOXAV_OPTION_SET
+            update_video_delay_every_ms_counter++;
+            if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
+            {
+                TOXAV_ERR_OPTION_SET error;
+
+                bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
+                                            (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
+                                            -((int)(global_bw_video_play_delay / 1000)), &error);
+                update_video_delay_every_ms_counter = 0;
+            }
+#endif
+
 #endif
         }
         else
