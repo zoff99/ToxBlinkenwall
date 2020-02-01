@@ -8075,7 +8075,13 @@ static void *video_play(void *dummy)
         omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
     }
 
-    if (update_omx_osd_counter > 20)
+    uint32_t omx_osd_update_every = 30;
+    if ((global_video_in_fps > 10) && (global_video_in_fps < 60))
+    {
+        omx_osd_update_every = global_video_in_fps * 2;
+    }
+
+    if (update_omx_osd_counter > omx_osd_update_every)
     {
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
         struct timeval tm_01_003;
@@ -9219,19 +9225,8 @@ void *thread_video_av(void *data)
 
     while (toxav_video_thread_stop != 1)
     {
-        // pthread_mutex_lock(&av_thread_lock);
-        // struct timeval tm_01;
-        // __utimer_start(&tm_01);
         toxav_iterate(av);
-        // long long timspan_in_ms;
-        // timspan_in_ms = __utimer_stop(&tm_01, "toxav_iterate:", 1);
-        // if (timspan_in_ms > 0)
-        // {
-        //     dbg(9, "toxav_iterate: %llu ms\n", timspan_in_ms);
-        // }
 
-        // dbg(9, "AV video Thread #%d running ...\n", (int) id);
-        // pthread_mutex_unlock(&av_thread_lock);
         if (global_video_active == 1)
         {
 #ifdef RPIZEROW
@@ -9245,6 +9240,7 @@ void *thread_video_av(void *data)
             {
                 TOXAV_ERR_OPTION_SET error;
 
+                // dbg(9, "toxav_option_set:%d\n", -((int)(global_bw_video_play_delay / 1000)));
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
                                             -((int)(global_bw_video_play_delay / 1000)), &error);
