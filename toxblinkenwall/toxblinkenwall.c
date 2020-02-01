@@ -7879,6 +7879,30 @@ static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
 
+#if 0
+    // ------ thread priority ------
+    struct sched_param param;
+    int policy;
+    int s;
+    display_thread_sched_attr("Scheduler attributes of [1]: video thread");
+    get_policy('r', &policy);
+    param.sched_priority = strtol("2", NULL, 0);
+    s = pthread_setschedparam(pthread_self(), policy, &param);
+
+    if (s != 0)
+    {
+        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of video thread\n");
+    }
+    else
+    {
+    }
+
+    display_thread_sched_attr("Scheduler attributes of [3]: video thread");
+    // ------ thread priority ------
+#endif
+
+
+
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01;
     __utimer_start(&tm_01);
@@ -8743,7 +8767,7 @@ void *thread_av(void *data)
     ToxAV *av = (ToxAV *) data;
     pthread_t id = pthread_self();
     pthread_mutex_t av_thread_lock;
-#if 1
+#if 0
     // ------ thread priority ------
     struct sched_param param;
     int policy;
@@ -9198,7 +9222,7 @@ void *thread_video_av(void *data)
     //  dbg(2, "av_thread_lock video created successfully\n");
     //}
     dbg(2, "AV video Thread #%d: starting\n", (size_t) id);
-#if 1
+#if 0
     // ------ thread priority ------
     struct sched_param param;
     int policy;
@@ -10236,7 +10260,7 @@ void *thread_record_alsa_audio(void *data)
     int s;
     display_thread_sched_attr("Scheduler attributes of [1]: thread_record_alsa_audio");
     get_policy('r', &policy);
-#if 1
+#if 0
     param.sched_priority = strtol("2", NULL, 0);
     s = pthread_setschedparam(pthread_self(), policy, &param);
 
@@ -12668,6 +12692,7 @@ int main(int argc, char *argv[])
     // int policy;
     // int s;
     display_thread_sched_attr("Scheduler attributes of [1]: main thread");
+#if 0
     get_policy('o', &policy);
     param.sched_priority = strtol("0", NULL, 0);
     s = pthread_setschedparam(pthread_self(), policy, &param);
@@ -12679,7 +12704,7 @@ int main(int argc, char *argv[])
     else
     {
     }
-
+#endif
     display_thread_sched_attr("Scheduler attributes of [3]: main thread");
     // ------ thread priority ------
     global_disconnect_friend_num = -1;
