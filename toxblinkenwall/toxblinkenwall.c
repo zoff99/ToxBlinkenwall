@@ -721,6 +721,7 @@ int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin);
 void bin_to_hex_string(uint8_t *tox_id_bin, size_t tox_id_bin_len, char *toxid_str);
 void delete_entry_file(int entry_num);
 void call_entry_num(Tox *tox, int entry_num);
+void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey);
 void text_on_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int start_x_pix,
                            int start_y_pix, const char *text);
 void left_top_bar_into_bgra_frame(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int bar_start_x_pix,
@@ -800,6 +801,7 @@ uint64_t global_start_time;
 int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
 int64_t global_disconnect_friend_num = -1;
+int64_t global_disconnect_conf_friend_num = -1;
 
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
@@ -5004,6 +5006,20 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
+            else if (strncmp((char *)message, ".confcall ", strlen((char *)".confcall ")) == 0) // call publickey (to enter a conf call)
+            {
+                if (strlen(message) == ((TOX_PUBLIC_KEY_SIZE * 2) + 10))
+                {
+                    const char *entry_hex_toxpubkey_string = (message + 10);
+                    uint8_t *entry_bin_toxpubkey = hex_string_to_bin(entry_hex_toxpubkey_string);
+
+                    if (entry_bin_toxpubkey)
+                    {
+                        call_conf_pubkey(tox, entry_bin_toxpubkey);
+                        free(entry_bin_toxpubkey);
+                    }
+                }
+            }
             else if (strncmp((char *)message, ".showfps", strlen((char *)".showfps ")) == 0) // show fps on video
             {
                 global_show_fps_on_video = 1;
@@ -6968,8 +6984,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
+        global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
         end_conf_call(av, 0);
-        global_disconnect_friend_num = friend_to_send_conf_video_to;
 
         reset_toxav_call_waiting();
         global_video_active = 0;
@@ -8996,7 +9012,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     y_plane_save = y_plane;
                     y_save = y_;
-                    for(int kk=0;kk<(w_use_r - 1);kk++)
+                    for(int kk=0;kk<(w_use_r - 2);kk++)
                     {
                         *y_plane = (uint8_t)*y_;
                         y_plane++;
@@ -9014,7 +9030,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     u_plane_save = u_plane;
                     u_save = u_;
-                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    for(int kk=0;kk<((w_use_r/2) - 1);kk++)
                     {
                         *u_plane = (uint8_t)*u_;
                         u_plane++;
@@ -9032,7 +9048,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     v_plane_save = v_plane;
                     v_save = v_;
-                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    for(int kk=0;kk<((w_use_r/2) - 1);kk++)
                     {
                         *v_plane = (uint8_t)*v_;
                         v_plane++;
@@ -10851,6 +10867,16 @@ void *thread_record_alsa_audio(void *data)
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
 // ------------------ alsa recording ------------------
+
+void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
+{
+    TOX_ERR_FRIEND_ADD error;
+    uint32_t new_friend_id = tox_friend_add_norequest(tox, (uint8_t *) bin_toxpubkey, &error);
+    if (error == TOX_ERR_FRIEND_ADD_OK)
+    {
+        // now jump into the conf call
+    }
+}
 
 void call_entry_num(Tox *tox, int entry_num)
 {
@@ -13275,6 +13301,13 @@ int main(int argc, char *argv[])
                 TOXAV_ERR_CALL_CONTROL error = 0;
                 toxav_call_control(mytox_av, global_disconnect_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
                 global_disconnect_friend_num = -1;
+            }
+
+            if (global_disconnect_conf_friend_num != -1)
+            {
+                TOXAV_ERR_CALL_CONTROL error = 0;
+                toxav_call_control(mytox_av, global_disconnect_conf_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
+                global_disconnect_conf_friend_num = -1;
             }
 
             if ((global_qrcode_was_updated == 1) && (global_is_qrcode_showing_on_screen == 1))
