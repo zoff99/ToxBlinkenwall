@@ -5015,6 +5015,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                     if (entry_bin_toxpubkey)
                     {
+                        memset(entry_bin_toxpubkey + TOX_PUBLIC_KEY_SIZE, 0, TOX_ADDRESS_SIZE - TOX_PUBLIC_KEY_SIZE);
                         call_conf_pubkey(tox, entry_bin_toxpubkey);
                         free(entry_bin_toxpubkey);
                     }
@@ -6725,6 +6726,31 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
     int video_bitrate = global_video_bit_rate;
     friend_to_send_conf_video_to = friend_number;
     toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+
+    // now send .confcall message to all active callers -------------------
+    char message_str[1000];
+    int j;
+    // ---
+    j = find_friend_in_friendlist((uint32_t) friend_to_send_conf_video_to);
+    if (j > -1)
+    {
+        CLEAR(message_str);
+        snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
+        memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
+        dbg(9, "answer_incoming_conf_av_call:1:%s\n", message_str);
+        send_text_message_to_friend(toxav_get_tox(av), friend_to_send_video_to, message_str);
+    }
+    // ---
+    j = find_friend_in_friendlist((uint32_t) friend_to_send_video_to);
+    if (j > -1)
+    {
+        CLEAR(message_str);
+        snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
+        memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
+        dbg(9, "answer_incoming_conf_av_call:2:%s\n", message_str);
+        send_text_message_to_friend(toxav_get_tox(av), friend_to_send_conf_video_to, message_str);
+    }
+    // now send .confcall message to all active callers -------------------
 }
 
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
@@ -10875,6 +10901,39 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
     if (error == TOX_ERR_FRIEND_ADD_OK)
     {
         // now jump into the conf call
+        if (global_video_active == 1)
+        {
+            if (global_confernece_call_active == 0)
+            {
+                TOXAV_ERR_CALL error = 0;
+                toxav_call(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error);
+                if (error == TOXAV_ERR_CALL_OK)
+                {
+                    friend_to_send_conf_video_to = new_friend_id;
+                    global_confernece_call_active = 1;
+                }
+            }
+        }
+    }
+    else
+    {
+        int64_t entry_num_friendnum = friend_number_for_entry(tox, bin_toxpubkey);
+        if (entry_num_friendnum != -1)
+        {
+            if (global_video_active == 1)
+            {
+                if (global_confernece_call_active == 0)
+                {
+                    TOXAV_ERR_CALL error = 0;
+                    toxav_call(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error);
+                    if (error == TOXAV_ERR_CALL_OK)
+                    {
+                        friend_to_send_conf_video_to = entry_num_friendnum;
+                        global_confernece_call_active = 1;
+                    }
+                }
+            }
+        }
     }
 }
 
