@@ -738,6 +738,9 @@ void set_restart_flag();
 void reload_name_from_file(Tox *tox);
 void read_pubkey_from_file(uint8_t **toxid_str, int entry_num);
 bool file_exists(const char *path);
+bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_rate, uint32_t video_bit_rate,
+                TOXAV_ERR_CALL *error, int with_locking);
+void end_conf_call(ToxAV *av, int disconnect);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -802,6 +805,7 @@ int global_cam_device_fd = 0;
 int global_framebuffer_device_fd = 0;
 int64_t global_disconnect_friend_num = -1;
 int64_t global_disconnect_conf_friend_num = -1;
+int64_t global_add_call_friend_num = -1;
 
 struct fb_var_screeninfo var_framebuffer_info;
 struct fb_fix_screeninfo var_framebuffer_fix_info;
@@ -894,6 +898,9 @@ float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 float global_audio_out_vu = AUDIO_VU_MIN_VALUE;
 
 sem_t video_in_frame_copy_sem;
+
+sem_t tox_call_control_sem;
+sem_t tox_call_sem;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
@@ -1301,6 +1308,30 @@ uint8_t *hex_string_to_bin(const char *hex_string)
     return val;
 }
 
+
+/*
+ * Converts a hexidecimal string of length hex_len to binary format and puts the result in output.
+ * output_size must be exactly half of hex_len.
+ *
+ * Returns 0 on success.
+ * Returns -1 on failure.
+ */
+uint8_t *hex_string_to_bin_pubkey(const char *hex_string)
+{
+    size_t len = TOX_PUBLIC_KEY_SIZE;
+    uint8_t *val = calloc(1, len);
+
+    // dbg(9, "hex_string_to_bin:len=%d\n", (int)len);
+
+    for (size_t i = 0; i != len; ++i)
+    {
+        // dbg(9, "hex_string_to_bin:%d %d\n", hex_string[2*i], hex_string[2*i+1]);
+        val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
+        // dbg(9, "hex_string_to_bin:i=%d val[i]=%d\n", i, (int)val[i]);
+    }
+
+    return val;
+}
 
 /* Converts a binary representation of a Tox ID into a string.
  *
@@ -3673,6 +3704,13 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         // friend went offline -> cancel all filetransfers
         kill_all_file_transfers_friend(m, num);
 
+
+        if ((int64_t)friend_to_send_conf_video_to == (int64_t)num)
+        {
+            dbg(9, "went offline:got hangup on conf call\n");
+            end_conf_call(mytox_av, 1);
+        }
+
         // friend went offline -> hang up on all calls
         if ((int64_t)friend_to_send_video_to == (int64_t)num)
         {
@@ -4377,8 +4415,8 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
             dbg(9, "cmd_vcm:004\n");
             update_status_line_1_text();
             TOXAV_ERR_CALL error = 0;
-            toxav_call(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error);
-            // toxav_call(mytox_av, friend_number, 0, 40, &error);
+            toxav_call_wrapper(mytox_av, friend_number, global_audio_bit_rate, global_video_bit_rate, &error, 0);
+            // toxav_call_wrapper(mytox_av, friend_number, 0, 40, &error, 0);
             dbg(9, "cmd_vcm:005\n");
 
             if (error != TOXAV_ERR_CALL_OK)
@@ -4608,7 +4646,7 @@ void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
             continue;
         }
 
-        *toxid_str = hex_string_to_bin(id);
+        *toxid_str = hex_string_to_bin_pubkey(id);
         break;
     }
 
@@ -5004,14 +5042,17 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             else if (strncmp((char *)message, ".confcall ",
                              strlen((char *)".confcall ")) == 0) // call publickey (to enter a conf call)
             {
+                dbg(9, ".confcall:msglen=%d vs. %d\n", strlen(message), ((TOX_PUBLIC_KEY_SIZE * 2) + 10));
                 if (strlen(message) == ((TOX_PUBLIC_KEY_SIZE * 2) + 10))
                 {
                     const char *entry_hex_toxpubkey_string = (message + 10);
-                    uint8_t *entry_bin_toxpubkey = hex_string_to_bin(entry_hex_toxpubkey_string);
+                    dbg(9, ".confcall:msg=XX%sYY\n", entry_hex_toxpubkey_string);
+
+                    uint8_t *entry_bin_toxpubkey = hex_string_to_bin_pubkey(entry_hex_toxpubkey_string);
 
                     if (entry_bin_toxpubkey)
                     {
-                        memset(entry_bin_toxpubkey + TOX_PUBLIC_KEY_SIZE, 0, TOX_ADDRESS_SIZE - TOX_PUBLIC_KEY_SIZE);
+                        dbg(9, ".confcall:002\n");
                         call_conf_pubkey(tox, entry_bin_toxpubkey);
                         free(entry_bin_toxpubkey);
                     }
@@ -6676,6 +6717,40 @@ void close_cam()
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
 
+bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CONTROL control,
+                        TOXAV_ERR_CALL_CONTROL *error, int with_locking)
+{
+    if (with_locking == 1)
+    {
+        dbg(9, "SEM:wait:001\n");
+        sem_wait(&tox_call_control_sem);
+        dbg(9, "SEM:wait:001_\n");
+    }
+    // only call "toxav_call_control" when no iterate function is active!!
+    bool ret = toxav_call_control(av, friend_number, control, error);
+    if (with_locking == 1)
+    {
+        dbg(9, "SEM:post:001\n");
+        sem_post(&tox_call_control_sem);
+        dbg(9, "SEM:post:001_\n");
+    }
+    return ret;
+}
+
+bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_rate, uint32_t video_bit_rate,
+                TOXAV_ERR_CALL *error, int with_locking)
+{
+    if (with_locking == 0)
+    {
+        return toxav_call(av, friend_number, audio_bit_rate, video_bit_rate, error);
+    }
+    else
+    {
+        global_add_call_friend_num = (int64_t)friend_number;
+        return true;
+    }
+}
+
 void end_conf_call(ToxAV *av, int disconnect)
 {
     dbg(9, "end_conf_call:enter\n");
@@ -6686,7 +6761,7 @@ void end_conf_call(ToxAV *av, int disconnect)
     if (disconnect == 1)
     {
         TOXAV_ERR_CALL_CONTROL error = 0;
-        toxav_call_control(av, fnum, TOXAV_CALL_CONTROL_CANCEL, &error);
+        toxav_call_control_wrapper(av, fnum, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
     }
 
 #if 0
@@ -6707,6 +6782,11 @@ void end_conf_call(ToxAV *av, int disconnect)
 void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
 {
     dbg(9, "answer_incoming_conf_av_call:enter\n");
+
+    dbg(9, "SEM:wait:002\n");
+    // sem_wait(&tox_call_control_sem);
+    dbg(9, "SEM:wait:002_\n");
+
 
     if (conf_call_y == NULL)
     {
@@ -6747,6 +6827,10 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
         dbg(9, "answer_incoming_conf_av_call:2:%s\n", message_str);
         send_text_message_to_friend(toxav_get_tox(av), friend_to_send_conf_video_to, message_str);
     }
+
+    dbg(9, "SEM:post:002\n");
+    // sem_post(&tox_call_control_sem);
+    dbg(9, "SEM:post:002_\n");
 
     // now send .confcall message to all active callers -------------------
 }
@@ -6791,7 +6875,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
     {
         dbg(2, "Not accepting calls yet\n");
         TOXAV_ERR_CALL_CONTROL error = 0;
-        toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+        toxav_call_control_wrapper(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
         // global_video_active = 0;
         return;
     }
@@ -6809,7 +6893,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
             else
             {
                 TOXAV_ERR_CALL_CONTROL error = 0;
-                toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+                toxav_call_control_wrapper(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
                 dbg(9, "Somebody else is already in a call, hang up\n");
             }
         }
@@ -6975,8 +7059,12 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number) && (global_video_active == 1))
     {
-        dbg(9, "t_toxav_call_state_cb:got hangup on conf call\n");
-        end_conf_call(av, 0);
+        if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
+        {
+            dbg(9, "t_toxav_call_state_cb:got hangup on conf call\n");
+            end_conf_call(av, 0);
+        }
+
         return;
     }
 
@@ -7039,6 +7127,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
+        global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
         end_conf_call(av, 0);
         reset_toxav_call_waiting();
         global_video_active = 0;
@@ -9862,7 +9951,7 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
 
     dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
-    toxav_call_control(av, num, TOXAV_CALL_CONTROL_CANCEL, &error);
+    toxav_call_control_wrapper(av, num, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
     global_video_active = 0;
     on_end_call();
     dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
@@ -10920,15 +11009,24 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
     TOX_ERR_FRIEND_ADD error;
     uint32_t new_friend_id = tox_friend_add_norequest(tox, (uint8_t *) bin_toxpubkey, &error);
 
+    dbg(9, "call_conf_pubkey:.confcall:new_friend_id=%d\n", new_friend_id);
+    dbg(9, "call_conf_pubkey:.confcall:error=%d\n", error);
+
     if (error == TOX_ERR_FRIEND_ADD_OK)
     {
+        dbg(9, "call_conf_pubkey:.confcall:global_video_active=%d\n", global_video_active);
+
         // now jump into the conf call
         if (global_video_active == 1)
         {
+            dbg(9, "call_conf_pubkey:.confcall:global_confernece_call_active=%d\n", global_confernece_call_active);
+
             if (global_confernece_call_active == 0)
             {
                 TOXAV_ERR_CALL error = 0;
-                toxav_call(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error);
+                toxav_call_wrapper(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error, 1);
+
+                dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error, new_friend_id);
 
                 if (error == TOXAV_ERR_CALL_OK)
                 {
@@ -10942,14 +11040,21 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
     {
         int64_t entry_num_friendnum = friend_number_for_entry(tox, bin_toxpubkey);
 
+        dbg(9, "call_conf_pubkey:.confcall:entry_num_friendnum=%d\n", (int)entry_num_friendnum);
+
         if (entry_num_friendnum != -1)
         {
+            dbg(9, "call_conf_pubkey:.confcall:global_video_active=%d\n", (int)global_video_active);
+
             if (global_video_active == 1)
             {
+                dbg(9, "call_conf_pubkey:.confcall:global_confernece_call_active=%d\n", (int)global_confernece_call_active);
                 if (global_confernece_call_active == 0)
                 {
                     TOXAV_ERR_CALL error = 0;
-                    toxav_call(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error);
+                    toxav_call_wrapper(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error, 1);
+
+                    dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error, (int)entry_num_friendnum);
 
                     if (error == TOXAV_ERR_CALL_OK)
                     {
@@ -13043,6 +13148,16 @@ int main(int argc, char *argv[])
         dbg(0, "Error in sem_init for video_in_frame_copy_sem\n");
     }
 
+    if (sem_init(&tox_call_control_sem, 0, 1))
+    {
+        dbg(0, "Error in sem_init for tox_call_control_sem\n");
+    }
+
+    if (sem_init(&tox_call_sem, 0, 1))
+    {
+        dbg(0, "Error in tox_call_sem for tox_call_control_sem\n");
+    }
+
     count_video_record_threads_int = 0;
 
     if (sem_init(&count_video_record_threads, 0, 1))
@@ -13322,7 +13437,9 @@ int main(int argc, char *argv[])
 
     while (tox_loop_running)
     {
+        sem_wait(&tox_call_control_sem);
         tox_iterate(tox, NULL);
+        sem_post(&tox_call_control_sem);
 #ifdef CHANGE_NOSPAM_REGULARLY
 
         if ((uint32_t)(global_last_change_nospam_ts + CHANGE_NOSPAM_REGULAR_INTERVAL_SECS) < (uint32_t)get_unix_time())
@@ -13379,19 +13496,34 @@ int main(int argc, char *argv[])
         }
         else
         {
-            if (global_disconnect_friend_num != -1)
+            if (global_add_call_friend_num != -1)
             {
-                reset_toxav_call_waiting();
-                TOXAV_ERR_CALL_CONTROL error = 0;
-                toxav_call_control(mytox_av, global_disconnect_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
-                global_disconnect_friend_num = -1;
+                // sem_wait(&tox_call_sem);
+                TOXAV_ERR_CALL error = 0;
+                dbg(9, "toxav_call:.confcall:fnum=%d\n", (int)global_add_call_friend_num);
+                toxav_call(mytox_av, (int)global_add_call_friend_num, global_audio_bit_rate, global_video_bit_rate, &error);
+                dbg(9, "toxav_call:.confcall:fnum=%d res=%d\n", (int)global_add_call_friend_num, error);
+                global_add_call_friend_num = -1;
+                // sem_post(&tox_call_sem);
             }
 
             if (global_disconnect_conf_friend_num != -1)
             {
                 TOXAV_ERR_CALL_CONTROL error = 0;
-                toxav_call_control(mytox_av, global_disconnect_conf_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error);
+                dbg(9, "toxav_call_control_wrapper:.confcall:fnum=%d\n", (int)global_disconnect_conf_friend_num);
+                toxav_call_control_wrapper(mytox_av, (int)global_disconnect_conf_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+                dbg(9, "toxav_call:.toxav_call_control_wrapper:fnum=%d res=%d\n", (int)global_disconnect_conf_friend_num, error);
                 global_disconnect_conf_friend_num = -1;
+            }
+
+            if (global_disconnect_friend_num != -1)
+            {
+                reset_toxav_call_waiting();
+                TOXAV_ERR_CALL_CONTROL error = 0;
+                dbg(9, "toxav_call_control_wrapper:.call:fnum=%d\n", (int)global_disconnect_friend_num);
+                toxav_call_control_wrapper(mytox_av, (int)global_disconnect_friend_num, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+                dbg(9, "toxav_call_control_wrapper:.call:fnum=%d res=%d\n", (int)global_disconnect_friend_num, error);
+                global_disconnect_friend_num = -1;
             }
 
             if ((global_qrcode_was_updated == 1) && (global_is_qrcode_showing_on_screen == 1))
@@ -13434,6 +13566,8 @@ int main(int argc, char *argv[])
 #else
     tox_kill(tox);
 #endif
+    sem_destroy(&tox_call_sem);
+    sem_destroy(&tox_call_control_sem);
     sem_destroy(&video_in_frame_copy_sem);
     sem_destroy(&count_video_play_threads);
     sem_destroy(&video_play_lock);
