@@ -6770,7 +6770,6 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
             {
                 TOXAV_ERR_CALL_CONTROL error = 0;
                 toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
-                // global_disconnect_friend_num = friend_number;
                 dbg(9, "Somebody else is already in a call, hang up\n");
             }
         }
@@ -6936,6 +6935,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number) && (global_video_active == 1))
     {
+        dbg(9, "t_toxav_call_state_cb:got hangup on conf call\n");
         end_conf_call(av, 0);
         return;
     }
@@ -6956,9 +6956,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         {
             // we are in a call with someone else already
             dbg(9, "We are in a call with someone else already. trying fn=%d\n", (int)friend_number);
-            // calling this here crashes!
-            // TOXAV_ERR_CALL_CONTROL error = 0;
-            // toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+            // TODO: do we ever get here??
             global_disconnect_friend_num = friend_number;
         }
 
@@ -6971,6 +6969,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
         end_conf_call(av, 0);
+        global_disconnect_friend_num = friend_to_send_conf_video_to;
 
         reset_toxav_call_waiting();
         global_video_active = 0;
@@ -8796,12 +8795,31 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 shrink = 10.0f;
             }
 
+            // clear this half ---------------------------
+            uint8_t *conf_call_y_copy = conf_call_y;
+            for (int gg=0;gg<conf_call_height;gg++)
+            {
+                memset(conf_call_y_copy + (int)(conf_call_width / 2) - 2, 0, (int)(conf_call_width / 2));
+                conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
+            }
+
+            uint8_t *conf_call_u_copy = conf_call_u;
+            for (int gg=0;gg<(conf_call_height/2);gg++)
+            {
+                memset(conf_call_u_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
+                conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
+            }
+
+            uint8_t *conf_call_v_copy = conf_call_v;
+            for (int gg=0;gg<(conf_call_height/2);gg++)
+            {
+                memset(conf_call_v_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
+                conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
+            }
+            // clear this half ---------------------------
+
             if (shrink > 1.0)
             {
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
-                uint8_t *y_plane_save;
-                uint8_t *y_save;
                 if ((h_use * (int)shrink) > height)
                 {
                     h_use = (height / (int)shrink);
@@ -8812,6 +8830,10 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     w_use_r = (width / (int)shrink);
                 }
                 
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                uint8_t *y_plane_save;
+                uint8_t *y_save;
                 for (int jj=0;jj<(h_use - 1);jj++)
                 {
                     y_plane_save = y_plane;
@@ -8825,6 +8847,44 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     }
                     y_plane = y_plane_save + conf_call_ystride;
                     y_ = y_save + (ystride * ((int)shrink));
+                }
+
+                uint8_t *u_plane = conf_call_u;
+                uint8_t *u_ = u;
+                uint8_t *u_plane_save;
+                uint8_t *u_save;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    u_plane_save = u_plane;
+                    u_save = u_;
+                    u_plane = u_plane + (int)(conf_call_width / 4) - 1;
+                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    {
+                        *u_plane = (uint8_t)*u_;
+                        u_plane++;
+                        u_ = u_ + (int)shrink;
+                    }
+                    u_plane = u_plane_save + conf_call_ustride;
+                    u_ = u_save + (ustride * ((int)shrink));
+                }
+
+                uint8_t *v_plane = conf_call_v;
+                uint8_t *v_ = v;
+                uint8_t *v_plane_save;
+                uint8_t *v_save;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    v_plane_save = v_plane;
+                    v_save = v_;
+                    v_plane = v_plane + (int)(conf_call_width / 4) - 1;
+                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    {
+                        *v_plane = (uint8_t)*v_;
+                        v_plane++;
+                        v_ = v_ + (int)shrink;
+                    }
+                    v_plane = v_plane_save + conf_call_vstride;
+                    v_ = v_save + (vstride * ((int)shrink));
                 }
             }
             else
@@ -8893,12 +8953,31 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 shrink = 10.0f;
             }
 
+            // clear this half ---------------------------
+            uint8_t *conf_call_y_copy = conf_call_y;
+            for (int gg=0;gg<conf_call_height;gg++)
+            {
+                memset(conf_call_y_copy, 0, (int)(conf_call_width / 2) - 2);
+                conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
+            }
+
+            uint8_t *conf_call_u_copy = conf_call_u;
+            for (int gg=0;gg<(conf_call_height/2);gg++)
+            {
+                memset(conf_call_u_copy, 128, (int)(conf_call_width / 4) - 1);
+                conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
+            }
+
+            uint8_t *conf_call_v_copy = conf_call_v;
+            for (int gg=0;gg<(conf_call_height/2);gg++)
+            {
+                memset(conf_call_v_copy, 128, (int)(conf_call_width / 4) - 1);
+                conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
+            }
+            // clear this half ---------------------------
+
             if (shrink > 1.0)
             {
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
-                uint8_t *y_plane_save;
-                uint8_t *y_save;
                 if ((h_use * (int)shrink) > height)
                 {
                     h_use = (height / (int)shrink);
@@ -8909,6 +8988,10 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     w_use_r = (width / (int)shrink);
                 }
                 
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                uint8_t *y_plane_save;
+                uint8_t *y_save;
                 for (int jj=0;jj<(h_use - 1);jj++)
                 {
                     y_plane_save = y_plane;
@@ -8921,6 +9004,42 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                     }
                     y_plane = y_plane_save + conf_call_ystride;
                     y_ = y_save + (ystride * ((int)shrink));
+                }
+
+                uint8_t *u_plane = conf_call_u;
+                uint8_t *u_ = u;
+                uint8_t *u_plane_save;
+                uint8_t *u_save;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    u_plane_save = u_plane;
+                    u_save = u_;
+                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    {
+                        *u_plane = (uint8_t)*u_;
+                        u_plane++;
+                        u_ = u_ + (int)shrink;
+                    }
+                    u_plane = u_plane_save + conf_call_ustride;
+                    u_ = u_save + (ustride * ((int)shrink));
+                }
+
+                uint8_t *v_plane = conf_call_v;
+                uint8_t *v_ = v;
+                uint8_t *v_plane_save;
+                uint8_t *v_save;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    v_plane_save = v_plane;
+                    v_save = v_;
+                    for(int kk=0;kk<(w_use_r/2);kk++)
+                    {
+                        *v_plane = (uint8_t)*v_;
+                        v_plane++;
+                        v_ = v_ + (int)shrink;
+                    }
+                    v_plane = v_plane_save + conf_call_vstride;
+                    v_ = v_save + (vstride * ((int)shrink));
                 }
             }
             else
