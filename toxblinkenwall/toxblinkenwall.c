@@ -1,7 +1,7 @@
 /**
  *
  * ToxBlinkenwall
- * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2020
  *
  * https://github.com/zoff99/ToxBlinkenwall
  *
@@ -9,7 +9,7 @@
  *
  */
 /*
- * Copyright © 2017 - 2019 Zoff <zoff@zoff.cc>
+ * Copyright © 2017 - 2020 Zoff <zoff@zoff.cc>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 56
-static const char global_version_string[] = "0.99.56";
+#define VERSION_PATCH 57
+static const char global_version_string[] = "0.99.57";
 // ----------- version -----------
 // ----------- version -----------
 
