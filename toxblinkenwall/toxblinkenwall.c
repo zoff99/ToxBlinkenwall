@@ -837,6 +837,16 @@ int full_height = 480; // gets set later, this is just as last resort
 int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
 // uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
+int32_t global_confernece_call_active = 0;
+int32_t friend_to_send_conf_video_to = -1;
+const int conf_call_width = 1280;
+const int conf_call_height = 720;
+uint8_t *conf_call_y = NULL;
+uint8_t *conf_call_u = NULL;
+uint8_t *conf_call_v = NULL;
+const int conf_call_ystride = 1280;
+const int conf_call_ustride = 1280 / 2;
+const int conf_call_vstride = 1280 / 2;
 
 #ifdef HAVE_EXTERNAL_KEYS
     int ext_keys_fd;
@@ -4332,9 +4342,12 @@ void pick_up_call()
     // pickup the Call ----------
     if (call_waiting_for_answer == 1)
     {
-        if ((mytox_av != NULL) && (call_waiting_friend_num != -1))
+        if (mytox_av != NULL)
         {
-            answer_incoming_av_call(mytox_av, call_waiting_friend_num, call_waiting_audio_enabled, call_waiting_video_enabled);
+            if (call_waiting_friend_num != -1)
+            {
+                answer_incoming_av_call(mytox_av, call_waiting_friend_num, call_waiting_audio_enabled, call_waiting_video_enabled);
+            }
         }
     }
 
@@ -6650,6 +6663,54 @@ void close_cam()
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
+
+void end_conf_call(ToxAV *av, int disconnect)
+{
+    dbg(9, "end_conf_call:enter\n");
+
+    int32_t fnum = friend_to_send_conf_video_to;
+    global_confernece_call_active = 0;
+    friend_to_send_conf_video_to = -1;
+
+    if (disconnect == 1)
+    {
+        TOXAV_ERR_CALL_CONTROL error = 0;
+        toxav_call_control(av, fnum, TOXAV_CALL_CONTROL_CANCEL, &error);
+    }
+
+#if 0
+    // TODO: make thread safe!!
+    if (conf_call_y)
+    {
+        dbg(9, "end_conf_call:free frame\n");
+        free(conf_call_y);
+        conf_call_y = NULL;
+        conf_call_u = NULL;
+        conf_call_v = NULL;
+    }
+#endif
+
+}
+
+void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
+{
+    dbg(9, "answer_incoming_conf_av_call:enter\n");
+
+    if (conf_call_y == NULL)
+    {
+        dbg(9, "answer_incoming_conf_av_call:alloc frame\n");
+        conf_call_y = calloc(1, (conf_call_width * conf_call_height) * 3 / 2);
+        conf_call_u = conf_call_y + (conf_call_width * conf_call_height);
+        conf_call_v = conf_call_u + ((conf_call_width / 2) * (conf_call_height / 2));
+    }
+
+    TOXAV_ERR_ANSWER err;
+    int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
+    int video_bitrate = global_video_bit_rate;
+    friend_to_send_conf_video_to = friend_number;
+    toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
+}
+
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
 {
     dbg(9, "answer_incoming_av_call\n");
@@ -6699,10 +6760,19 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
     {
         if ((int64_t)friend_to_send_video_to != (int64_t)friend_number)
         {
-            TOXAV_ERR_CALL_CONTROL error = 0;
-            toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
-            // global_disconnect_friend_num = friend_number;
-            dbg(9, "Somebody else is already in a call, hang up\n");
+            if (global_confernece_call_active == 0)
+            {
+                answer_incoming_conf_av_call(mytox_av, friend_number);
+                global_confernece_call_active = 1;
+                return;
+            }
+            else
+            {
+                TOXAV_ERR_CALL_CONTROL error = 0;
+                toxav_call_control(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error);
+                // global_disconnect_friend_num = friend_number;
+                dbg(9, "Somebody else is already in a call, hang up\n");
+            }
         }
         else
         {
@@ -6864,6 +6934,12 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 {
     dbg(9, "t_toxav_call_state_cb:%d\n", state);
 
+    if (((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number) && (global_video_active == 1))
+    {
+        end_conf_call(av, 0);
+        return;
+    }
+
     if (accepting_calls != 1)
     {
         dbg(2, "Not accepting call state changes yet\n");
@@ -6894,6 +6970,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
+        end_conf_call(av, 0);
+
         reset_toxav_call_waiting();
         global_video_active = 0;
         on_end_call();
@@ -6923,6 +7001,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
+        end_conf_call(av, 0);
+
         reset_toxav_call_waiting();
         global_video_active = 0;
         on_end_call();
@@ -8497,7 +8577,7 @@ static void *video_play(void *dummy)
 }
 
 
-static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
+static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
         int32_t ystride, int32_t ustride, int32_t vstride,
@@ -8661,6 +8741,134 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 #endif
 
 }
+
+static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
+        uint16_t width, uint16_t height,
+        uint8_t const *y, uint8_t const *u, uint8_t const *v,
+        int32_t ystride, int32_t ustride, int32_t vstride,
+        void *user_data)
+{
+    if (global_video_active != 1)
+    {
+        return;
+    }
+    
+    if (!y)
+    {
+        return;
+    }
+
+    if (global_confernece_call_active == 1)
+    {
+        if ((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number)
+        {
+            if (!conf_call_y)
+            {
+                return;
+            }
+
+            // paint conf call video frame to the right
+            int w_use_r = width;
+            if ((conf_call_width / 2) < width)
+            {
+                w_use_r = (conf_call_width / 2);
+            }
+            
+            int h_use = height;
+            if (height > conf_call_height)
+            {
+                h_use = conf_call_height;
+            }
+            
+            uint8_t *y_plane = conf_call_y;
+            uint8_t *y_ = y;
+            for (int jj=0;jj<h_use;jj++)
+            {
+                memcpy(y_plane + (int)(conf_call_width / 2) - 2, y_, w_use_r);
+                y_plane = y_plane + conf_call_ystride;
+                y_ = y_ + ystride;
+            }
+
+            uint8_t *u_plane = conf_call_u;
+            uint8_t *u_ = u;
+            for (int jj=0;jj<(h_use/2);jj++)
+            {
+                memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r/2));
+                u_plane = u_plane + conf_call_ustride;
+                u_ = u_ + ustride;
+            }
+
+            uint8_t *v_plane = conf_call_v;
+            uint8_t *v_ = v;
+            for (int jj=0;jj<(h_use/2);jj++)
+            {
+                memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r/2));
+                v_plane = v_plane + conf_call_vstride;
+                v_ = v_ + vstride;
+            }
+        }
+        else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
+        {
+            if (!conf_call_y)
+            {
+                return;
+            }
+
+            // paint main call video frame to the left
+            int w_use_r = width;
+            if ((conf_call_width / 2) < width)
+            {
+                w_use_r = (conf_call_width / 2);
+            }
+            
+            int h_use = height;
+            if (height > conf_call_height)
+            {
+                h_use = conf_call_height;
+            }
+            
+            uint8_t *y_plane = conf_call_y;
+            uint8_t *y_ = y;
+            for (int jj=0;jj<h_use;jj++)
+            {
+                memcpy(y_plane, y_, w_use_r);
+                y_plane = y_plane + conf_call_ystride;
+                y_ = y_ + ystride;
+            }
+
+            uint8_t *u_plane = conf_call_u;
+            uint8_t *u_ = u;
+            for (int jj=0;jj<(h_use/2);jj++)
+            {
+                memcpy(u_plane, u_, (w_use_r/2));
+                u_plane = u_plane + conf_call_ustride;
+                u_ = u_ + ustride;
+            }
+
+            uint8_t *v_plane = conf_call_v;
+            uint8_t *v_ = v;
+            for (int jj=0;jj<(h_use/2);jj++)
+            {
+                memcpy(v_plane, v_, (w_use_r/2));
+                v_plane = v_plane + conf_call_vstride;
+                v_ = v_ + vstride;
+            }
+        }
+        else
+        {
+            return;
+        }
+
+        t_toxav_receive_video_frame_cb_wrapper(av, friend_to_send_video_to,
+                conf_call_width, conf_call_height,
+                conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, user_data);
+    }
+    else
+    {
+        t_toxav_receive_video_frame_cb_wrapper(av, friend_number, width, height, y, u, v, ystride, ustride, vstride, user_data);
+    }
+}
+
 
 void set_av_video_frame()
 {
@@ -9085,6 +9293,17 @@ void *thread_av(void *data)
                                                         av_video_frame.buf_len,
                                                         &error);
 
+                            if (global_confernece_call_active == 1)
+                            {
+                                toxav_video_send_frame_h264(av, friend_to_send_conf_video_to,
+                                                            av_video_frame.h264_w,
+                                                            av_video_frame.h264_h,
+                                                            av_video_frame.h264_buf,
+                                                            av_video_frame.buf_len,
+                                                            &error);
+                            }
+
+
                             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                             {
                                 yieldcpu(1);
@@ -9094,6 +9313,17 @@ void *thread_av(void *data)
                                                             av_video_frame.h264_buf,
                                                             av_video_frame.buf_len,
                                                             &error);
+
+                                if (global_confernece_call_active == 1)
+                                {
+                                    toxav_video_send_frame_h264(av, friend_to_send_conf_video_to,
+                                                                av_video_frame.h264_w,
+                                                                av_video_frame.h264_h,
+                                                                av_video_frame.h264_buf,
+                                                                av_video_frame.buf_len,
+                                                                &error);
+                                }
+
                             }
 
                         }
@@ -9107,6 +9337,18 @@ void *thread_av(void *data)
                                                    av_video_frame.v,
                                                    &error);
 
+                            if (global_confernece_call_active == 1)
+                            {
+                                toxav_video_send_frame(av, friend_to_send_conf_video_to,
+                                                       av_video_frame.w,
+                                                       av_video_frame.h,
+                                                       av_video_frame.y,
+                                                       av_video_frame.u,
+                                                       av_video_frame.v,
+                                                       &error);
+                            }
+
+
                             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                             {
                                 yieldcpu(1);
@@ -9117,6 +9359,18 @@ void *thread_av(void *data)
                                                        av_video_frame.u,
                                                        av_video_frame.v,
                                                        &error);
+
+                                if (global_confernece_call_active == 1)
+                                {
+                                    toxav_video_send_frame(av, friend_to_send_conf_video_to,
+                                                           av_video_frame.w,
+                                                           av_video_frame.h,
+                                                           av_video_frame.y,
+                                                           av_video_frame.u,
+                                                           av_video_frame.v,
+                                                           &error);
+                                }
+
                             }
 
                         }
@@ -9302,6 +9556,8 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     {
         really_in_call = 1;
     }
+
+    end_conf_call(av, 1);
 
     if (video_play_rb != NULL)
     {
@@ -10226,6 +10482,14 @@ void audio_record__(int16_t *buf_pointer)
                                               sample_count,
                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
+            if (global_confernece_call_active == 1)
+            {
+                bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                                                  sample_count,
+                                                  (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+            }
+
+
             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
             {
                 yieldcpu(1);
@@ -10233,12 +10497,28 @@ void audio_record__(int16_t *buf_pointer)
                                              sample_count,
                                              (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
+                if (global_confernece_call_active == 1)
+                {
+                    bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                                                      sample_count,
+                                                      (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                }
+
+
                 if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                 {
                     yieldcpu(1);
                     res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                                  sample_count,
                                                  (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+
+                    if (global_confernece_call_active == 1)
+                    {
+                        bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                                                          sample_count,
+                                                          (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                    }
+
                 }
             }
 
