@@ -8768,43 +8768,93 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
             // paint conf call video frame to the right
+            float shrink = 1.0f;
             int w_use_r = width;
             if ((conf_call_width / 2) < width)
             {
                 w_use_r = (conf_call_width / 2);
+                shrink = (float)width / (float)w_use_r;
             }
             
             int h_use = height;
             if (height > conf_call_height)
             {
                 h_use = conf_call_height;
-            }
-            
-            uint8_t *y_plane = conf_call_y;
-            uint8_t *y_ = y;
-            for (int jj=0;jj<h_use;jj++)
-            {
-                memcpy(y_plane + (int)(conf_call_width / 2) - 2, y_, w_use_r);
-                y_plane = y_plane + conf_call_ystride;
-                y_ = y_ + ystride;
+                float shrink2 = (float)height / (float)h_use;
+                if (shrink2 > shrink)
+                {
+                    shrink = shrink2;
+                }
             }
 
-            uint8_t *u_plane = conf_call_u;
-            uint8_t *u_ = u;
-            for (int jj=0;jj<(h_use/2);jj++)
+            if (shrink < 1.0)
             {
-                memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r/2));
-                u_plane = u_plane + conf_call_ustride;
-                u_ = u_ + ustride;
+                shrink = 1.0f;
+            }
+            else if (shrink > 10.0)
+            {
+                shrink = 10.0f;
             }
 
-            uint8_t *v_plane = conf_call_v;
-            uint8_t *v_ = v;
-            for (int jj=0;jj<(h_use/2);jj++)
+            if (shrink > 1.0)
             {
-                memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r/2));
-                v_plane = v_plane + conf_call_vstride;
-                v_ = v_ + vstride;
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                uint8_t *y_plane_save;
+                uint8_t *y_save;
+                if ((h_use * (int)shrink) > height)
+                {
+                    h_use = (height / (int)shrink);
+                }
+
+                if ((w_use_r * (int)shrink) > width)
+                {
+                    w_use_r = (width / (int)shrink);
+                }
+                
+                for (int jj=0;jj<(h_use - 1);jj++)
+                {
+                    y_plane_save = y_plane;
+                    y_save = y_;
+                    y_plane = y_plane + (int)(conf_call_width / 2) - 2;
+                    for(int kk=0;kk<(w_use_r - 1);kk++)
+                    {
+                        *y_plane = (uint8_t)*y_;
+                        y_plane++;
+                        y_ = y_ + (int)shrink;
+                    }
+                    y_plane = y_plane_save + conf_call_ystride;
+                    y_ = y_save + (ystride * ((int)shrink));
+                }
+            }
+            else
+            {
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                for (int jj=0;jj<h_use;jj++)
+                {
+                    memcpy(y_plane + (int)(conf_call_width / 2) - 2, y_, w_use_r);
+                    y_plane = y_plane + conf_call_ystride;
+                    y_ = y_ + ystride;
+                }
+
+                uint8_t *u_plane = conf_call_u;
+                uint8_t *u_ = u;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r/2));
+                    u_plane = u_plane + conf_call_ustride;
+                    u_ = u_ + ustride;
+                }
+
+                uint8_t *v_plane = conf_call_v;
+                uint8_t *v_ = v;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r/2));
+                    v_plane = v_plane + conf_call_vstride;
+                    v_ = v_ + vstride;
+                }
             }
         }
         else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
@@ -8815,43 +8865,92 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
             // paint main call video frame to the left
+            float shrink = 1.0f;
             int w_use_r = width;
             if ((conf_call_width / 2) < width)
             {
                 w_use_r = (conf_call_width / 2);
+                shrink = (float)width / (float)w_use_r;
             }
             
             int h_use = height;
             if (height > conf_call_height)
             {
                 h_use = conf_call_height;
-            }
-            
-            uint8_t *y_plane = conf_call_y;
-            uint8_t *y_ = y;
-            for (int jj=0;jj<h_use;jj++)
-            {
-                memcpy(y_plane, y_, w_use_r);
-                y_plane = y_plane + conf_call_ystride;
-                y_ = y_ + ystride;
+                float shrink2 = (float)height / (float)h_use;
+                if (shrink2 > shrink)
+                {
+                    shrink = shrink2;
+                }
             }
 
-            uint8_t *u_plane = conf_call_u;
-            uint8_t *u_ = u;
-            for (int jj=0;jj<(h_use/2);jj++)
+            if (shrink < 1.0)
             {
-                memcpy(u_plane, u_, (w_use_r/2));
-                u_plane = u_plane + conf_call_ustride;
-                u_ = u_ + ustride;
+                shrink = 1.0f;
+            }
+            else if (shrink > 10.0)
+            {
+                shrink = 10.0f;
             }
 
-            uint8_t *v_plane = conf_call_v;
-            uint8_t *v_ = v;
-            for (int jj=0;jj<(h_use/2);jj++)
+            if (shrink > 1.0)
             {
-                memcpy(v_plane, v_, (w_use_r/2));
-                v_plane = v_plane + conf_call_vstride;
-                v_ = v_ + vstride;
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                uint8_t *y_plane_save;
+                uint8_t *y_save;
+                if ((h_use * (int)shrink) > height)
+                {
+                    h_use = (height / (int)shrink);
+                }
+
+                if ((w_use_r * (int)shrink) > width)
+                {
+                    w_use_r = (width / (int)shrink);
+                }
+                
+                for (int jj=0;jj<(h_use - 1);jj++)
+                {
+                    y_plane_save = y_plane;
+                    y_save = y_;
+                    for(int kk=0;kk<(w_use_r - 1);kk++)
+                    {
+                        *y_plane = (uint8_t)*y_;
+                        y_plane++;
+                        y_ = y_ + (int)shrink;
+                    }
+                    y_plane = y_plane_save + conf_call_ystride;
+                    y_ = y_save + (ystride * ((int)shrink));
+                }
+            }
+            else
+            {
+                uint8_t *y_plane = conf_call_y;
+                uint8_t *y_ = y;
+                for (int jj=0;jj<h_use;jj++)
+                {
+                    memcpy(y_plane, y_, w_use_r);
+                    y_plane = y_plane + conf_call_ystride;
+                    y_ = y_ + ystride;
+                }
+
+                uint8_t *u_plane = conf_call_u;
+                uint8_t *u_ = u;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    memcpy(u_plane, u_, (w_use_r/2));
+                    u_plane = u_plane + conf_call_ustride;
+                    u_ = u_ + ustride;
+                }
+
+                uint8_t *v_plane = conf_call_v;
+                uint8_t *v_ = v;
+                for (int jj=0;jj<(h_use/2);jj++)
+                {
+                    memcpy(v_plane, v_, (w_use_r/2));
+                    v_plane = v_plane + conf_call_vstride;
+                    v_ = v_ + vstride;
+                }
             }
         }
         else
