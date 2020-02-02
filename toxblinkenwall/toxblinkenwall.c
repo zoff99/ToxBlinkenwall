@@ -278,25 +278,25 @@ static const char global_version_string[] = "0.99.56";
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
-    int global__ON_THE_FLY_CHANGES;
-    int global__VPX_RESIZE_ALLOWED;
-    int global__VPX_DROPFRAME_THRESH;
-    int global__VPX_END_RESIZE_UP_THRESH;
-    int global__VPX_END_RESIZE_DOWN_THRESH;
-    int global__MAX_DECODE_TIME_US;
-    int global__MAX_ENCODE_TIME_US;
-    int global__VP8E_SET_CPUUSED_VALUE;
-    int global__VPX_END_USAGE;
-    int global__VPX_KF_MAX_DIST;
-    int global__VPX_G_LAG_IN_FRAMES;
+int global__ON_THE_FLY_CHANGES;
+int global__VPX_RESIZE_ALLOWED;
+int global__VPX_DROPFRAME_THRESH;
+int global__VPX_END_RESIZE_UP_THRESH;
+int global__VPX_END_RESIZE_DOWN_THRESH;
+int global__MAX_DECODE_TIME_US;
+int global__MAX_ENCODE_TIME_US;
+int global__VP8E_SET_CPUUSED_VALUE;
+int global__VPX_END_USAGE;
+int global__VPX_KF_MAX_DIST;
+int global__VPX_G_LAG_IN_FRAMES;
 
-    int UTOX_DEFAULT_BITRATE_V;
+int UTOX_DEFAULT_BITRATE_V;
 
-    int global__VPX_ENCODER_USED;
-    int global__VPX_DECODER_USED;
-    int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
-    int global__SEND_VIDEO_LOSSLESS;
-    int global__SEND_VIDEO_RAW_YUV;
+int global__VPX_ENCODER_USED;
+int global__VPX_DECODER_USED;
+int global__SEND_VIDEO_VP9_LOSSLESS_QUALITY;
+int global__SEND_VIDEO_LOSSLESS;
+int global__SEND_VIDEO_RAW_YUV;
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -1827,7 +1827,6 @@ void on_end_call()
 
     first_incoming_video_frame = 1;
     write_caller_name_to_file("");
-
     fb_fill_black();
 
     if (yuv_frame_for_play)
@@ -1884,8 +1883,6 @@ void *play_ringtone(void *data)
     int every_ms_switch_freq = 180;
     float loudness           = 0.7f; // 0.1 <-> 0.8
     int beep_freq_change_every_x_samples = ((samplerate / 1000) * every_ms_switch_freq);
-
-
     // Create input buffer
     int16_t *input = calloc(total_samples, sizeof(int16_t));
 
@@ -2494,12 +2491,10 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 #if 0
             struct tbw_bootstrap_nodes tbw_nd;
             memset(&tbw_nd, 0, sizeof(struct tbw_bootstrap_nodes));
-
             int ip_ = inet_pton(AF_INET, nodes[i].ip, &tbw_nd.s_addr);
             tbw_nd.sin_port = nodes[i].port;
             memcpy(tbw_nd.key_hex, nodes[i].key_bin, 32);
             tbw_nd.node_type = 0;
-
             FILE *f = fopen("./first_udp_bootstrap_node.bin", "wb");
             fwrite(&tbw_nd, sizeof(struct tbw_bootstrap_nodes), 1, f);
             fclose(f);
@@ -5006,7 +5001,8 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     }
                 }
             }
-            else if (strncmp((char *)message, ".confcall ", strlen((char *)".confcall ")) == 0) // call publickey (to enter a conf call)
+            else if (strncmp((char *)message, ".confcall ",
+                             strlen((char *)".confcall ")) == 0) // call publickey (to enter a conf call)
             {
                 if (strlen(message) == ((TOX_PUBLIC_KEY_SIZE * 2) + 10))
                 {
@@ -5288,10 +5284,9 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
         //        (char *)raw_message);
         dbg(9, "friend_message_v2:fn=%d res=%d msg=%s\n", (int)friend_number, (int)res,
             (char *)message_text);
-
-
         // send msgV2 receipt
         uint8_t *msgid_buffer = calloc(1, TOX_PUBLIC_KEY_SIZE + 1);
+
         if (msgid_buffer)
         {
             memset(msgid_buffer, 0, TOX_PUBLIC_KEY_SIZE + 1);
@@ -6684,7 +6679,6 @@ void close_cam()
 void end_conf_call(ToxAV *av, int disconnect)
 {
     dbg(9, "end_conf_call:enter\n");
-
     int32_t fnum = friend_to_send_conf_video_to;
     global_confernece_call_active = 0;
     friend_to_send_conf_video_to = -1;
@@ -6696,6 +6690,7 @@ void end_conf_call(ToxAV *av, int disconnect)
     }
 
 #if 0
+
     // TODO: make thread safe!!
     if (conf_call_y)
     {
@@ -6705,8 +6700,8 @@ void end_conf_call(ToxAV *av, int disconnect)
         conf_call_u = NULL;
         conf_call_v = NULL;
     }
-#endif
 
+#endif
 }
 
 void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
@@ -6726,12 +6721,12 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
     int video_bitrate = global_video_bit_rate;
     friend_to_send_conf_video_to = friend_number;
     toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
-
     // now send .confcall message to all active callers -------------------
     char message_str[1000];
     int j;
     // ---
     j = find_friend_in_friendlist((uint32_t) friend_to_send_conf_video_to);
+
     if (j > -1)
     {
         CLEAR(message_str);
@@ -6740,8 +6735,10 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
         dbg(9, "answer_incoming_conf_av_call:1:%s\n", message_str);
         send_text_message_to_friend(toxav_get_tox(av), friend_to_send_video_to, message_str);
     }
+
     // ---
     j = find_friend_in_friendlist((uint32_t) friend_to_send_video_to);
+
     if (j > -1)
     {
         CLEAR(message_str);
@@ -6750,6 +6747,7 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
         dbg(9, "answer_incoming_conf_av_call:2:%s\n", message_str);
         send_text_message_to_friend(toxav_get_tox(av), friend_to_send_conf_video_to, message_str);
     }
+
     // now send .confcall message to all active callers -------------------
 }
 
@@ -7012,7 +7010,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
         end_conf_call(av, 0);
-
         reset_toxav_call_waiting();
         global_video_active = 0;
         on_end_call();
@@ -7043,7 +7040,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
         end_conf_call(av, 0);
-
         reset_toxav_call_waiting();
         global_video_active = 0;
         on_end_call();
@@ -7274,10 +7270,8 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
-
     // struct timeval tm_033;
     // __utimer_start(&tm_033);
-
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
 #ifndef RPIZEROW
 
@@ -7438,14 +7432,12 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     // pthread_mutex_lock(cc->arb_mutex);
     // free(rb_write(cc->arb, f));
     // pthread_mutex_unlock(cc->arb_mutex);
-
     //long long timspan_in_ms;
     //timspan_in_ms = __utimer_stop(&tm_033, "toxav_receive_video_frame:", 1);
     //if (timspan_in_ms > 0)
     //{
     //    dbg(9, "toxav_receive_audio_frame: %llu ms\n", timspan_in_ms);
     //}
-
 }
 
 
@@ -7999,7 +7991,6 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
 static void *video_play(void *dummy)
 {
     // dbg(9, "VP-DEBUG:001:thread_start\n");
-
 #if 0
     // ------ thread priority ------
     struct sched_param param;
@@ -8021,14 +8012,10 @@ static void *video_play(void *dummy)
     display_thread_sched_attr("Scheduler attributes of [3]: video thread");
     // ------ thread priority ------
 #endif
-
-
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01;
     __utimer_start(&tm_01);
 #endif
-
     // make a local copy
     uint16_t width = video__width;
     uint16_t height = video__height;
@@ -8036,17 +8023,14 @@ static void *video_play(void *dummy)
     int32_t ustride = video__ustride;
     int32_t vstride = video__vstride;
     uint32_t received_ts = video__received_ts;
-
     int frame_width_px1 = (int)width;
     int frame_height_px1 = (int)height;
     int ystride_ = (int)ystride;
     int ustride_ = (int)ustride;
     int vstride_ = (int)vstride;
-
     int y_layer_size = (int) max(frame_width_px1, abs(ystride_)) * frame_height_px1;
     int u_layer_size = (int) max((frame_width_px1 / 2), abs(ustride_)) * (frame_height_px1 / 2);
     int v_layer_size = (int) max((frame_width_px1 / 2), abs(vstride_)) * (frame_height_px1 / 2);
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01_006;
     __utimer_start(&tm_01_006);
@@ -8074,10 +8058,12 @@ static void *video_play(void *dummy)
     dbg(9, "video_frame_play:size=%d\n", (int)(y_layer_size + u_layer_size + v_layer_size));
     long long timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_006, "video_frame_play:tm_01_006:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_006: %llu ms\n", timspan_in_ms);
     }
+
 #endif
     uint8_t *u = (uint8_t *)(y + y_layer_size);
     uint8_t *v = (uint8_t *)(y + y_layer_size + u_layer_size);
@@ -8093,19 +8079,18 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_007, "video_frame_play:tm_01_007:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_007: %llu ms\n", timspan_in_ms);
     }
-#endif
 
+#endif
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
-
     // release lock --------------
     sem_post(&video_in_frame_copy_sem);
     // release lock --------------
-
 #ifdef HAVE_OUTPUT_OMX
 
     if (!omx_initialized)
@@ -8170,8 +8155,6 @@ static void *video_play(void *dummy)
     // --- check rotation ---
     void *buf = NULL;
     uint32_t len = 0;
-
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01_001;
     __utimer_start(&tm_01_001);
@@ -8180,10 +8163,12 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_001, "video_frame_play:tm_01_001:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_001: %llu ms\n", timspan_in_ms);
     }
+
 #endif
     uint32_t yuf_data_buf_len = y_layer_size + u_layer_size + v_layer_size;
 
@@ -8202,11 +8187,14 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_002, "video_frame_play:tm_01_002:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_002: %llu ms\n", timspan_in_ms);
     }
+
 #endif
+
     if (y)
     {
         // free((void *)y);
@@ -8221,6 +8209,7 @@ static void *video_play(void *dummy)
     }
 
     uint32_t omx_osd_update_every = 30;
+
     if ((global_video_in_fps > 10) && (global_video_in_fps < 60))
     {
         omx_osd_update_every = global_video_in_fps * 2;
@@ -8237,10 +8226,12 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
         timspan_in_ms;
         timspan_in_ms = __utimer_stop(&tm_01_003, "video_frame_play:tm_01_003:", 1);
+
         if (timspan_in_ms > 0)
         {
             dbg(9, "video_frame_play:tm_01_003: %llu ms\n", timspan_in_ms);
         }
+
 #endif
         update_omx_osd_counter = 0;
     }
@@ -8254,12 +8245,13 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_004, "video_frame_play:tm_01_004:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_004: %llu ms\n", timspan_in_ms);
     }
-#endif
 
+#endif
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01_005;
     __utimer_start(&tm_01_005);
@@ -8268,10 +8260,12 @@ static void *video_play(void *dummy)
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_005, "video_frame_play:tm_01_005:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play:tm_01_005: %llu ms\n", timspan_in_ms);
     }
+
 #endif
 
     if (networktraffic_thread_stop == 0)
@@ -8281,9 +8275,8 @@ static void *video_play(void *dummy)
 
     // OSD --------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
-
 #endif
-// -
+    // -
 #ifdef HAVE_FRAMEBUFFER
 
     // -- draw OSD for framebuffer output --
@@ -8581,39 +8574,40 @@ static void *video_play(void *dummy)
     }
 
 #endif
-
     uint32_t video_frame_play_delay_tbw = ((uint32_t)bw_current_time_actual() - received_ts) / 1000;
+
     if ((video_frame_play_delay_tbw > 5) && (video_frame_play_delay_tbw < 50))
     {
         video__received_ts_mean[video__received_ts_pos] = video_frame_play_delay_tbw;
-
         uint32_t mean_delay_ms = 0;
-        for(int jj=0;jj<VIDEO_RECEIVED_TS_MEAN_NUM;jj++)
+
+        for (int jj = 0; jj < VIDEO_RECEIVED_TS_MEAN_NUM; jj++)
         {
             mean_delay_ms = mean_delay_ms + video__received_ts_mean[jj];
         }
+
         mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
         global_bw_video_play_delay = mean_delay_ms * 1000;
-
         video__received_ts_pos++;
+
         if (video__received_ts_pos >= VIDEO_RECEIVED_TS_MEAN_NUM)
         {
             video__received_ts_pos = 0;
         }
     }
 
-//-
+    //-
     dec_video_t_counter();
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01, "video_frame_play:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "video_frame_play: %llu ms\n", timspan_in_ms);
     }
-#endif
 
+#endif
     pthread_exit(0);
 }
 
@@ -8628,11 +8622,8 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
     // ignore video on the PI Zero W
     return;
 #endif
-
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
-
     uint32_t rec_video_frame_ts = (uint32_t)bw_current_time_actual();
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     dbg(9, "VP-DEBUG:===========\n");
     struct timeval tm_022;
@@ -8659,7 +8650,8 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
             {
                 global_video_in_fps = (int)((1000 * update_fps_counter) / global_timespan_video_in);
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
-                dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps, (int)update_fps_counter, (int)global_timespan_video_in);
+                dbg(9, "fps counter 2 gfps=%d counter=%d global_timespan_video_in=%d\n", (int)global_video_in_fps,
+                    (int)update_fps_counter, (int)global_timespan_video_in);
                 dbg(9, "video in fps:%d\n", (int)global_video_in_fps);
                 dbg(9, "timspan_in_ms:%d\n", (int)timspan_in_ms);
 #endif
@@ -8734,6 +8726,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                         dec_video_t_counter();
                         sem_post(&video_in_frame_copy_sem);
                         dbg(0, "error creating video play thread ERRNO=%d\n", res_);
+
                         if (update_fps_counter > 0)
                         {
                             // we could not display this frame
@@ -8775,12 +8768,13 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     long long timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
+
     if (timspan_in_ms > 0)
     {
         dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
     }
-#endif
 
+#endif
 }
 
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
@@ -8793,7 +8787,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     {
         return;
     }
-    
+
     if (!y)
     {
         return;
@@ -8811,17 +8805,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             // paint conf call video frame to the right
             float shrink = 1.0f;
             int w_use_r = width;
+
             if ((conf_call_width / 2) < width)
             {
                 w_use_r = (conf_call_width / 2);
                 shrink = (float)width / (float)w_use_r;
             }
-            
+
             int h_use = height;
+
             if (height > conf_call_height)
             {
                 h_use = conf_call_height;
                 float shrink2 = (float)height / (float)h_use;
+
                 if (shrink2 > shrink)
                 {
                     shrink = shrink2;
@@ -8839,25 +8836,29 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
             // clear this half ---------------------------
             uint8_t *conf_call_y_copy = conf_call_y;
-            for (int gg=0;gg<conf_call_height;gg++)
+
+            for (int gg = 0; gg < conf_call_height; gg++)
             {
                 memset(conf_call_y_copy + (int)(conf_call_width / 2) - 2, 0, (int)(conf_call_width / 2));
                 conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
             }
 
             uint8_t *conf_call_u_copy = conf_call_u;
-            for (int gg=0;gg<(conf_call_height/2);gg++)
+
+            for (int gg = 0; gg < (conf_call_height / 2); gg++)
             {
                 memset(conf_call_u_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
                 conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
             }
 
             uint8_t *conf_call_v_copy = conf_call_v;
-            for (int gg=0;gg<(conf_call_height/2);gg++)
+
+            for (int gg = 0; gg < (conf_call_height / 2); gg++)
             {
                 memset(conf_call_v_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
                 conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
             }
+
             // clear this half ---------------------------
 
             if (shrink > 1.0)
@@ -8871,22 +8872,25 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     w_use_r = (width / (int)shrink);
                 }
-                
+
                 uint8_t *y_plane = conf_call_y;
                 uint8_t *y_ = y;
                 uint8_t *y_plane_save;
                 uint8_t *y_save;
-                for (int jj=0;jj<(h_use - 1);jj++)
+
+                for (int jj = 0; jj < (h_use - 1); jj++)
                 {
                     y_plane_save = y_plane;
                     y_save = y_;
                     y_plane = y_plane + (int)(conf_call_width / 2) - 2;
-                    for(int kk=0;kk<(w_use_r - 1);kk++)
+
+                    for (int kk = 0; kk < (w_use_r - 1); kk++)
                     {
-                        *y_plane = (uint8_t)*y_;
+                        *y_plane = (uint8_t) * y_;
                         y_plane++;
                         y_ = y_ + (int)shrink;
                     }
+
                     y_plane = y_plane_save + conf_call_ystride;
                     y_ = y_save + (ystride * ((int)shrink));
                 }
@@ -8895,17 +8899,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 uint8_t *u_ = u;
                 uint8_t *u_plane_save;
                 uint8_t *u_save;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
                     u_plane_save = u_plane;
                     u_save = u_;
                     u_plane = u_plane + (int)(conf_call_width / 4) - 1;
-                    for(int kk=0;kk<(w_use_r/2);kk++)
+
+                    for (int kk = 0; kk < (w_use_r / 2); kk++)
                     {
-                        *u_plane = (uint8_t)*u_;
+                        *u_plane = (uint8_t) * u_;
                         u_plane++;
                         u_ = u_ + (int)shrink;
                     }
+
                     u_plane = u_plane_save + conf_call_ustride;
                     u_ = u_save + (ustride * ((int)shrink));
                 }
@@ -8914,17 +8921,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 uint8_t *v_ = v;
                 uint8_t *v_plane_save;
                 uint8_t *v_save;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
                     v_plane_save = v_plane;
                     v_save = v_;
                     v_plane = v_plane + (int)(conf_call_width / 4) - 1;
-                    for(int kk=0;kk<(w_use_r/2);kk++)
+
+                    for (int kk = 0; kk < (w_use_r / 2); kk++)
                     {
-                        *v_plane = (uint8_t)*v_;
+                        *v_plane = (uint8_t) * v_;
                         v_plane++;
                         v_ = v_ + (int)shrink;
                     }
+
                     v_plane = v_plane_save + conf_call_vstride;
                     v_ = v_save + (vstride * ((int)shrink));
                 }
@@ -8933,7 +8943,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             {
                 uint8_t *y_plane = conf_call_y;
                 uint8_t *y_ = y;
-                for (int jj=0;jj<h_use;jj++)
+
+                for (int jj = 0; jj < h_use; jj++)
                 {
                     memcpy(y_plane + (int)(conf_call_width / 2) - 2, y_, w_use_r);
                     y_plane = y_plane + conf_call_ystride;
@@ -8942,18 +8953,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
                 uint8_t *u_plane = conf_call_u;
                 uint8_t *u_ = u;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
-                    memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r/2));
+                    memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r / 2));
                     u_plane = u_plane + conf_call_ustride;
                     u_ = u_ + ustride;
                 }
 
                 uint8_t *v_plane = conf_call_v;
                 uint8_t *v_ = v;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
-                    memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r/2));
+                    memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r / 2));
                     v_plane = v_plane + conf_call_vstride;
                     v_ = v_ + vstride;
                 }
@@ -8969,17 +8982,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             // paint main call video frame to the left
             float shrink = 1.0f;
             int w_use_r = width;
+
             if ((conf_call_width / 2) < width)
             {
                 w_use_r = (conf_call_width / 2);
                 shrink = (float)width / (float)w_use_r;
             }
-            
+
             int h_use = height;
+
             if (height > conf_call_height)
             {
                 h_use = conf_call_height;
                 float shrink2 = (float)height / (float)h_use;
+
                 if (shrink2 > shrink)
                 {
                     shrink = shrink2;
@@ -8997,25 +9013,29 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
             // clear this half ---------------------------
             uint8_t *conf_call_y_copy = conf_call_y;
-            for (int gg=0;gg<conf_call_height;gg++)
+
+            for (int gg = 0; gg < conf_call_height; gg++)
             {
                 memset(conf_call_y_copy, 0, (int)(conf_call_width / 2) - 2);
                 conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
             }
 
             uint8_t *conf_call_u_copy = conf_call_u;
-            for (int gg=0;gg<(conf_call_height/2);gg++)
+
+            for (int gg = 0; gg < (conf_call_height / 2); gg++)
             {
                 memset(conf_call_u_copy, 128, (int)(conf_call_width / 4) - 1);
                 conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
             }
 
             uint8_t *conf_call_v_copy = conf_call_v;
-            for (int gg=0;gg<(conf_call_height/2);gg++)
+
+            for (int gg = 0; gg < (conf_call_height / 2); gg++)
             {
                 memset(conf_call_v_copy, 128, (int)(conf_call_width / 4) - 1);
                 conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
             }
+
             // clear this half ---------------------------
 
             if (shrink > 1.0)
@@ -9029,21 +9049,24 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     w_use_r = (width / (int)shrink);
                 }
-                
+
                 uint8_t *y_plane = conf_call_y;
                 uint8_t *y_ = y;
                 uint8_t *y_plane_save;
                 uint8_t *y_save;
-                for (int jj=0;jj<(h_use - 1);jj++)
+
+                for (int jj = 0; jj < (h_use - 1); jj++)
                 {
                     y_plane_save = y_plane;
                     y_save = y_;
-                    for(int kk=0;kk<(w_use_r - 2);kk++)
+
+                    for (int kk = 0; kk < (w_use_r - 2); kk++)
                     {
-                        *y_plane = (uint8_t)*y_;
+                        *y_plane = (uint8_t) * y_;
                         y_plane++;
                         y_ = y_ + (int)shrink;
                     }
+
                     y_plane = y_plane_save + conf_call_ystride;
                     y_ = y_save + (ystride * ((int)shrink));
                 }
@@ -9052,16 +9075,19 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 uint8_t *u_ = u;
                 uint8_t *u_plane_save;
                 uint8_t *u_save;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
                     u_plane_save = u_plane;
                     u_save = u_;
-                    for(int kk=0;kk<((w_use_r/2) - 1);kk++)
+
+                    for (int kk = 0; kk < ((w_use_r / 2) - 1); kk++)
                     {
-                        *u_plane = (uint8_t)*u_;
+                        *u_plane = (uint8_t) * u_;
                         u_plane++;
                         u_ = u_ + (int)shrink;
                     }
+
                     u_plane = u_plane_save + conf_call_ustride;
                     u_ = u_save + (ustride * ((int)shrink));
                 }
@@ -9070,16 +9096,19 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 uint8_t *v_ = v;
                 uint8_t *v_plane_save;
                 uint8_t *v_save;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
                     v_plane_save = v_plane;
                     v_save = v_;
-                    for(int kk=0;kk<((w_use_r/2) - 1);kk++)
+
+                    for (int kk = 0; kk < ((w_use_r / 2) - 1); kk++)
                     {
-                        *v_plane = (uint8_t)*v_;
+                        *v_plane = (uint8_t) * v_;
                         v_plane++;
                         v_ = v_ + (int)shrink;
                     }
+
                     v_plane = v_plane_save + conf_call_vstride;
                     v_ = v_save + (vstride * ((int)shrink));
                 }
@@ -9088,7 +9117,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             {
                 uint8_t *y_plane = conf_call_y;
                 uint8_t *y_ = y;
-                for (int jj=0;jj<h_use;jj++)
+
+                for (int jj = 0; jj < h_use; jj++)
                 {
                     memcpy(y_plane, y_, w_use_r);
                     y_plane = y_plane + conf_call_ystride;
@@ -9097,18 +9127,20 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
                 uint8_t *u_plane = conf_call_u;
                 uint8_t *u_ = u;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
-                    memcpy(u_plane, u_, (w_use_r/2));
+                    memcpy(u_plane, u_, (w_use_r / 2));
                     u_plane = u_plane + conf_call_ustride;
                     u_ = u_ + ustride;
                 }
 
                 uint8_t *v_plane = conf_call_v;
                 uint8_t *v_ = v;
-                for (int jj=0;jj<(h_use/2);jj++)
+
+                for (int jj = 0; jj < (h_use / 2); jj++)
                 {
-                    memcpy(v_plane, v_, (w_use_r/2));
+                    memcpy(v_plane, v_, (w_use_r / 2));
                     v_plane = v_plane + conf_call_vstride;
                     v_ = v_ + vstride;
                 }
@@ -9120,8 +9152,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         }
 
         t_toxav_receive_video_frame_cb_wrapper(av, friend_to_send_video_to,
-                conf_call_width, conf_call_height,
-                conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, user_data);
+                                               conf_call_width, conf_call_height,
+                                               conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, user_data);
     }
     else
     {
@@ -9563,7 +9595,6 @@ void *thread_av(void *data)
                                                             &error);
                             }
 
-
                             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                             {
                                 yieldcpu(1);
@@ -9583,9 +9614,7 @@ void *thread_av(void *data)
                                                                 av_video_frame.buf_len,
                                                                 &error);
                                 }
-
                             }
-
                         }
                         else
                         {
@@ -9608,7 +9637,6 @@ void *thread_av(void *data)
                                                        &error);
                             }
 
-
                             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                             {
                                 yieldcpu(1);
@@ -9630,9 +9658,7 @@ void *thread_av(void *data)
                                                            av_video_frame.v,
                                                            &error);
                                 }
-
                             }
-
                         }
                     }
 
@@ -9757,7 +9783,6 @@ void *thread_video_av(void *data)
     display_thread_sched_attr("Scheduler attributes of [3]: video thread");
     // ------ thread priority ------
 #endif
-
     uint32_t update_video_delay_every_ms_counter = 0;
     const uint32_t update_video_delay_every_counter = 800;
 
@@ -9771,21 +9796,20 @@ void *thread_video_av(void *data)
             usleep_usec((500 * 1000));
 #else
             usleep_usec((global_av_iterate_ms * 1000));
-
 #ifdef HAVE_TOXAV_OPTION_SET
             update_video_delay_every_ms_counter++;
+
             if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
             {
                 TOXAV_ERR_OPTION_SET error;
-
                 // dbg(9, "toxav_option_set:%d\n", -((int)(global_bw_video_play_delay / 1000)));
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
                                             -((int)(global_bw_video_play_delay / 1000)), &error);
                 update_video_delay_every_ms_counter = 0;
             }
-#endif
 
+#endif
 #endif
         }
         else
@@ -10749,7 +10773,6 @@ void audio_record__(int16_t *buf_pointer)
                                                   (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
             }
 
-
             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
             {
                 yieldcpu(1);
@@ -10764,7 +10787,6 @@ void audio_record__(int16_t *buf_pointer)
                                                       (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                 }
 
-
                 if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                 {
                     yieldcpu(1);
@@ -10778,7 +10800,6 @@ void audio_record__(int16_t *buf_pointer)
                                                           sample_count,
                                                           (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                     }
-
                 }
             }
 
@@ -10898,6 +10919,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 {
     TOX_ERR_FRIEND_ADD error;
     uint32_t new_friend_id = tox_friend_add_norequest(tox, (uint8_t *) bin_toxpubkey, &error);
+
     if (error == TOX_ERR_FRIEND_ADD_OK)
     {
         // now jump into the conf call
@@ -10907,6 +10929,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
             {
                 TOXAV_ERR_CALL error = 0;
                 toxav_call(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error);
+
                 if (error == TOXAV_ERR_CALL_OK)
                 {
                     friend_to_send_conf_video_to = new_friend_id;
@@ -10918,6 +10941,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
     else
     {
         int64_t entry_num_friendnum = friend_number_for_entry(tox, bin_toxpubkey);
+
         if (entry_num_friendnum != -1)
         {
             if (global_video_active == 1)
@@ -10926,6 +10950,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
                 {
                     TOXAV_ERR_CALL error = 0;
                     toxav_call(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error);
+
                     if (error == TOXAV_ERR_CALL_OK)
                     {
                         friend_to_send_conf_video_to = entry_num_friendnum;
@@ -11525,8 +11550,6 @@ void init_sound_play_device(int channels, int sample_rate)
     }
 
     dbg(9, "play_device: did set channel count:%d\n", channels);
-
-
 #if 0
     snd_pcm_uframes_t bufsize = ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES;
     err = snd_pcm_hw_params_set_buffer_size_near(audio_play_handle, hw_params, &bufsize);
@@ -11682,6 +11705,7 @@ static int sound_play_xrun_recovery(snd_pcm_t *handle, int err, int channels, in
     else if (err == -ESTRPIPE)
     {
         dbg(9, "play_device:snd_pcm_resume ...\n");
+
         while ((err = snd_pcm_resume(handle)) == -EAGAIN)
         {
             // sleep(1); /* wait until the suspend flag is released */
@@ -13287,6 +13311,7 @@ int main(int argc, char *argv[])
     else
     {
     }
+
 #endif
     display_thread_sched_attr("Scheduler attributes of [3]: main thread");
     // ------ thread priority ------
