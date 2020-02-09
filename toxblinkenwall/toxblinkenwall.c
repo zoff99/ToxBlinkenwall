@@ -2598,10 +2598,16 @@ void bootstrap(Tox *tox)
     };
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
-    // dummy node to bootstrap
-    tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
     // bootstrap nodes
-    bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
+    if (use_tor == 0)
+    {
+        bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
+    }
+    else
+    {
+        // dummy node to bootstrap
+        tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
+    }
     // tcp relay nodes
     bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
 #pragma GCC diagnostic pop
@@ -2634,11 +2640,17 @@ void bootstrap_wrapper(Tox *tox)
                     {
                         if (tbw_nd.node_type == 0)
                         {
-                            bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
-
-                            if (res)
+                            if (use_tor == 0)
                             {
-                                custom_file_ok = 1;
+                                bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
+                                if (res)
+                                {
+                                    custom_file_ok = 1;
+                                }
+                            }
+                            else
+                            {
+                                tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
                             }
                         }
                         else
