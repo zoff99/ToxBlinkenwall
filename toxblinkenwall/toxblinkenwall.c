@@ -306,7 +306,7 @@ int global__SEND_VIDEO_RAW_YUV;
 #define PI_H264_CAM_W 1280 // 1640 // 1280
 #define PI_H264_CAM_H  720 // 922 // 1232 // 720
 #define MAX_VIDEO_BITRATE_FOR_720P 2700
-#define INITIAL_H264_ENCODER_BITRATE 100 // 100kbit/s
+#define INITIAL_H264_ENCODER_BITRATE 220 // 100kbit/s
 #define H264_HW_ENCODER_MAX_VIDEO_BITRATE 10000 // kbit/s
 uint32_t h264_bufcounter = 0;
 uint32_t h264_bufcounter_first = 1;
