@@ -618,8 +618,8 @@ exit:
     return err;
 }
 
-int omx_display_input_buffer(struct omx_state *st,
-                             void **pbuf, uint32_t *plen)
+int omx_get_display_input_buffer(struct omx_state *st,
+                                 void **pbuf, uint32_t *plen)
 {
     int buf_idx;
 

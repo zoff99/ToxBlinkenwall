@@ -8091,28 +8091,8 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
 
 static void *video_play(void *dummy)
 {
-    // dbg(9, "VP-DEBUG:001:thread_start\n");
-#if 0
-    // ------ thread priority ------
-    struct sched_param param;
-    int policy;
-    int s;
-    display_thread_sched_attr("Scheduler attributes of [1]: video thread");
-    get_policy('r', &policy);
-    param.sched_priority = strtol("2", NULL, 0);
-    s = pthread_setschedparam(pthread_self(), policy, &param);
+    // dbg(9, "VP-DEBUG:001:thread_start:%d %d %d %p %p %p\n", video__width, video__height, video__received_ts, video__y, video__u, video__v);
 
-    if (s != 0)
-    {
-        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of video thread\n");
-    }
-    else
-    {
-    }
-
-    display_thread_sched_attr("Scheduler attributes of [3]: video thread");
-    // ------ thread priority ------
-#endif
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01;
     __utimer_start(&tm_01);
@@ -8151,6 +8131,15 @@ static void *video_play(void *dummy)
     {
         yuv_frame_for_play = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
         yuv_frame_for_play_size = y_layer_size + u_layer_size + v_layer_size;
+    }
+
+    if (! yuv_frame_for_play)
+    {
+        // release lock --------------
+        sem_post(&video_in_frame_copy_sem);
+        // release lock --------------
+        dec_video_t_counter();
+        pthread_exit(0);
     }
 
     // uint8_t *y = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
@@ -8229,6 +8218,7 @@ static void *video_play(void *dummy)
                 // free((void *)y);
             }
 
+            dec_video_t_counter();
             pthread_exit(0);
         }
 
@@ -8260,7 +8250,7 @@ static void *video_play(void *dummy)
     struct timeval tm_01_001;
     __utimer_start(&tm_01_001);
 #endif
-    omx_display_input_buffer(&omx, &buf, &len);
+    omx_get_display_input_buffer(&omx, &buf, &len);
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_001, "video_frame_play:tm_01_001:", 1);
@@ -8280,13 +8270,13 @@ static void *video_play(void *dummy)
     if (yuf_data_buf_len > len)
     {
         dbg(9, "OMX: Error buffer too small !!!!!!\n");
+        dec_video_t_counter();
+        pthread_exit(0);
     }
-    else
-    {
-        memcpy(buf, y, y_layer_size);
-        memcpy(buf + y_layer_size, u, u_layer_size);
-        memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
-    }
+
+    memcpy(buf, y, y_layer_size);
+    memcpy(buf + y_layer_size, u, u_layer_size);
+    memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_002, "video_frame_play:tm_01_002:", 1);
