@@ -8273,18 +8273,20 @@ static void *video_play(void *dummy)
 #endif
     uint32_t yuf_data_buf_len = y_layer_size + u_layer_size + v_layer_size;
 
-    if (yuf_data_buf_len > len)
-    {
-        dbg(9, "OMX: Error buffer too small !!!!!!\n");
-    }
-
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01_002;
     __utimer_start(&tm_01_002);
 #endif
-    memcpy(buf, y, y_layer_size);
-    memcpy(buf + y_layer_size, u, u_layer_size);
-    memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
+    if (yuf_data_buf_len > len)
+    {
+        dbg(9, "OMX: Error buffer too small !!!!!!\n");
+    }
+    else
+    {
+        memcpy(buf, y, y_layer_size);
+        memcpy(buf + y_layer_size, u, u_layer_size);
+        memcpy(buf + y_layer_size + u_layer_size, v, v_layer_size);
+    }
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_002, "video_frame_play:tm_01_002:", 1);
