@@ -8692,12 +8692,11 @@ static void *video_play(void *dummy)
     //-
     dec_video_t_counter();
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
-    timspan_in_ms;
-    timspan_in_ms = __utimer_stop(&tm_01, "video_frame_play:", 1);
+    long long timspan_in_ms44 = __utimer_stop(&tm_01, "video_frame_play:", 1);
 
-    if (timspan_in_ms > 0)
+    if (timspan_in_ms44 > 0)
     {
-        dbg(9, "video_frame_play: %llu ms\n", timspan_in_ms);
+        dbg(9, "video_frame_play: %llu ms\n", timspan_in_ms44);
     }
 
 #endif
