@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 57
-static const char global_version_string[] = "0.99.57";
+#define VERSION_PATCH 70
+static const char global_version_string[] = "0.99.70";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -6735,7 +6735,7 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
     if (with_locking == 1)
     {
         dbg(9, "SEM:wait:001\n");
-        sem_wait(&tox_call_control_sem);
+        /* LCK1 */ //sem_wait(&tox_call_control_sem);
         dbg(9, "SEM:wait:001_\n");
     }
     // only call "toxav_call_control" when no iterate function is active!!
@@ -6743,7 +6743,7 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
     if (with_locking == 1)
     {
         dbg(9, "SEM:post:001\n");
-        sem_post(&tox_call_control_sem);
+        /* LCK1 */ //sem_post(&tox_call_control_sem);
         dbg(9, "SEM:post:001_\n");
     }
     return ret;
@@ -7371,6 +7371,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         uint32_t sampling_rate,
         void *user_data)
 {
+
     // struct timeval tm_033;
     // __utimer_start(&tm_033);
     global_audio_in_vu = AUDIO_VU_MIN_VALUE;
@@ -8270,6 +8271,10 @@ static void *video_play(void *dummy)
     if (yuf_data_buf_len > len)
     {
         dbg(9, "OMX: Error buffer too small !!!!!!\n");
+        // to force omx reinit on next iteration ----------------
+        omx_w = frame_width_px + 3;
+        omx_h = frame_height_px + 3;
+        // to force omx reinit on next iteration ----------------
         dec_video_t_counter();
         pthread_exit(0);
     }
@@ -8875,6 +8880,8 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+    dbg(9, "--- t_toxav_receive_video_frame_cb ---\n");
+    
     if (global_video_active != 1)
     {
         return;
@@ -8966,7 +8973,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
+                uint8_t *y_ = (uint8_t *)y;
                 uint8_t *y_plane_save;
                 uint8_t *y_save;
 
@@ -8988,7 +8995,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = u;
+                uint8_t *u_ = (uint8_t *)u;
                 uint8_t *u_plane_save;
                 uint8_t *u_save;
 
@@ -9010,7 +9017,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = v;
+                uint8_t *v_ = (uint8_t *)v;
                 uint8_t *v_plane_save;
                 uint8_t *v_save;
 
@@ -9034,7 +9041,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             else
             {
                 uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
+                uint8_t *y_ = (uint8_t *)y;
 
                 for (int jj = 0; jj < h_use; jj++)
                 {
@@ -9044,7 +9051,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = u;
+                uint8_t *u_ = (uint8_t *)u;
 
                 for (int jj = 0; jj < (h_use / 2); jj++)
                 {
@@ -9054,7 +9061,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = v;
+                uint8_t *v_ = (uint8_t *)v;
 
                 for (int jj = 0; jj < (h_use / 2); jj++)
                 {
@@ -9143,7 +9150,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
+                uint8_t *y_ = (uint8_t *)y;
                 uint8_t *y_plane_save;
                 uint8_t *y_save;
 
@@ -9164,7 +9171,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = u;
+                uint8_t *u_ = (uint8_t *)u;
                 uint8_t *u_plane_save;
                 uint8_t *u_save;
 
@@ -9185,7 +9192,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = v;
+                uint8_t *v_ = (uint8_t *)v;
                 uint8_t *v_plane_save;
                 uint8_t *v_save;
 
@@ -9208,7 +9215,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             else
             {
                 uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = y;
+                uint8_t *y_ = (uint8_t *)y;
 
                 for (int jj = 0; jj < h_use; jj++)
                 {
@@ -9218,7 +9225,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = u;
+                uint8_t *u_ = (uint8_t *)u;
 
                 for (int jj = 0; jj < (h_use / 2); jj++)
                 {
@@ -9228,7 +9235,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 }
 
                 uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = v;
+                uint8_t *v_ = (uint8_t *)v;
 
                 for (int jj = 0; jj < (h_use / 2); jj++)
                 {
@@ -13209,6 +13216,8 @@ int main(int argc, char *argv[])
     tox_callback_friend_status(tox, on_tox_friend_status);
     tox_callback_friend_name(tox, friend_name_cb);
     // init callbacks ----------------------------------
+
+
     // init toxutil callbacks ----------------------------------
 #ifdef TOX_HAVE_TOXUTIL
     tox_utils_callback_self_connection_status(tox, self_connection_status_cb);
@@ -13234,6 +13243,7 @@ int main(int argc, char *argv[])
     tox_callback_file_recv_chunk(tox, on_file_recv_chunk);
 #endif
     // init toxutil callbacks ----------------------------------
+
     update_savedata_file(tox);
     load_friendlist(tox);
     write_phonebook_names_to_files(tox);
@@ -13280,21 +13290,26 @@ int main(int argc, char *argv[])
                     break;
                 }
         }
+
     }
+
 
     // -- here tox node is online, but video is not yet ready!!
     TOXAV_ERR_NEW rc;
     dbg(2, "new Tox AV\n");
     mytox_av = toxav_new(tox, &rc);
 
+
     if (rc != TOXAV_ERR_NEW_OK)
     {
         dbg(0, "Error at toxav_new: %d\n", rc);
     }
 
+
     toxav_audio_iterate_seperation(mytox_av, true);
     CallControl mytox_CC;
     memset(&mytox_CC, 0, sizeof(CallControl));
+
     // init AV callbacks -------------------------------
     toxav_callback_call(mytox_av, t_toxav_call_cb, &mytox_CC);
     toxav_callback_call_state(mytox_av, t_toxav_call_state_cb, &mytox_CC);
@@ -13305,6 +13320,8 @@ int main(int argc, char *argv[])
     toxav_callback_call_comm(mytox_av, t_toxav_call_comm_cb, &mytox_CC);
 #endif
     // init AV callbacks -------------------------------
+
+
     // start toxav thread ------------------------------
     pthread_t tid[7]; // 0 -> toxav_iterate thread, 1 -> video send thread
     // 2 -> audio recording thread, 3 -> read keys from pipe
@@ -13417,6 +13434,8 @@ int main(int argc, char *argv[])
     // int policy;
     // int s;
     display_thread_sched_attr("Scheduler attributes of [1]: main thread");
+
+
 #if 0
     get_policy('o', &policy);
     param.sched_priority = strtol("0", NULL, 0);
@@ -13440,9 +13459,8 @@ int main(int argc, char *argv[])
 
     while (tox_loop_running)
     {
-        sem_wait(&tox_call_control_sem);
         tox_iterate(tox, NULL);
-        sem_post(&tox_call_control_sem);
+
 #ifdef CHANGE_NOSPAM_REGULARLY
 
         if ((uint32_t)(global_last_change_nospam_ts + CHANGE_NOSPAM_REGULAR_INTERVAL_SECS) < (uint32_t)get_unix_time())
