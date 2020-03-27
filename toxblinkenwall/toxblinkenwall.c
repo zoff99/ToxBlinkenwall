@@ -407,6 +407,57 @@ int global_gl_osd_changed = 0;
 #endif
 
 
+
+
+
+// -------- DEBUG --------
+// -------- DEBUG --------
+// -------- DEBUG --------
+#define sta() my_log_start(__LINE__, __func__)
+#define ret() my_log_return(__LINE__, __func__)
+#define en() my_log_end(__LINE__, __func__)
+
+void my_log_start(int line, const char *func);
+void my_log_return(int line, const char *func);
+void my_log_end(int line, const char *func);
+
+#include <unistd.h>
+#include <sys/syscall.h>
+long syscall(long number, ...);
+#define gettid() syscall(SYS_gettid)
+
+void my_log_start(int line, const char *func)
+{
+    int32_t cur_pthread_tid = (int32_t)gettid();
+    dbg(9, "START :TID=%d:%d:%s\n", cur_pthread_tid, line, func);
+}
+
+void my_log_return(int line, const char *func)
+{
+    int32_t cur_pthread_tid = (int32_t)gettid();
+    dbg(9, "RETURN:TID=%d:%d:%s\n", cur_pthread_tid, line, func);
+}
+
+void my_log_end(int line, const char *func)
+{
+    int32_t cur_pthread_tid = (int32_t)gettid();
+    dbg(9, "END   :TID=%d:%d:%s\n", cur_pthread_tid, line, func);
+}
+// -------- DEBUG --------
+// -------- DEBUG --------
+// -------- DEBUG --------
+
+
+
+
+
+
+
+
+
+
+
+
 #define OVERLAY_WIDTH_PERCENT_OF_FB   0.28f
 #define OVERLAY_HEIGHT_PERCENT_OF_FB   0.06f
 #define OVERLAY_WIDTH_PX (32*(8+3)) // 32*(8+3) // max. chars * char width
@@ -6734,6 +6785,7 @@ void close_cam()
 bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CONTROL control,
                                 TOXAV_ERR_CALL_CONTROL *error, int with_locking)
 {
+    sta();
     if (with_locking == 1)
     {
         dbg(9, "SEM:wait:001\n");
@@ -6751,12 +6803,14 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
         dbg(9, "SEM:post:001_\n");
     }
 
+    en();
     return ret;
 }
 
 bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_rate, uint32_t video_bit_rate,
                         TOXAV_ERR_CALL *error, int with_locking)
 {
+    sta();
     if (with_locking == 0)
     {
         return toxav_call(av, friend_number, audio_bit_rate, video_bit_rate, error);
@@ -6766,10 +6820,12 @@ bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_ra
         global_add_call_friend_num = (int64_t)friend_number;
         return true;
     }
+    en();
 }
 
 void end_conf_call(ToxAV *av, int disconnect)
 {
+    sta();
     dbg(9, "end_conf_call:enter\n");
     int32_t fnum = friend_to_send_conf_video_to;
     global_confernece_call_active = 0;
@@ -6794,10 +6850,12 @@ void end_conf_call(ToxAV *av, int disconnect)
     }
 
 #endif
+    en();
 }
 
 void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
 {
+    sta();
     dbg(9, "answer_incoming_conf_av_call:enter\n");
     dbg(9, "SEM:wait:002\n");
     // sem_wait(&tox_call_control_sem);
@@ -6847,10 +6905,12 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
     // sem_post(&tox_call_control_sem);
     dbg(9, "SEM:post:002_\n");
     // now send .confcall message to all active callers -------------------
+    en();
 }
 
 void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled)
 {
+    sta();
     dbg(9, "answer_incoming_av_call\n");
     TOXAV_ERR_ANSWER err;
     global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
@@ -6878,11 +6938,13 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
 #endif
     // change some settings here -------
     reset_toxav_call_waiting();
+    en();
 }
 
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
+    sta();
     dbg(9, "t_toxav_call_cb\n");
 
     if ((accepting_calls != 1) || (call_waiting_for_answer == 1))
@@ -6891,6 +6953,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         TOXAV_ERR_CALL_CONTROL error = 0;
         toxav_call_control_wrapper(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
         // global_video_active = 0;
+        ret();
         return;
     }
 
@@ -6902,6 +6965,7 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
             {
                 answer_incoming_conf_av_call(mytox_av, friend_number);
                 global_confernece_call_active = 1;
+                ret();
                 return;
             }
             else
@@ -6936,6 +7000,8 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         pick_up_call();
 #endif
     }
+
+    en();
 }
 
 #ifdef TOX_HAVE_TOXAV_CALLBACKS_002
@@ -7069,6 +7135,8 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
 
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
+    sta();
+
     dbg(9, "t_toxav_call_state_cb:%d\n", state);
 
     if (((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number) && (global_video_active == 1))
@@ -7079,12 +7147,14 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             end_conf_call(av, 0);
         }
 
+        ret();
         return;
     }
 
     if (accepting_calls != 1)
     {
         dbg(2, "Not accepting call state changes yet\n");
+        ret();
         return;
     }
 
@@ -7102,6 +7172,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
             global_disconnect_friend_num = friend_number;
         }
 
+        ret();
         return;
     }
 
@@ -7137,6 +7208,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         friend_to_send_video_to = -1;
         fb_fill_black();
         show_tox_id_qrcode(toxav_get_tox(av));
+        ret();
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
@@ -7168,6 +7240,7 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
         friend_to_send_video_to = -1;
         fb_fill_black();
         show_tox_id_qrcode(toxav_get_tox(av));
+        ret();
         return;
     }
     else if (state & TOXAV_FRIEND_CALL_STATE_SENDING_A)
@@ -7237,6 +7310,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     // -------- never reached --------
     dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d global_video_active=%d global_send_first_frame=%d friend_to_send_video_to=%d\n",
         friend_number, state, send_audio, send_video, global_video_active, global_send_first_frame, friend_to_send_video_to);
+
+    en();
 }
 
 
@@ -7244,6 +7319,8 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
 {
+    sta();
+
     //if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
     //{
     //  // we are in a call with someone else already
@@ -7277,6 +7354,7 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
 
     dbg(2, "suggested bit rates: audio: %d video: %d\n", audio_bit_rate, video_bit_rate);
     dbg(2, "actual    bit rates: audio: %d video: %d\n", global_audio_bit_rate, global_video_bit_rate);
+    en();
 }
 
 #ifdef HAVE_ALSA_PLAY
@@ -7312,13 +7390,16 @@ int get_audio_t_counter()
 
 void inc_video_t_counter()
 {
+    sta();
     sem_wait(&count_video_play_threads);
     count_video_play_threads_int++;
     sem_post(&count_video_play_threads);
+    en();
 }
 
 void dec_video_t_counter()
 {
+    sta();
     sem_wait(&count_video_play_threads);
     count_video_play_threads_int--;
 
@@ -7328,14 +7409,17 @@ void dec_video_t_counter()
     }
 
     sem_post(&count_video_play_threads);
+    en();
 }
 
 int get_video_t_counter()
 {
+    sta();
     sem_wait(&count_video_play_threads);
     int ret = count_video_play_threads_int;
     sem_post(&count_video_play_threads);
     return ret;
+    en();
 }
 
 void inc_video_trec_counter()
@@ -8093,6 +8177,7 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
 
 static void *video_play(void *dummy)
 {
+    sta();
     // dbg(9, "VP-DEBUG:001:thread_start:%d %d %d %p %p %p\n", video__width, video__height, video__received_ts, video__y, video__u, video__v);
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01;
@@ -8705,6 +8790,8 @@ static void *video_play(void *dummy)
     }
 
 #endif
+
+    en();
     pthread_exit(0);
 }
 
@@ -8715,6 +8802,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+    sta();
 #ifdef RPIZEROW
     // ignore video on the PI Zero W
     return;
@@ -8872,6 +8960,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
     }
 
 #endif
+    en();
 }
 
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
@@ -8880,6 +8969,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         int32_t ystride, int32_t ustride, int32_t vstride,
         void *user_data)
 {
+    sta();
     dbg(9, "--- t_toxav_receive_video_frame_cb ---\n");
 
     if (global_video_active != 1)
@@ -9258,6 +9348,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     {
         t_toxav_receive_video_frame_cb_wrapper(av, friend_number, width, height, y, u, v, ystride, ustride, vstride, user_data);
     }
+    en();
 }
 
 
@@ -9922,16 +10013,22 @@ void *thread_video_av(void *data)
 
 void reset_toxav_call_waiting()
 {
+    sta();
+
     if (call_waiting_for_answer == 1)
     {
         call_waiting_for_answer = 0;
         call_waiting_friend_num = -1;
         stop_play_ringtone();
     }
+
+    en();
 }
 
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
+    sta();
+
     int really_in_call = 0;
     reset_toxav_call_waiting();
 
@@ -9973,6 +10070,8 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
         fb_fill_black();
         show_tox_id_qrcode(toxav_get_tox(av));
     }
+
+    en();
 }
 // ------------------ Tox AV stuff --------------------
 // ------------------ Tox AV stuff --------------------
