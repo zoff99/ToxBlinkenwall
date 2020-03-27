@@ -3960,31 +3960,6 @@ void cmd_kamft(Tox *tox, uint32_t friend_number)
     kill_all_file_transfers_friend(tox, friend_number);
 }
 
-void cmd_snap(Tox *tox, uint32_t friend_number)
-{
-    send_text_message_to_friend(tox, friend_number, "*Feature DISABLED*");
-
-    if (1 == 1 + 1)
-    {
-        send_text_message_to_friend(tox, friend_number, "capture single shot, and send to all friends ...");
-        char output_str[1000];
-        run_cmd_return_output(shell_cmd__single_shot, output_str, 1);
-#if 0
-
-        if (strlen(output_str) > 0)
-        {
-            // send_text_message_to_friend(tox, friend_number, "toxblinkenwall:%s", output_str);
-        }
-        else
-        {
-            send_text_message_to_friend(tox, friend_number, "ERROR running snap command");
-        }
-
-#endif
-        send_text_message_to_friend(tox, friend_number, "... capture single shot, ready!");
-    }
-}
-
 void cmd_friends(Tox *tox, uint32_t friend_number)
 {
     size_t i;
