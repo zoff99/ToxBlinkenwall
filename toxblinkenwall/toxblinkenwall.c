@@ -2094,7 +2094,6 @@ void *play_ringtone(void *data)
 
     // -------- PLAY ---------
     dbg(2, "Ringtone:Clean thread exit!\n");
-
     pthread_exit(0);
 }
 
@@ -2257,7 +2256,6 @@ void *calc_network_traffic(void *data)
     }
 
     dbg(2, "Network Traffic:Clean thread exit!\n");
-    
     pthread_exit(0);
 }
 
@@ -3037,7 +3035,7 @@ void show_tox_id_qrcode(Tox *tox)
             uint32_t line_position_y = 30;
             const uint32_t line_position_x = 30;
             const uint32_t line_position_x_header = 10;
-            #define MAX_SCREEN_NAME_LENGTH_DEF 150
+#define MAX_SCREEN_NAME_LENGTH_DEF 150
             const size_t max_screen_name_length = MAX_SCREEN_NAME_LENGTH_DEF;
             char text_line[MAX_SCREEN_NAME_LENGTH_DEF];
             uint8_t color_r;
@@ -6248,7 +6246,8 @@ int v4l_stream_off()
 }
 
 
-void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *input_local, uint16_t width, uint16_t height)
+void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *input_local, uint16_t width,
+                 uint16_t height)
 {
     uint8_t *end = input_local + width * height * 2;
 
@@ -6431,6 +6430,7 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
                                 TOXAV_ERR_CALL_CONTROL *error, int with_locking)
 {
     sta();
+
     if (with_locking == 1)
     {
         dbg(9, "SEM:wait:001\n");
@@ -6456,6 +6456,7 @@ bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_ra
                         TOXAV_ERR_CALL *error, int with_locking)
 {
     sta();
+
     if (with_locking == 0)
     {
         return toxav_call(av, friend_number, audio_bit_rate, video_bit_rate, error);
@@ -6465,6 +6466,7 @@ bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_ra
         global_add_call_friend_num = (int64_t)friend_number;
         return true;
     }
+
     en();
 }
 
@@ -6781,7 +6783,6 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
 static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t state, void *user_data)
 {
     sta();
-
     dbg(9, "t_toxav_call_state_cb:%d\n", state);
 
     if (((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number) && (global_video_active == 1))
@@ -6955,7 +6956,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     // -------- never reached --------
     dbg(9, "Call state for friend %d changed to %d, audio=%d, video=%d global_video_active=%d global_send_first_frame=%d friend_to_send_video_to=%d\n",
         friend_number, state, send_audio, send_video, global_video_active, global_send_first_frame, friend_to_send_video_to);
-
     en();
 }
 
@@ -6965,7 +6965,6 @@ static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        void *user_data)
 {
     sta();
-
     //if ((friend_to_send_video_to != friend_number) && (global_video_active == 1))
     //{
     //  // we are in a call with someone else already
@@ -8435,7 +8434,6 @@ static void *video_play(void *dummy)
     }
 
 #endif
-
     en();
     pthread_exit(0);
 }
@@ -8993,6 +8991,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     {
         t_toxav_receive_video_frame_cb_wrapper(av, friend_number, width, height, y, u, v, ystride, ustride, vstride, user_data);
     }
+
     en();
 }
 
@@ -9559,7 +9558,6 @@ void *thread_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean thread exit!\n");
-
     pthread_exit(0);
 }
 
@@ -9583,7 +9581,6 @@ void *thread_audio_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean audio thread exit!\n");
-
     pthread_exit(0);
 }
 
@@ -9658,7 +9655,6 @@ void *thread_video_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
-
     pthread_exit(0);
 }
 
@@ -9679,7 +9675,6 @@ void reset_toxav_call_waiting()
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
     sta();
-
     int really_in_call = 0;
     reset_toxav_call_waiting();
 
@@ -10612,42 +10607,42 @@ void audio_record__(int16_t *buf_pointer)
 #endif
             TOXAV_ERR_SEND_FRAME error;
             bool res1 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
-                                              sample_count,
-                                              (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                               sample_count,
+                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
             if (global_confernece_call_active == 1)
             {
                 bool res2 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
-                                                  sample_count,
-                                                  (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                                   sample_count,
+                                                   (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
             }
 
             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
             {
                 yieldcpu(1);
                 bool res3 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
-                                             sample_count,
-                                             (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                                   sample_count,
+                                                   (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
                 if (global_confernece_call_active == 1)
                 {
                     bool res4 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
-                                                      sample_count,
-                                                      (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                                       sample_count,
+                                                       (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                 }
 
                 if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                 {
                     yieldcpu(1);
                     bool res5 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
-                                                 sample_count,
-                                                 (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                                       sample_count,
+                                                       (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
                     if (global_confernece_call_active == 1)
                     {
                         bool res6 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
-                                                          sample_count,
-                                                          (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
+                                                           sample_count,
+                                                           (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                     }
                 }
             }
@@ -10757,7 +10752,6 @@ void *thread_record_alsa_audio(void *data)
     free(stream);
 #endif
     close_sound_device();
-
     pthread_exit(0);
 }
 
@@ -10966,7 +10960,7 @@ void write_phonebook_names_to_files(Tox *tox)
                     static char *fr_conn_status_online_udp = "ONLINE (udp)";
                     static char *fr_conn_status_online_tcp = "ONLINE (TCP)";
                     static char *fr_conn_status_unknown = "*unknown*";
-                    #define MAX_TEXT_LEN_DEF 33
+#define MAX_TEXT_LEN_DEF 33
                     static const int max_text_len = MAX_TEXT_LEN_DEF; // must be more than 32 or snprintf will give an error below
                     char *fr_conn_stats = NULL;
                     char text_line[MAX_TEXT_LEN_DEF + 1];
@@ -11270,7 +11264,6 @@ void *thread_ext_keys(void *data)
     }
 
     close(ext_keys_fd);
-
     pthread_exit(0);
 }
 
