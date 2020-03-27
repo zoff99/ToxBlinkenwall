@@ -321,8 +321,8 @@ int show_own_cam = 1;
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
 
-#define PI_NORMAL_CAM_W_1080 1920;
-#define PI_NORMAL_CAM_H_1080 1080;
+#define PI_NORMAL_CAM_W_1080 1920
+#define PI_NORMAL_CAM_H_1080 1080
 
 #include <linux/fb.h>
 
@@ -408,6 +408,7 @@ int global_gl_osd_changed = 0;
 
 
 
+void dbg(int level, const char *fmt, ...);
 
 
 // -------- DEBUG --------
@@ -727,13 +728,11 @@ int avatar_send(Tox *m, uint32_t friendnum);
 struct FileTransfer *new_file_transfer(uint32_t friendnum, uint32_t filenum, FILE_TRANSFER_DIRECTION direction,
                                        uint8_t type);
 void kill_all_file_transfers_friend(Tox *m, uint32_t friendnum);
-int has_reached_max_file_transfer_for_friend(uint32_t num);
 static int find_friend_in_friendlist(uint32_t friendnum);
 int is_friend_online(Tox *tox, uint32_t num);
 void av_local_disconnect(ToxAV *av, uint32_t num);
 void run_cmd_return_output(const char *command, char *output, int lastline);
 void save_resumable_fts(Tox *m, uint32_t friendnum);
-void resume_resumable_fts(Tox *m, uint32_t friendnum);
 void left_top_bar_into_yuv_frame(int bar_start_x_pix, int bar_start_y_pix, int bar_w_pix, int bar_h_pix, uint8_t r,
                                  uint8_t g, uint8_t b);
 void left_top_bar_into_yuv_frame_ptr(uint8_t *yuv_frame, int frame_w, int frame_h,
@@ -1579,7 +1578,7 @@ void write_ownname_to_file(Tox *tox)
     }
     else
     {
-        tox_self_get_name(tox, ownname);
+        tox_self_get_name(tox, (uint8_t *)ownname);
     }
 
     char this_filename[300];
@@ -1597,6 +1596,7 @@ void write_ownname_to_file(Tox *tox)
 }
 
 
+#if 0
 static void write_audio_in_vu_to_file(float vu)
 {
     float vu2 = vu - AUDIO_VU_MIN_VALUE;
@@ -1613,7 +1613,9 @@ static void write_audio_in_vu_to_file(float vu)
     fprintf(fp, "%f\n", vu2);
     fclose(fp);
 }
+#endif
 
+#if 0
 static void write_audio_out_vu_to_file(float vu)
 {
     float vu2 = vu - AUDIO_VU_MIN_VALUE;
@@ -1630,8 +1632,7 @@ static void write_audio_out_vu_to_file(float vu)
     fprintf(fp, "%f\n", vu2);
     fclose(fp);
 }
-
-
+#endif
 
 static void write_rtt_to_file(uint32_t value)
 {
@@ -1720,7 +1721,7 @@ void toggle_own_cam(int on_off)
         snprintf(cmd_str, sizeof(cmd_str), "v4l2-ctl --overlay=0");
     }
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void on_start()
@@ -1729,7 +1730,7 @@ void on_start()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onstart);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void on_online()
@@ -1738,7 +1739,7 @@ void on_online()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__ononline);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void on_offline()
@@ -1747,7 +1748,7 @@ void on_offline()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onoffline);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     // if we go offline, immediately bootstrap again. maybe we can go online faster
     // set last online timestamp into the past
@@ -1905,7 +1906,7 @@ void on_end_call()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallend);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     first_incoming_video_frame = 1;
     write_caller_name_to_file("");
@@ -1927,14 +1928,14 @@ void on_start_call()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallstart);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     toggle_own_cam(1);
 
     if (friend_to_send_video_to > -1)
     {
         if ((global_camera_orientation_angle >= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
-                || (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
+                && (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
         {
             TOXAV_ERR_OPTION_SET error;
             toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to, TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION,
@@ -1966,9 +1967,9 @@ void *play_ringtone(void *data)
     float loudness           = 0.7f; // 0.1 <-> 0.8
     int beep_freq_change_every_x_samples = ((samplerate / 1000) * every_ms_switch_freq);
     // Create input buffer
-    int16_t *input = calloc(total_samples, sizeof(int16_t));
+    int16_t *input_local = calloc(total_samples, sizeof(int16_t));
 
-    if (!input)
+    if (!input_local)
     {
         pthread_exit(0);
     }
@@ -1976,7 +1977,7 @@ void *play_ringtone(void *data)
     // Initialize buffer with zeros
     for (int i = 0; i < total_samples; ++i)
     {
-        input[i] = 0;
+        input_local[i] = 0;
     }
 
     int total_index = 0;
@@ -1985,7 +1986,7 @@ void *play_ringtone(void *data)
     {
         // amplitude = 0.8 * max range; max range = 0x8000 = 32768 ( max value for 16 Bit signed int )
         int sinus    = loudness * 0x8000 * sin(2 * PI * beep_fequency * i / samplerate);
-        input[total_index] = sinus;
+        input_local[total_index] = sinus;
         total_index++;
 
         if (ringtone_thread_stop == 1)
@@ -1995,7 +1996,7 @@ void *play_ringtone(void *data)
 
         if (channels == 2)
         {
-            input[total_index] = sinus;
+            input_local[total_index] = sinus;
             total_index++;
         }
 
@@ -2022,7 +2023,7 @@ void *play_ringtone(void *data)
 
         for (long i = 0; i < (samples / frame_sample_count); ++i)
         {
-            int16_t *pcm = &input[idx];
+            int16_t *pcm = &input_local[idx];
             size_t sample_count = frame_sample_count;
             idx += frame_sample_count;
 
@@ -2085,14 +2086,16 @@ void *play_ringtone(void *data)
 
 #endif
 
-    if (input)
+    if (input_local)
     {
-        free(input);
-        input = NULL;
+        free(input_local);
+        input_local = NULL;
     }
 
     // -------- PLAY ---------
     dbg(2, "Ringtone:Clean thread exit!\n");
+
+    pthread_exit(0);
 }
 
 void move_network_lan_bar_values()
@@ -2175,7 +2178,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if (fscanf(file1, "%llu", &lan_rx_value)) {};
+            if (fscanf(file1, "%llu", &lan_rx_value)) {}
 
             fclose(file1);
         }
@@ -2184,7 +2187,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if (fscanf(file1, "%llu", &lan_tx_value)) {};
+            if (fscanf(file1, "%llu", &lan_tx_value)) {}
 
             fclose(file1);
         }
@@ -2193,7 +2196,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if (fscanf(file1, "%llu", &wifi_rx_value)) {};
+            if (fscanf(file1, "%llu", &wifi_rx_value)) {}
 
             fclose(file1);
         }
@@ -2202,7 +2205,7 @@ void *calc_network_traffic(void *data)
 
         if (file1)
         {
-            if (fscanf(file1, "%llu", &wifi_tx_value)) {};
+            if (fscanf(file1, "%llu", &wifi_tx_value)) {}
 
             fclose(file1);
         }
@@ -2254,6 +2257,8 @@ void *calc_network_traffic(void *data)
     }
 
     dbg(2, "Network Traffic:Clean thread exit!\n");
+    
+    pthread_exit(0);
 }
 
 void start_calc_network_traffic()
@@ -2658,7 +2663,7 @@ void bootstrap(Tox *tox)
     else
     {
         // dummy node to bootstrap
-        tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
+        tox_bootstrap(tox, "local", 7766, (uint8_t *)"2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
     }
 
     // tcp relay nodes
@@ -2704,7 +2709,7 @@ void bootstrap_wrapper(Tox *tox)
                             }
                             else
                             {
-                                tox_bootstrap(tox, "local", 7766, "2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
+                                tox_bootstrap(tox, "local", 7766, (uint8_t *)"2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
                             }
                         }
                         else
@@ -2773,7 +2778,7 @@ void show_video_calling(uint32_t fnum, bool with_delay)
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
 
     // show random caller "head" image
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     int j = find_friend_in_friendlist(fnum);
 
@@ -2914,7 +2919,7 @@ void show_text_as_image(const char *display_text)
         // snprintf(cmd_str, sizeof(cmd_str), "%s '%s'", shell_cmd__show_text_as_image, display_text2);
         snprintf(cmd_str, sizeof(cmd_str), "%s ''", shell_cmd__show_text_as_image);
 
-        if (system(cmd_str));
+        if (system(cmd_str)) {}
 
         // unlink(cmd__image_text_full_path);
     }
@@ -2926,7 +2931,7 @@ void show_text_as_image_stop()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_text_as_image_stop);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void show_endless_image()
@@ -2937,7 +2942,7 @@ void show_endless_image()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void stop_endless_image()
@@ -2946,7 +2951,7 @@ void stop_endless_image()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_image_anim);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 
@@ -2958,7 +2963,7 @@ void show_endless_loading()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__start_endless_loading_anim);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void stop_endless_loading()
@@ -2967,7 +2972,7 @@ void stop_endless_loading()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_loading_anim);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void create_tox_id_qrcode(Tox *tox)
@@ -2979,7 +2984,7 @@ void create_tox_id_qrcode(Tox *tox)
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s \"tox:%s\"", shell_cmd__create_qrcode, tox_id_hex);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     global_qrcode_was_updated = 1;
 }
@@ -3014,7 +3019,7 @@ void show_tox_id_qrcode_real(Tox *tox)
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 
     dbg(2, "show_tox_id_qrcode()\n");
     global_is_qrcode_showing_on_screen = 1;
@@ -3032,8 +3037,9 @@ void show_tox_id_qrcode(Tox *tox)
             uint32_t line_position_y = 30;
             const uint32_t line_position_x = 30;
             const uint32_t line_position_x_header = 10;
-            const size_t max_screen_name_length = 150;
-            char text_line[max_screen_name_length];
+            #define MAX_SCREEN_NAME_LENGTH_DEF 150
+            const size_t max_screen_name_length = MAX_SCREEN_NAME_LENGTH_DEF;
+            char text_line[MAX_SCREEN_NAME_LENGTH_DEF];
             uint8_t color_r;
             uint8_t color_g;
             uint8_t color_b;
@@ -3109,7 +3115,7 @@ void show_tox_id_qrcode(Tox *tox)
                 {
                     char ownname[300];
                     CLEAR(ownname);
-                    tox_self_get_name(tox, ownname);
+                    tox_self_get_name(tox, (uint8_t *)ownname);
                     snprintf(text_line, sizeof(text_line), "name: %s", ownname);
                     text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                           var_framebuffer_fix_info.line_length, bf_out_real_fb,
@@ -3317,7 +3323,7 @@ void show_tox_id_qrcode(Tox *tox)
         CLEAR(cmd_str);
         snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 
-        if (system(cmd_str));
+        if (system(cmd_str)) {}
 
         dbg(2, "show_tox_id_qrcode()\n");
     }
@@ -3333,7 +3339,7 @@ void show_tox_client_application_download_links()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_clients);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void show_help_image()
@@ -3344,7 +3350,7 @@ void show_help_image()
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_help);
 
-    if (system(cmd_str));
+    if (system(cmd_str)) {}
 }
 
 void show_toxid_text_on_fb(Tox *tox)
@@ -3446,19 +3452,15 @@ int is_friend_online(Tox *tox, uint32_t num)
     {
         case TOX_CONNECTION_NONE:
             return 0;
-            break;
 
         case TOX_CONNECTION_TCP:
             return 1;
-            break;
 
         case TOX_CONNECTION_UDP:
             return 1;
-            break;
 
         default:
             return 0;
-            break;
     }
 }
 
@@ -3496,246 +3498,6 @@ static void update_friend_last_online(uint32_t num, time_t timestamp)
              &Friends.list[friendlistnum].last_online.tm);
 }
 
-void send_file_to_friend_real(Tox *m, uint32_t num, const char *filename, int resume, uint8_t *fileid_resume)
-{
-    // ------- hack to send file --------
-    // ------- hack to send file --------
-    const char *errmsg = NULL;
-    char path[MAX_STR_SIZE];
-    snprintf(path, sizeof(path), "%s", filename);
-    dbg(2, "send_file_to_friend_real:path=%s\n", path);
-    FILE *file_to_send = fopen(path, "r");
-
-    if (file_to_send == NULL)
-    {
-        dbg(0, "send_file_to_friend_real:error opening file\n");
-        return;
-    }
-
-    off_t filesize = file_size(path);
-
-    if (filesize == 0)
-    {
-        dbg(0, "send_file_to_friend_real:filesize 0\n");
-        fclose(file_to_send);
-        return;
-    }
-
-    char file_name[TOX_MAX_FILENAME_LENGTH];
-    size_t namelen = get_file_name(file_name, sizeof(file_name), path);
-    TOX_ERR_FILE_SEND err;
-    char *o = calloc(1, (size_t)TOX_FILE_ID_LENGTH);
-    uint32_t filenum = -1;
-
-    if (resume == 0)
-    {
-        dbg(9, "resume == 0\n");
-        random_char(o, (int)TOX_FILE_ID_LENGTH);
-        filenum = tox_file_send(m, num, TOX_FILE_KIND_DATA, (uint64_t)filesize, (uint8_t *)o,
-                                (uint8_t *)file_name, namelen, &err);
-    }
-    else
-    {
-        dbg(9, "resume == 1\n");
-        filenum = tox_file_send(m, num, TOX_FILE_KIND_DATA, (uint64_t)filesize, fileid_resume,
-                                (uint8_t *)file_name, namelen, &err);
-    }
-
-    dbg(2, "send_file_to_friend:tox_file_send=%s filenum=%d\n", file_name, (int)filenum);
-
-    if (err != TOX_ERR_FILE_SEND_OK)
-    {
-        dbg(0, "send_file_to_friend_real: ! TOX_ERR_FILE_SEND_OK\n");
-        goto on_send_error;
-    }
-
-    dbg(2, "send_file_to_friend_real(1):tox_file_send=%s filenum=%d\n", file_name, (int)filenum);
-    struct FileTransfer *ft = new_file_transfer(num, filenum, FILE_TRANSFER_SEND, TOX_FILE_KIND_DATA);
-    dbg(2, "send_file_to_friend_real(2):tox_file_send=%s filenum=%d\n", file_name, (int)filenum);
-
-    if (!ft)
-    {
-        dbg(0, "send_file_to_friend_real:ft=NULL\n");
-        err = TOX_ERR_FILE_SEND_TOO_MANY;
-        goto on_send_error;
-    }
-
-    memcpy(ft->file_name, file_name, namelen + 1);
-    ft->file = file_to_send;
-    ft->file_size = filesize;
-
-    if (resume == 0)
-    {
-        dbg(9, "resume == 0\n");
-        memcpy(ft->file_id, o, (size_t)TOX_FILE_ID_LENGTH);
-    }
-    else
-    {
-        dbg(9, "resume == 1\n");
-        memcpy(ft->file_id, fileid_resume, (size_t)TOX_FILE_ID_LENGTH);
-    }
-
-    dbg(0, "send_file_to_friend_real:tox_file_get_file_id num=%d filenum=%d\n", (int)num, (int)filenum);
-    // dbg(0, "send_file_to_friend_real:file_id_resume=%d ft->file_id=%d\n", (int)fileid_resume, (int)ft->file_id);
-    // dbg(0, "send_file_to_friend_real:o=%d ft->file_id=%d\n", (int)o, (int)ft->file_id);
-    char file_id_str[TOX_FILE_ID_LENGTH * 2 + 1];
-    bin_id_to_string_all((char *)ft->file_id, (size_t)TOX_FILE_ID_LENGTH, file_id_str,
-                         (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
-    dbg(2, "send_file_to_friend_real:file_id=%s\n", file_id_str);
-    bin_id_to_string_all((char *)fileid_resume, (size_t)TOX_FILE_ID_LENGTH, file_id_str,
-                         (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
-    dbg(2, "send_file_to_friend_real:fileid_resume=%s\n", file_id_str);
-    bin_id_to_string_all((char *)o, (size_t)TOX_FILE_ID_LENGTH, file_id_str, (size_t)(TOX_FILE_ID_LENGTH * 2 + 1));
-    dbg(2, "send_file_to_friend_real:o=%s\n", file_id_str);
-    free(o);
-    o = NULL;
-    return;
-on_send_error:
-    free(o);
-    o = NULL;
-
-    switch (err)
-    {
-        case TOX_ERR_FILE_SEND_FRIEND_NOT_FOUND:
-            errmsg = "File transfer failed: Invalid friend.";
-            break;
-
-        case TOX_ERR_FILE_SEND_FRIEND_NOT_CONNECTED:
-            errmsg = "File transfer failed: Friend is offline.";
-            break;
-
-        case TOX_ERR_FILE_SEND_NAME_TOO_LONG:
-            errmsg = "File transfer failed: Filename is too long.";
-            break;
-
-        case TOX_ERR_FILE_SEND_TOO_MANY:
-            errmsg = "File transfer failed: Too many concurrent file transfers.";
-            break;
-
-        default:
-            errmsg = "File transfer failed.";
-            break;
-    }
-
-    dbg(0, "send_file_to_friend_real:ft error=%s\n", errmsg);
-    tox_file_control(m, num, filenum, TOX_FILE_CONTROL_CANCEL, NULL);
-    fclose(file_to_send);
-    // ------- hack to send file --------
-    // ------- hack to send file --------
-}
-
-void resume_file_to_friend(Tox *m, uint32_t num, struct FileTransfer *ft)
-{
-}
-
-void send_file_to_friend(Tox *m, uint32_t num, const char *filename)
-{
-    send_file_to_friend_real(m, num, filename, 0, NULL);
-}
-
-
-int copy_file(const char *from, const char *to)
-{
-    int fd_to, fd_from;
-    char buf[4096];
-    ssize_t nread;
-    int saved_errno;
-    fd_from = open(from, O_RDONLY);
-
-    if (fd_from < 0)
-    {
-        dbg(0, "copy_file:002\n");
-        return -1;
-    }
-
-    fd_to = open(to, O_WRONLY | O_CREAT | O_EXCL, 0666);
-
-    if (fd_to < 0)
-    {
-        dbg(0, "copy_file:003\n");
-        goto out_error;
-    }
-
-    while (nread = read(fd_from, buf, sizeof buf), nread > 0)
-    {
-        char *out_ptr = buf;
-        ssize_t nwritten;
-
-        do
-        {
-            nwritten = write(fd_to, out_ptr, nread);
-
-            if (nwritten >= 0)
-            {
-                nread -= nwritten;
-                out_ptr += nwritten;
-            }
-            else if (errno != EINTR)
-            {
-                dbg(0, "copy_file:004\n");
-                goto out_error;
-            }
-        }
-        while (nread > 0);
-    }
-
-    if (nread == 0)
-    {
-        if (close(fd_to) < 0)
-        {
-            fd_to = -1;
-            dbg(0, "copy_file:005\n");
-            goto out_error;
-        }
-
-        close(fd_from);
-        /* Success! */
-        return 0;
-    }
-
-out_error:
-    saved_errno = errno;
-    close(fd_from);
-
-    if (fd_to >= 0)
-    {
-        close(fd_to);
-    }
-
-    dbg(0, "copy_file:009\n");
-    errno = saved_errno;
-    return -1;
-}
-
-
-
-char *copy_file_to_friend_subdir(int friendlistnum, const char *file_with_path, const char *filename)
-{
-}
-
-int have_resumed_fts_friend(uint32_t friendnum)
-{
-    int j = find_friend_in_friendlist(friendnum);
-
-    if (j == -1)
-    {
-        return 0;
-    }
-
-    if (Friends.list[j].have_resumed_fts == 1)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-void send_file_to_all_friends(Tox *m, const char *file_with_path, const char *filename)
-{
-}
-
 void on_tox_friend_status(Tox *tox, uint32_t friend_number, TOX_USER_STATUS status, void *user_data)
 {
     dbg(2, "on_tox_friend_status:friendnum=%d status=%d\n", (int)friend_number, (int)status);
@@ -3755,7 +3517,6 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
     if (is_friend_online(m, num) == 1)
     {
         dbg(0, "friend %d just got online\n", num);
-        resume_resumable_fts(m, num);
 
         if (avatar_send(m, num) == -1)
         {
@@ -3940,62 +3701,6 @@ void close_file_transfer(Tox *m, struct FileTransfer *ft, int CTRL)
     ft->state = FILE_TRANSFER_INACTIVE; // == 0
 }
 
-int has_reached_max_file_transfer_for_friend(uint32_t num)
-{
-    int active_ft = 0;
-    int friendlistnum = find_friend_in_friendlist(num);
-    int i;
-
-    for (i = 0; i < MAX_FILES; ++i)
-    {
-        struct FileTransfer *ft_send = &Friends.list[friendlistnum].file_sender[i];
-
-        if (ft_send->state != FILE_TRANSFER_INACTIVE)
-        {
-            if (ft_send->file_name != NULL)
-            {
-                active_ft++;
-            }
-        }
-    }
-
-    if (active_ft < MAX_FILES)
-    {
-        return 0;
-    }
-    else
-    {
-        // have reached max filetransfers already
-        return 1;
-    }
-}
-
-struct FileTransfer *get_file_transfer_from_filename_struct(int friendlistnum, const char *filename)
-{
-    size_t i;
-
-    for (i = 0; i < MAX_FILES; ++i)
-    {
-        struct FileTransfer *ft_send = &Friends.list[friendlistnum].file_sender[i];
-
-        if (ft_send->state != FILE_TRANSFER_INACTIVE)
-        {
-            if (ft_send->file_name != NULL)
-            {
-                if ((strlen(ft_send->file_name) > 0) && (filename != NULL) && (strlen(filename) > 0))
-                {
-                    if (strncmp((char *)ft_send->file_name, filename, strlen(ft_send->file_name)) == 0)
-                    {
-                        // dbg(9, "found ft by filename:%s\n", ft_send->file_name);
-                        return ft_send;
-                    }
-                }
-            }
-        }
-    }
-
-    return NULL;
-}
 
 
 struct FileTransfer *get_file_transfer_struct(uint32_t friendnum, uint32_t filenum)
@@ -4508,6 +4213,10 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
                         dbg(0, "toxav_call (1):TOXAV_ERR_CALL_FRIEND_ALREADY_IN_CALL\n");
                         break;
 
+                    case TOXAV_ERR_CALL_OK:
+                        dbg(0, "toxav_call (1):TOXAV_ERR_CALL_OK\n");
+                        break;
+
                     case TOXAV_ERR_CALL_INVALID_BIT_RATE:
                         dbg(0, "toxav_call (1):TOXAV_ERR_CALL_INVALID_BIT_RATE\n");
                         break;
@@ -4520,10 +4229,10 @@ void cmd_vcm(Tox *tox, uint32_t friend_number)
             else
             {
 #ifdef HAVE_TOXAV_OPTION_SET
-                TOXAV_ERR_OPTION_SET error;
+                TOXAV_ERR_OPTION_SET error33;
                 bool res = toxav_option_set(mytox_av, friend_number,
                                             (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_RC_MAX_QUANTIZER,
-                                            (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error);
+                                            (int32_t)DEFAULT_GLOBAL_VID_MAX_Q, &error33);
 #endif
             }
         }
@@ -5298,15 +5007,15 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             {
                 if (strlen(message) > 6)
                 {
-                    int vbr_new = get_number_in_string(message, (int)global__VPX_G_LAG_IN_FRAMES);
+                    int vbr_new2 = get_number_in_string(message, (int)global__VPX_G_LAG_IN_FRAMES);
 
-                    if ((vbr_new >= 0) && (vbr_new <= 100))
+                    if ((vbr_new2 >= 0) && (vbr_new2 <= 100))
                     {
                         if (mytox_av != NULL)
                         {
                             if (friend_to_send_video_to > -1)
                             {
-                                global__VPX_G_LAG_IN_FRAMES = (int)vbr_new;
+                                global__VPX_G_LAG_IN_FRAMES = (int)vbr_new2;
                                 toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, NULL);
                             }
                         }
@@ -5397,8 +5106,8 @@ void friend_message_v2(Tox *tox, uint32_t friend_number,
         {
             memset(msgid_buffer, 0, TOX_PUBLIC_KEY_SIZE + 1);
             bool res2 = tox_messagev2_get_message_id(raw_message, msgid_buffer);
-            uint32_t ts_sec = (uint32_t)time(NULL);
-            tox_util_friend_send_msg_receipt_v2(tox, (uint32_t) friend_number, msgid_buffer, ts_sec);
+            uint32_t ts_sec22 = (uint32_t)time(NULL);
+            tox_util_friend_send_msg_receipt_v2(tox, (uint32_t) friend_number, msgid_buffer, ts_sec22);
             free(msgid_buffer);
         }
 
@@ -5526,48 +5235,6 @@ void save_resumable_fts(Tox *m, uint32_t friendnum)
 
     Friends.list[friendlistnum].have_resumed_fts = 0;
 }
-
-
-
-void resume_resumable_fts(Tox *m, uint32_t friendnum)
-{
-    dbg(9, "resume_resumable_fts:001\n");
-    ll_node_t *saved_ft_list = resumable_filetransfers;
-    int i = 0;
-
-    while (saved_ft_list != NULL)
-    {
-        dbg(9, "resume_resumable_fts:element #%d=%p\n", i, saved_ft_list->val);
-
-        if (saved_ft_list->val != NULL)
-        {
-            struct FileTransfer *ft = (struct FileTransfer *)saved_ft_list->val;
-
-            if (ft->friendnum == friendnum)
-            {
-                dbg(9, "resume_resumable_fts:**found element #%d=%p\n", i, saved_ft_list->val);
-                resume_file_to_friend(m, ft->filenum, ft);
-                // now remove element, and start loop again
-                ll_remove_by_index(&resumable_filetransfers, i);
-                saved_ft_list = resumable_filetransfers;
-                i = 0;
-                continue;
-            }
-        }
-
-        i++;
-        saved_ft_list = saved_ft_list->next;
-    }
-
-    int j = find_friend_in_friendlist(friendnum);
-
-    if (j > -1)
-    {
-        Friends.list[j].have_resumed_fts = 1;
-    }
-}
-
-
 
 void on_file_chunk_request(Tox *tox, uint32_t friendnumber, uint32_t filenumber, uint64_t position,
                            size_t length, void *userdata)
@@ -6055,27 +5722,6 @@ void avatar_unset(Tox *m)
     avatar_clear();
 }
 
-int check_number_of_files_to_resend_to_friend(Tox *m, uint32_t friendnum, int friendlistnum)
-{
-}
-
-void resend_zip_files_and_send(Tox *m, uint32_t friendnum, int friendlistnum)
-{
-}
-
-void process_friends_dir(Tox *m, uint32_t friendnum, int friendlistnum)
-{
-}
-
-void check_friends_dir(Tox *m)
-{
-}
-
-void check_dir(Tox *m)
-{
-}
-
-
 char *get_current_time_date_formatted()
 {
     time_t t;
@@ -6088,7 +5734,6 @@ char *get_current_time_date_formatted()
     // dbg(9, "str_date_time=%s\n", str_date_time);
     return str_date_time;
 }
-
 
 int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
 {
@@ -6603,30 +6248,30 @@ int v4l_stream_off()
 }
 
 
-void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *input, uint16_t width, uint16_t height)
+void yuv422to420(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v, uint8_t *input_local, uint16_t width, uint16_t height)
 {
-    uint8_t *end = input + width * height * 2;
+    uint8_t *end = input_local + width * height * 2;
 
-    while (input != end)
+    while (input_local != end)
     {
-        uint8_t *line_end = input + width * 2;
+        uint8_t *line_end = input_local + width * 2;
 
-        while (input != line_end)
+        while (input_local != line_end)
         {
-            *plane_y++ = *input++;
-            *plane_v++ = *input++;
-            *plane_y++ = *input++;
-            *plane_u++ = *input++;
+            *plane_y++ = *input_local++;
+            *plane_v++ = *input_local++;
+            *plane_y++ = *input_local++;
+            *plane_u++ = *input_local++;
         }
 
-        line_end = input + width * 2;
+        line_end = input_local + width * 2;
 
-        while (input != line_end)
+        while (input_local != line_end)
         {
-            *plane_y++ = *input++;
-            input++; // u
-            *plane_y++ = *input++;
-            input++; // v
+            *plane_y++ = *input_local++;
+            input_local++; // u
+            *plane_y++ = *input_local++;
+            input_local++; // v
         }
     }
 }
@@ -9541,8 +9186,8 @@ void *thread_av(void *data)
 
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
-        pthread_t id = pthread_self();
-        dbg(2, "AV Thread #%d: init cam\n", (size_t) id);
+        pthread_t id22 = pthread_self();
+        dbg(2, "AV Thread #%d: init cam\n", (size_t) id22);
         init_and_start_cam(1, false);
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
@@ -9673,7 +9318,7 @@ void *thread_av(void *data)
                     if (global_camera_orientation_angle_prev != global_camera_orientation_angle)
                     {
                         if ((global_camera_orientation_angle >= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_0)
-                                || (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
+                                && (global_camera_orientation_angle <= TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION_270))
                         {
                             TOXAV_ERR_OPTION_SET error_orientation;
                             toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to, TOXAV_CLIENT_INPUT_VIDEO_ORIENTATION,
@@ -9914,6 +9559,8 @@ void *thread_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean thread exit!\n");
+
+    pthread_exit(0);
 }
 
 void *thread_audio_av(void *data)
@@ -9936,6 +9583,8 @@ void *thread_audio_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean audio thread exit!\n");
+
+    pthread_exit(0);
 }
 
 void *thread_video_av(void *data)
@@ -10009,6 +9658,8 @@ void *thread_video_av(void *data)
     }
 
     dbg(2, "ToxVideo:Clean video thread exit!\n");
+
+    pthread_exit(0);
 }
 
 void reset_toxav_call_waiting()
@@ -10960,13 +10611,13 @@ void audio_record__(int16_t *buf_pointer)
             // write_audio_out_vu_to_file(global_audio_out_vu);
 #endif
             TOXAV_ERR_SEND_FRAME error;
-            bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
+            bool res1 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                               sample_count,
                                               (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
             if (global_confernece_call_active == 1)
             {
-                bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                bool res2 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
                                                   sample_count,
                                                   (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
             }
@@ -10974,13 +10625,13 @@ void audio_record__(int16_t *buf_pointer)
             if (error == TOXAV_ERR_SEND_FRAME_SYNC)
             {
                 yieldcpu(1);
-                res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
+                bool res3 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                              sample_count,
                                              (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
                 if (global_confernece_call_active == 1)
                 {
-                    bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                    bool res4 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
                                                       sample_count,
                                                       (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                 }
@@ -10988,13 +10639,13 @@ void audio_record__(int16_t *buf_pointer)
                 if (error == TOXAV_ERR_SEND_FRAME_SYNC)
                 {
                     yieldcpu(1);
-                    res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
+                    bool res5 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_video_to, (const int16_t *)audio_buf_orig,
                                                  sample_count,
                                                  (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
 
                     if (global_confernece_call_active == 1)
                     {
-                        bool res = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
+                        bool res6 = toxav_audio_send_frame(mytox_av, (uint32_t)friend_to_send_conf_video_to, (const int16_t *)audio_buf_orig,
                                                           sample_count,
                                                           (uint8_t)DEFAULT_AUDIO_CAPTURE_CHANNELS, (uint32_t)DEFAULT_AUDIO_CAPTURE_SAMPLERATE, &error);
                     }
@@ -11106,6 +10757,8 @@ void *thread_record_alsa_audio(void *data)
     free(stream);
 #endif
     close_sound_device();
+
+    pthread_exit(0);
 }
 
 #endif
@@ -11131,11 +10784,11 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 
             if (global_confernece_call_active == 0)
             {
-                TOXAV_ERR_CALL error = 0;
-                toxav_call_wrapper(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error, 1);
-                dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error, new_friend_id);
+                TOXAV_ERR_CALL error444 = 0;
+                toxav_call_wrapper(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error444, 1);
+                dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error444, new_friend_id);
 
-                if (error == TOXAV_ERR_CALL_OK)
+                if (error444 == TOXAV_ERR_CALL_OK)
                 {
                     friend_to_send_conf_video_to = new_friend_id;
                     global_confernece_call_active = 1;
@@ -11158,11 +10811,11 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 
                 if (global_confernece_call_active == 0)
                 {
-                    TOXAV_ERR_CALL error = 0;
-                    toxav_call_wrapper(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error, 1);
-                    dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error, (int)entry_num_friendnum);
+                    TOXAV_ERR_CALL error555 = 0;
+                    toxav_call_wrapper(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error555, 1);
+                    dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error555, (int)entry_num_friendnum);
 
-                    if (error == TOXAV_ERR_CALL_OK)
+                    if (error555 == TOXAV_ERR_CALL_OK)
                     {
                         friend_to_send_conf_video_to = entry_num_friendnum;
                         global_confernece_call_active = 1;
@@ -11219,7 +10872,7 @@ void toggle_speaker()
     snprintf(cmd_001, sizeof(cmd_001), "sudo ./toggle_alsa.sh %d", (int)speaker_out_num);
     dbg(9, "toggle_speaker:cmd=%s\n", cmd_001);
 
-    if (system(cmd_001));
+    if (system(cmd_001)) {}
 
     // -- toggle alsa config with sudo command --
     yieldcpu(40); // wait a bit !!
@@ -11313,9 +10966,10 @@ void write_phonebook_names_to_files(Tox *tox)
                     static char *fr_conn_status_online_udp = "ONLINE (udp)";
                     static char *fr_conn_status_online_tcp = "ONLINE (TCP)";
                     static char *fr_conn_status_unknown = "*unknown*";
-                    static const int max_text_len = 33; // must be more than 32 or snprintf will give an error below
+                    #define MAX_TEXT_LEN_DEF 33
+                    static const int max_text_len = MAX_TEXT_LEN_DEF; // must be more than 32 or snprintf will give an error below
                     char *fr_conn_stats = NULL;
-                    char text_line[max_text_len + 1];
+                    char text_line[MAX_TEXT_LEN_DEF + 1];
                     CLEAR(text_line);
 
                     if (Friends.list[friendlistnum].connection_status == TOX_CONNECTION_NONE)
@@ -11403,6 +11057,8 @@ void *thread_phonebook_invite(void *data)
 
         yieldcpu(30 * 1000); // invite all phonebook entries (that are not yet friends) every 30 seconds
     }
+
+    pthread_exit(0);
 }
 
 
@@ -11614,6 +11270,8 @@ void *thread_ext_keys(void *data)
     }
 
     close(ext_keys_fd);
+
+    pthread_exit(0);
 }
 
 #endif
@@ -13096,7 +12754,6 @@ int main(int argc, char *argv[])
                 }
 
                 return (0);
-                break;
 
             case 'h':
                 printf("Usage: %s [OPTIONS]\n", argv[0]);
