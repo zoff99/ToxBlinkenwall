@@ -587,6 +587,8 @@ static stbir__inline float stbir__saturate(float x)
 }
 
 #ifdef STBIR_SATURATE_INT
+
+#if 0
 static stbir__inline stbir_uint8 stbir__saturate8(int x)
 {
     if ((unsigned int) x <= 255)
@@ -597,7 +599,9 @@ static stbir__inline stbir_uint8 stbir__saturate8(int x)
 
     return 255;
 }
+#endif
 
+#if 0
 static stbir__inline stbir_uint16 stbir__saturate16(int x)
 {
     if ((unsigned int) x <= 65535)
@@ -608,6 +612,8 @@ static stbir__inline stbir_uint16 stbir__saturate16(int x)
 
     return 65535;
 }
+#endif
+
 #endif
 
 static float stbir__srgb_uchar_to_linear_float[256] = {
