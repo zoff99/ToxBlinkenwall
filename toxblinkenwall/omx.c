@@ -162,6 +162,16 @@ static struct OMX_CALLBACKTYPE callbacks =
 
 static void free_omx_buffers(struct omx_state *st)
 {
+    if (!st)
+    {
+        return;
+    }
+
+    if (!st->video_render)
+    {
+        return;
+    }
+
     OMX_ERRORTYPE err;
 
     // free OMX buffers
@@ -202,6 +212,11 @@ int omx_init(struct omx_state *st)
 {
     OMX_ERRORTYPE err;
     bcm_host_init();
+
+    if (!st)
+    {
+        return ENOENT;
+    }
 
     if (st->buffers)
     {
@@ -261,6 +276,11 @@ void omx_deinit(struct omx_state *st)
         return;
     }
 
+    if (!st->video_render)
+    {
+        return;
+    }
+
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
     usleep_usec2(20000);
@@ -315,6 +335,11 @@ void omx_display_disable(struct omx_state *st)
     OMX_CONFIG_DISPLAYREGIONTYPE config;
 
     if (!st)
+    {
+        return;
+    }
+
+    if (!st->video_render)
     {
         return;
     }
@@ -428,6 +453,16 @@ int omx_display_xy(int flag, struct omx_state *st,
 
 int omx_change_video_out_rotation(struct omx_state *st, int angle)
 {
+    if (!st)
+    {
+        return 1;
+    }
+
+    if (!st->video_render)
+    {
+        return 1;
+    }
+
     unsigned int i;
     OMX_PARAM_PORTDEFINITIONTYPE portdef;
     OMX_CONFIG_DISPLAYREGIONTYPE config;
@@ -467,6 +502,16 @@ int omx_change_video_out_rotation(struct omx_state *st, int angle)
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride)
 {
+    if (!st)
+    {
+        1;
+    }
+
+    if (!st->video_render)
+    {
+        1;
+    }
+
     unsigned int i;
     OMX_PARAM_PORTDEFINITIONTYPE portdef;
     OMX_CONFIG_DISPLAYREGIONTYPE config;
@@ -623,6 +668,11 @@ int omx_get_display_input_buffer(struct omx_state *st,
 {
     int buf_idx;
 
+    if (!st)
+    {
+        return EINVAL;
+    }
+
     if (!st->buffers)
     {
         return EINVAL;
@@ -639,6 +689,16 @@ int omx_get_display_input_buffer(struct omx_state *st,
 
 int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
 {
+    if (!st)
+    {
+        return 1;
+    }
+
+    if (!st->video_render)
+    {
+        return 1;
+    }
+
     int buf_idx = st->current_buffer;
     st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME;
     st->buffers[buf_idx]->nOffset = 0;
