@@ -414,13 +414,24 @@ void dbg(int level, const char *fmt, ...);
 // -------- DEBUG --------
 // -------- DEBUG --------
 // -------- DEBUG --------
+#if 0
+
 #define sta() my_log_start(__LINE__, __func__)
 #define ret() my_log_return(__LINE__, __func__)
 #define en() my_log_end(__LINE__, __func__)
 
+#else
+
+#define sta() dummy_noop(__LINE__, __func__)
+#define ret() dummy_noop(__LINE__, __func__)
+#define en() dummy_noop(__LINE__, __func__)
+
+#endif
+
 void my_log_start(int line, const char *func);
 void my_log_return(int line, const char *func);
 void my_log_end(int line, const char *func);
+void dummy_noop(int line, const char *func);
 
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -443,6 +454,10 @@ void my_log_end(int line, const char *func)
 {
     int32_t cur_pthread_tid = (int32_t)gettid();
     dbg(9, "END   :TID=%d:%d:%s\n", cur_pthread_tid, line, func);
+}
+
+void dummy_noop(int line, const char *func)
+{
 }
 // -------- DEBUG --------
 // -------- DEBUG --------
