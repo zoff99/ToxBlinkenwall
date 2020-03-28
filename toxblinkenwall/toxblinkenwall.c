@@ -8592,11 +8592,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     if (global_video_active != 1)
     {
+        ret();
         return;
     }
 
     if (!y)
     {
+        ret();
         return;
     }
 
@@ -8955,6 +8957,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         }
         else
         {
+            ret();
             return;
         }
 
@@ -9599,7 +9602,9 @@ void *thread_video_av(void *data)
 
     while (toxav_video_thread_stop != 1)
     {
+        // dbg(9, "START :ToxAV iterate()\n");
         toxav_iterate(av);
+        // dbg(9, "END   :ToxAV iterate()\n");
 
         if (global_video_active == 1)
         {
