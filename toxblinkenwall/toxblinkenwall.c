@@ -2669,7 +2669,7 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic ignored "-Wall"
 
     // bootstrap nodes
-    if (use_tor == 0)
+    if ((use_tor == 0) && (switch_tcponly == 0))
     {
         bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
     }
@@ -2711,7 +2711,7 @@ void bootstrap_wrapper(Tox *tox)
                     {
                         if (tbw_nd.node_type == 0)
                         {
-                            if (use_tor == 0)
+                            if ((use_tor == 0) && (switch_tcponly == 0))
                             {
                                 bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
 
@@ -3550,11 +3550,16 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
             end_conf_call(mytox_av, 1);
         }
 
+        dbg(0, "friend %d went *OFFLINE*:002\n", num);
+
         // friend went offline -> hang up on all calls
         if ((int64_t)friend_to_send_video_to == (int64_t)num)
         {
+            dbg(0, "friend %d went *OFFLINE*:003\n", num);
             av_local_disconnect(mytox_av, num);
+            dbg(0, "friend %d went *OFFLINE*:004\n", num);
         }
+        dbg(0, "friend %d went *OFFLINE*:005\n", num);
     }
 
     if (global_is_qrcode_showing_on_screen == 1)
@@ -6428,8 +6433,10 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
         dbg(9, "SEM:wait:001_\n");
     }
 
+    dbg(9, "toxav_call_control_wrapper:002\n");
     // only call "toxav_call_control" when no iterate function is active!!
     bool ret = toxav_call_control(av, friend_number, control, error);
+    dbg(9, "toxav_call_control_wrapper:003\n");
 
     if (with_locking == 1)
     {
@@ -6470,8 +6477,10 @@ void end_conf_call(ToxAV *av, int disconnect)
 
     if (disconnect == 1)
     {
+        dbg(9, "end_conf_call:toxav_call_control_wrapper:start\n");
         TOXAV_ERR_CALL_CONTROL error = 0;
         toxav_call_control_wrapper(av, fnum, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+        dbg(9, "end_conf_call:toxav_call_control_wrapper:end\n");
     }
 
 #if 0
@@ -6487,6 +6496,7 @@ void end_conf_call(ToxAV *av, int disconnect)
     }
 
 #endif
+    dbg(9, "end_conf_call:099\n");
     en();
 }
 
@@ -8603,7 +8613,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         void *user_data)
 {
     sta();
-    dbg(9, "--- t_toxav_receive_video_frame_cb ---\n");
 
     if (global_video_active != 1)
     {
@@ -9669,6 +9678,7 @@ void reset_toxav_call_waiting()
 
 void av_local_disconnect(ToxAV *av, uint32_t num)
 {
+    dbg(0, "av_local_disconnect:001\n");
     sta();
     int really_in_call = 0;
     reset_toxav_call_waiting();
@@ -9678,7 +9688,9 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
         really_in_call = 1;
     }
 
+    dbg(0, "av_local_disconnect:002\n");
     end_conf_call(av, 1);
+    dbg(0, "av_local_disconnect:003\n");
 
     if (video_play_rb != NULL)
     {

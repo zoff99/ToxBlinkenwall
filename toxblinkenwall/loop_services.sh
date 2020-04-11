@@ -159,6 +159,10 @@ while [ 1 == 1 ]; do
         tor_option=" -T "
     fi
 
+    if [ -f "OPTION_USETCP" ]; then
+        tor_option=" -t "
+    fi
+
     ldd toxblinkenwall|grep -i libasan > /dev/null 2>&1
     use_asan_lib=$?
     if [ $use_asan_lib -eq 0 ]; then
