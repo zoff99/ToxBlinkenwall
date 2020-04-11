@@ -416,15 +416,15 @@ void dbg(int level, const char *fmt, ...);
 // -------- DEBUG --------
 #if 0
 
-#define sta() my_log_start(__LINE__, __func__)
-#define ret() my_log_return(__LINE__, __func__)
-#define en() my_log_end(__LINE__, __func__)
+    #define sta() my_log_start(__LINE__, __func__)
+    #define ret() my_log_return(__LINE__, __func__)
+    #define en() my_log_end(__LINE__, __func__)
 
 #else
 
-#define sta() dummy_noop(__LINE__, __func__)
-#define ret() dummy_noop(__LINE__, __func__)
-#define en() dummy_noop(__LINE__, __func__)
+    #define sta() dummy_noop(__LINE__, __func__)
+    #define ret() dummy_noop(__LINE__, __func__)
+    #define en() dummy_noop(__LINE__, __func__)
 
 #endif
 
@@ -3559,6 +3559,7 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
             av_local_disconnect(mytox_av, num);
             dbg(0, "friend %d went *OFFLINE*:004\n", num);
         }
+
         dbg(0, "friend %d went *OFFLINE*:005\n", num);
     }
 
