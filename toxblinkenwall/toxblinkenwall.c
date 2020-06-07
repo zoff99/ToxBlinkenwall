@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 70
-static const char global_version_string[] = "0.99.70";
+#define VERSION_PATCH 71
+static const char global_version_string[] = "0.99.71";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -568,6 +568,15 @@ void usleep_usec(uint64_t usec)
     nanosleep(&ts, NULL);
 }
 
+// gives a counter value that increaes every millisecond
+static uint64_t current_time_monotonic_default()
+{
+    uint64_t time = 0;
+    struct timespec clock_mono;
+    clock_gettime(CLOCK_MONOTONIC, &clock_mono);
+    time = 1000ULL * clock_mono.tv_sec + (clock_mono.tv_nsec / 1000000ULL);
+    return time;
+}
 
 // 250=4fps, 500=2fps, 160=6fps, 66=15fps, 40=25fps  // default video fps (sleep in msecs.)
 int DEFAULT_FPS_SLEEP_MS = 10; // about 21 fps in reality on the Pi3 with 480p software encoding
@@ -943,6 +952,8 @@ const int conf_call_vstride = 1280 / 2;
     #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
+sem_t count_tox_write_savedata;
+
 pthread_t ringtone_thread;
 int ringtone_thread_stop = 0;
 
@@ -973,6 +984,8 @@ int count_video_play_threads_int;
 uint8_t *yuv_frame_for_play = NULL;
 size_t yuv_frame_for_play_size = 0;
 sem_t video_play_lock;
+uint64_t incoming_vframe_delta_in_ms = 0;
+uint64_t incoming_vframe_delta_in_ms_002 = 0;
 
 uint16_t video__width;
 uint16_t video__height;
@@ -1033,7 +1046,8 @@ int toxav_video_thread_stop = 0;
 int toxav_iterate_thread_stop = 0;
 int toxav_audioiterate_thread_stop = 0;
 
-uint32_t global_av_iterate_ms = 2;
+uint32_t global_av_iterate_ms = 1;
+uint32_t global_av_audio_iterate_ms = 2;
 uint32_t global_iterate_ms = 2;
 int global_opengl_iterate_ms = 2;
 
@@ -1769,8 +1783,10 @@ void on_offline()
     // set last online timestamp into the past
     uint32_t my_last_online_ts_ = (uint32_t)get_unix_time();
 
+    // TODO: there is a mixup here with seconds and millis!!
     if (my_last_online_ts_ > (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000))
     {
+        // TODO: there is a mixup here with seconds and millis!!
         // give tbw 2 seconds to go online by itself, otherwise we bootstrap again
         my_last_online_ts = my_last_online_ts_ - ((BOOTSTRAP_AFTER_OFFLINE_SECS - 2) * 1000);
     }
@@ -2455,10 +2471,18 @@ void update_savedata_file(const Tox *tox)
     size_t size = tox_get_savedata_size(tox);
     char *savedata = calloc(1, size);
     tox_get_savedata(tox, (uint8_t *)savedata);
+
+    // lock writing of savadata file
+    sem_wait(&count_tox_write_savedata);
+
     FILE *f = fopen(savedata_tmp_filename, "wb");
     fwrite(savedata, size, 1, f);
     fclose(f);
     rename(savedata_tmp_filename, savedata_filename);
+
+    // lock writing of savadata file
+    sem_post(&count_tox_write_savedata);
+
     free(savedata);
 }
 
@@ -7860,6 +7884,9 @@ static void *video_play(void *dummy)
 
     if (!yuv_frame_for_play)
     {
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+        dbg(9, "yuv_frame_for_play:CALLOC <---------- \n");
+#endif
         yuv_frame_for_play = (uint8_t *)calloc(1, y_layer_size + u_layer_size + v_layer_size);
         yuv_frame_for_play_size = y_layer_size + u_layer_size + v_layer_size;
     }
@@ -8451,6 +8478,12 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
     // ignore video on the PI Zero W
     return;
 #endif
+
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+    dbg(9, "incoming_vframe_spent_inside_toxcore:%d\n", (int)(current_time_monotonic_default() - incoming_vframe_delta_in_ms_002));
+#endif
+
+
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
     uint32_t rec_video_frame_ts = (uint32_t)bw_current_time_actual();
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
@@ -8564,6 +8597,11 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                     }
                     else
                     {
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+                        dbg(9, "incoming_vframe_delta:%d\n", (int)(current_time_monotonic_default() - incoming_vframe_delta_in_ms));
+                        incoming_vframe_delta_in_ms = current_time_monotonic_default();
+#endif
+
                         // dbg(2, "creating video play thread #%d\n", get_video_t_counter());
                         if (pthread_detach(video_play_thread))
                         {
@@ -8602,6 +8640,8 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
     {
         dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
     }
+
+    incoming_vframe_delta_in_ms_002 = current_time_monotonic_default();
 
 #endif
     en();
@@ -9575,7 +9615,7 @@ void *thread_audio_av(void *data)
 
         if (global_video_active == 1)
         {
-            usleep_usec(5 * 1000);
+            usleep_usec(global_av_audio_iterate_ms * 1000);
         }
         else
         {
@@ -12893,6 +12933,11 @@ int main(int argc, char *argv[])
         dbg(0, "Error in sem_init for audio_play_lock\n");
     }
 
+    if (sem_init(&count_tox_write_savedata, 0, 1))
+    {
+        dbg(0, "Error in sem_init for count_tox_write_savedata\n");
+    }
+
 #endif
 
     if (sem_init(&video_play_lock, 0, 1))
@@ -13232,6 +13277,7 @@ int main(int argc, char *argv[])
 
         if (am_i_online == 0)
         {
+            // TODO: there is a mixup here with seconds and millis!!
             if ((my_last_online_ts + (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000)) < (uint32_t)get_unix_time())
             {
                 // then bootstap again
@@ -13338,6 +13384,8 @@ int main(int argc, char *argv[])
     sem_destroy(&count_audio_play_threads);
     sem_destroy(&audio_play_lock);
 #endif
+    sem_destroy(&count_tox_write_savedata);
+
 #ifdef HAVE_ALSA_REC
     sem_destroy(&count_audio_record_threads);
     sem_destroy(&audio_record_lock);
