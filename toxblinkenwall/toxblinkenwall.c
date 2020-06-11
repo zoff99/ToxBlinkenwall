@@ -1438,6 +1438,480 @@ int bin_id_to_string(const char *bin_id, size_t bin_id_size, char *output, size_
 
 
 
+// --------------------------------- Audio mixing/resampling ---------------------------------
+// --------------------------------- Audio mixing/resampling ---------------------------------
+// --------------------------------- Audio mixing/resampling ---------------------------------
+
+long global_group_audio_peerbuffers = 0;
+pthread_mutex_t group_audio___mutex;
+int16_t *global___audio_group_ret_buf = NULL;
+int16_t *global___audio_group_temp_buf = NULL;
+int16_t *global_group_audio_peerbuffers_buffer = NULL;
+size_t *global_group_audio_peerbuffers_buffer_start_pos = NULL; // byte position inside the buffer where valid data starts
+size_t *global_group_audio_peerbuffers_buffer_end_pos = NULL; // byte position inside the buffer where valid can be added at
+int audio_play_volume_percent_c = 100;
+float volumeMultiplier = -20.0f;
+int16_t *audio_buffer_pcm_2 = NULL;
+uint64_t audio_mixing_process_last_ts = 0;
+
+#define FIXED_MAX_AUDIO_PEERS 2
+#define PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS 60
+#define MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES ((48000*(PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS * 10)/1000) * 2) // XY ms PCM16 buffer @48kHz mono int16_t values
+
+// function defintions ------------
+size_t Pipe_getUsed(size_t *_rptr, size_t *_wptr);
+void Pipe_updateIndex(size_t *index, size_t bytes);
+size_t Pipe_getFree(size_t *_rptr, size_t *_wptr);
+void mixing_audio_read_buffer(uint32_t peernumber, uint32_t num_samples, int16_t *ret_buffer);
+// function defintions ------------
+
+void set_play_volume_for_mixing(int volume_percent)
+{
+    if((volume_percent >= 0) && (volume_percent <= 100))
+    {
+        audio_play_volume_percent_c = volume_percent;
+    }
+
+    //volume in dB 0db = unity gain, no attenuation, full amplitude signal
+    //           -20db = 10x attenuation, significantly more quiet
+    // ** // float volumeLevelDb = -((float)((100 - volume_percent) / 5)) + 0.0001f;
+    // ** // const float VOLUME_REFERENCE = 1.0f;
+    // ** // volumeMultiplier = (VOLUME_REFERENCE * pow(10, (volumeLevelDb / 20.f)));
+    float volumeLevelDb = ((float)volume_percent / 100.0f) - 1.0f;
+    volumeMultiplier = powf(20, volumeLevelDb);
+    // ** // volumeMultiplier = ((float)audio_play_volume_percent_c / 100.0f);
+    // dbg(9, "set_audio_play_volume_percent:vol=%d mul=%f", volume_percent, volumeMultiplier);
+}
+
+void Pipe_reset(size_t *_rptr, size_t *_wptr)
+{
+    *_wptr = 0;
+    *_rptr = 0;
+}
+
+size_t Pipe_read(char* data, size_t bytes, void * check_buf, void *_buf, size_t *_rptr, size_t *_wptr)
+{
+
+    if (!data)
+    {
+        return 0;
+    }
+
+    if (!check_buf)
+    {
+        return 0;
+    }
+
+    bytes = min(bytes, Pipe_getUsed(_rptr, _wptr));
+    const size_t bytes_read1 = min(bytes, (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2) - (*_rptr));
+    memcpy(data, (char *)_buf + (*_rptr), bytes_read1);
+    memcpy(data + bytes_read1, _buf, bytes - bytes_read1);
+    Pipe_updateIndex(_rptr, bytes);
+
+    return bytes;
+}
+
+size_t Pipe_write(const char* data, size_t bytes, void *_buf, size_t *_rptr, size_t *_wptr)
+{
+
+    if (!data)
+    {
+        return 0;
+    }
+
+    if (!_buf)
+    {
+        return 0;
+    }
+
+    bytes = min(bytes, Pipe_getFree(_rptr, _wptr));
+    const size_t bytes_write1 = min(bytes, (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2) - *_wptr); 
+    memcpy((char *)_buf + *_wptr, data, bytes_write1);
+    memcpy(_buf, data + bytes_write1, bytes - bytes_write1);
+    Pipe_updateIndex(_wptr, bytes);
+
+    return bytes;
+}
+
+void Pipe_dump(void *_buf)
+{
+    printf("buf=");
+    int i;
+    for (i=0;i<(MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2);i++)
+    {
+        printf("%d;", ((uint8_t *)_buf)[i]);
+    }
+    printf("\n");
+}
+
+size_t Pipe_getUsed(size_t *_rptr, size_t *_wptr)
+{
+    if (*_wptr >= *_rptr)
+    {
+        return *_wptr - *_rptr;
+    }
+    else
+    {
+        return (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2) - *_rptr + *_wptr;
+    }
+}
+
+void Pipe_updateIndex(size_t *index, size_t bytes)
+{
+    if (bytes >= (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2) - *index)
+    {
+        *index = *index + bytes - (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2);
+    }
+    else
+    {
+        *index = *index + bytes;
+    }
+}
+
+size_t Pipe_getFree(size_t *_rptr, size_t *_wptr)
+{
+    return ((MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2) - 1 - *_wptr + *_rptr) % (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2);
+}
+
+void mixing_audio_alloc_peer_buffer()
+{    
+    uint32_t num_peers = FIXED_MAX_AUDIO_PEERS;
+
+    set_play_volume_for_mixing(100);
+    audio_mixing_process_last_ts = 0;
+
+    audio_buffer_pcm_2 = (int16_t *)calloc(1, MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2 * 5);
+    global___audio_group_ret_buf = (int16_t *)calloc(1, MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2);
+    global___audio_group_temp_buf = (int16_t *)calloc(1, MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2);
+
+    global_group_audio_peerbuffers_buffer =
+                (int16_t *)calloc(1, (size_t)(num_peers * MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * 2));
+
+    global_group_audio_peerbuffers_buffer_start_pos = (size_t *)calloc(1, (size_t)(num_peers * sizeof(size_t)));
+    global_group_audio_peerbuffers_buffer_end_pos = (size_t *)calloc(1, (size_t)(num_peers * sizeof(size_t)));
+    global_group_audio_peerbuffers = num_peers;
+}
+
+void mixing_audio_free_peer_buffer()
+{
+    free(global_group_audio_peerbuffers_buffer);
+    global_group_audio_peerbuffers_buffer = NULL;
+
+    free(global___audio_group_ret_buf);
+    global___audio_group_ret_buf = NULL;
+
+    free(global___audio_group_temp_buf);
+    global___audio_group_temp_buf = NULL;
+
+    free(audio_buffer_pcm_2);
+    audio_buffer_pcm_2 = NULL;
+
+    free(global_group_audio_peerbuffers_buffer_start_pos);
+    global_group_audio_peerbuffers_buffer_start_pos = NULL;
+
+    free(global_group_audio_peerbuffers_buffer_end_pos);
+    global_group_audio_peerbuffers_buffer_end_pos = NULL;
+}
+
+uint32_t mixing_audio_get_samples_in_buffer(uint32_t peernumber)
+{
+    return (uint32_t)(Pipe_getUsed(
+                &global_group_audio_peerbuffers_buffer_start_pos[peernumber],
+                &global_group_audio_peerbuffers_buffer_end_pos[peernumber]) * 2);
+}
+
+// return how many buffers have more or equal to `sample_count` samples available to read
+uint32_t mixing_audio_any_have_sample_count_in_buffer_count(uint32_t sample_count)
+{
+    uint32_t ret = 0;
+
+    long i;
+    uint32_t has_samples;
+    for(i=0;i<global_group_audio_peerbuffers;i++)
+    {
+        has_samples = mixing_audio_get_samples_in_buffer(i);
+        if (has_samples >= sample_count)
+        {
+            ret++;
+        }
+    }
+
+    return ret;
+}
+
+// return: allocated new pcm16 buffer, caller needs to free it after use (buffer contains exactly `num_samples` mixed samples)
+//         NULL -> some error
+int16_t *mixing_audio_get_mixed_output_buffer(uint32_t num_samples)
+{
+    uint32_t num_bufs_ready = mixing_audio_any_have_sample_count_in_buffer_count(num_samples);
+
+    if (num_bufs_ready < 1)
+    {
+        return NULL;
+    }
+
+    const size_t buf_size = (size_t)(num_samples * 2);
+
+    float damping_factor = (float)num_bufs_ready * 1.5f;
+    if (damping_factor < 1)
+    {
+        damping_factor = 1;
+    }
+    // dbg(9, "damping_factor:1=%f", damping_factor);
+
+    // ------------ change PCM volume here ------------
+    if(audio_play_volume_percent_c < 100)
+    {
+        if(audio_play_volume_percent_c == 0)
+        {
+            return NULL;
+        }
+        else
+        {
+            damping_factor = damping_factor / volumeMultiplier;
+            
+            if(audio_play_volume_percent_c < 30)
+            {
+                damping_factor = damping_factor * 4;
+            }
+            else if(audio_play_volume_percent_c < 20)
+            {
+                damping_factor = damping_factor * 7;
+            }
+
+            // dbg(9, "damping_factor:2=%f mult=%f vol=%d", damping_factor, volumeMultiplier, audio_play_volume_percent_c);
+        }
+    }
+    // ------------ change PCM volume here ------------
+
+
+
+    int16_t *ret_buf = global___audio_group_ret_buf; // (int16_t *)calloc(1, buf_size * 2);
+    memset((void *)ret_buf, 0, buf_size);
+    //if (!ret_buf)
+    //{
+    //    return NULL;
+    //}
+
+    int16_t *temp_buf = global___audio_group_temp_buf; // (int16_t *)calloc(1, buf_size * 2);
+
+    //if (!temp_buf)
+    //{
+    //    // FFF3
+    //    // dbg(9, "FFF3");
+    //    // free(ret_buf);
+    //    return NULL;
+    //}
+
+    long i;
+    uint32_t has_samples;
+    for(i=0;i<global_group_audio_peerbuffers;i++)
+    {
+        has_samples = mixing_audio_get_samples_in_buffer(i);
+        if (has_samples >= num_samples)
+        {
+            // read and mix from this buffer
+            memset((void *)temp_buf, 0, buf_size);
+            mixing_audio_read_buffer((uint32_t)(i), num_samples, temp_buf);
+
+            // ------ now mix it ---------------------------------
+            uint32_t j;
+            for(j=0;j<num_samples;j++)
+            {
+                int32_t mixed_sample = (int32_t)ret_buf[j] + (int32_t)( (int32_t)temp_buf[j] / (int32_t)damping_factor );
+
+                if (mixed_sample > INT16_MAX)
+                {
+                    ret_buf[j] = INT16_MAX;
+                }
+                else if (mixed_sample < INT16_MIN)
+                {
+                    ret_buf[j] = INT16_MIN;
+                }
+                else
+                {
+                    ret_buf[j] = (int16_t)mixed_sample;
+                }
+            }
+            // ------ now mix it ---------------------------------
+        }
+    }
+
+    // dbg(9, "group_audio_get_mixed_output_buffer:088");
+    // FFF4
+    // dbg(9, "FFF4");
+    // free(temp_buf);
+    // dbg(9, "group_audio_get_mixed_output_buffer:099");
+
+    return ret_buf;
+}
+
+void mixing_audio_add_buffer(uint32_t peernumber, int16_t *pcm, uint32_t num_samples)
+{    
+    if ((long)peernumber >= global_group_audio_peerbuffers)
+    {
+        return;
+    }
+
+    size_t bytes_free = Pipe_getFree(global_group_audio_peerbuffers_buffer_start_pos + peernumber,
+                                     global_group_audio_peerbuffers_buffer_end_pos + peernumber);
+
+    if ((size_t)(num_samples * 2) > bytes_free)
+    {
+        // not enough space in the ringbuffer
+        // dbg(9, "group_audio_add_buffer:not enough space in the ringbuffer");
+        Pipe_reset(global_group_audio_peerbuffers_buffer_start_pos + peernumber,
+                   global_group_audio_peerbuffers_buffer_end_pos + peernumber);
+    }
+
+    // dbg(9, "bbb:002:global_group_audio_peerbuffers_buffer=%p", global_group_audio_peerbuffers_buffer);
+
+    Pipe_write((const char*)pcm, (size_t)(num_samples * 2),
+            global_group_audio_peerbuffers_buffer + (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * peernumber),
+            global_group_audio_peerbuffers_buffer_start_pos + peernumber,
+            global_group_audio_peerbuffers_buffer_end_pos + peernumber);
+}
+
+void mixing_audio_read_buffer(uint32_t peernumber, uint32_t num_samples, int16_t *ret_buffer)
+{
+    if ((long)peernumber >= global_group_audio_peerbuffers)
+    {
+        return;
+    }
+
+    if (!ret_buffer)
+    {
+        return;
+    }
+
+    Pipe_read((char *)ret_buffer, (size_t)(num_samples * 2),
+            global_group_audio_peerbuffers_buffer,
+            global_group_audio_peerbuffers_buffer + (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * peernumber),
+            global_group_audio_peerbuffers_buffer_start_pos + peernumber,
+            global_group_audio_peerbuffers_buffer_end_pos + peernumber);
+}
+
+float interpolate_linear(int16_t start, int16_t end, float interpolation_position)
+{
+    if (interpolation_position <= 0.0)
+    {
+        return (float)start;
+    }
+    else if (interpolation_position >= 1.0)
+    {
+        return (float)end;
+    }
+    else
+    {
+        return (
+                ((1.0f - interpolation_position) * (float)start)
+                +
+                (interpolation_position * (float)end)
+               );
+    }
+}
+
+// allowed input sample rates: 8000, 12000, 16000, 24000, 48000
+//
+// return: allocated new pcm16 buffer, caller needs to free it after use
+//         NULL -> some error
+int16_t *upsample_to_48khz(int16_t *pcm, size_t sample_count, uint8_t channels, uint32_t sampling_rate, uint32_t *sample_count_new)
+{    
+    if (sample_count < 2)
+    {
+        return NULL;
+    }
+
+    int upsample_factor = 1;
+
+    if (sampling_rate == 8000)
+    {
+        upsample_factor = 6;
+    }
+    else if (sampling_rate == 12000)
+    {
+        upsample_factor = 4;
+    }
+    else if (sampling_rate == 16000)
+    {
+        upsample_factor = 3;
+    }
+    else if (sampling_rate == 24000)
+    {
+        upsample_factor = 2;
+    }
+    else if (sampling_rate == 48000)
+    {
+        upsample_factor = 1;
+    }
+    else
+    {
+        return NULL;
+    }
+    
+    if (!sample_count_new)
+    {
+        return NULL;
+    }
+    
+    *sample_count_new = sample_count * upsample_factor;
+
+    int32_t new_buffer_byte_size = (*sample_count_new) * 2;
+    int16_t *new_pcm_buffer = calloc(1, (size_t)new_buffer_byte_size); // 48kHz , mono, PCM Int16 signed
+    memset(new_pcm_buffer, 0, new_buffer_byte_size);
+    int16_t *new_pcm_buffer_pos = new_pcm_buffer;
+
+    int32_t i;
+    int32_t j;
+    int16_t *pcm_next;
+
+    if ((sampling_rate == 48000) && (channels == 2))
+    {
+        pcm_next = pcm;
+        for (i = 0; i < (int32_t)sample_count; i++)
+        {
+            // copy each int16 sample from the LEFT channel to the result buffer
+            memcpy(new_pcm_buffer_pos, pcm_next, 2);
+            pcm_next++; // current sample for RIGHT channel
+            pcm_next++; // next sample for LEFT channel
+            new_pcm_buffer_pos++; // advance result buffer
+        }
+
+        return new_pcm_buffer;
+    }
+
+
+    for (i = 0; i < ((int32_t)sample_count - 1); i++)
+    {
+        pcm_next = pcm + 1;
+        if (channels == 2)
+        {
+            pcm_next++;
+        }
+
+        for (j = 0; j < upsample_factor; j++)
+        {
+            *new_pcm_buffer_pos = (int16_t)interpolate_linear(*pcm, *pcm_next, j/upsample_factor);
+            new_pcm_buffer_pos++;
+        }
+
+        pcm++;
+        if (channels == 2)
+        {
+            pcm++;
+        }
+    }
+
+    *new_pcm_buffer_pos = *pcm;
+    return new_pcm_buffer;
+}
+
+// --------------------------------- Audio mixing/resampling ---------------------------------
+// --------------------------------- Audio mixing/resampling ---------------------------------
+// --------------------------------- Audio mixing/resampling ---------------------------------
+
+
+
 
 // linked list ----------
 typedef struct ll_node
@@ -1981,7 +2455,6 @@ void on_start_call()
     }
 }
 
-
 void *play_ringtone(void *data)
 {
 #define PI 3.14159265359
@@ -2316,7 +2789,6 @@ void stop_calc_network_traffic()
     pthread_join(networktraffic_thread, NULL);
 }
 
-
 void start_play_ringtone()
 {
     dbg(2, "start_play_ringtone\n");
@@ -2465,7 +2937,6 @@ void replace_bad_char_from_string(char *str, const char replace_with)
     }
 }
 
-
 void update_savedata_file(const Tox *tox)
 {
     size_t size = tox_get_savedata_size(tox);
@@ -2498,7 +2969,6 @@ off_t file_size(const char *path)
     return st.st_size;
 }
 
-
 void random_char(char *output, int len)
 {
     int i;
@@ -2524,7 +2994,6 @@ void bin_id_to_string_all(const char *bin_id, size_t bin_id_size, char *output, 
         }
     }
 }
-
 
 size_t get_file_name(char *namebuf, size_t bufsize, const char *pathname)
 {
@@ -2990,7 +3459,6 @@ void stop_endless_image()
 
     if (system(cmd_str)) {}
 }
-
 
 void show_endless_loading()
 {
@@ -3713,9 +4181,6 @@ static void load_friendlist(Tox *m)
     free_friendlist_nums((void *) friend_lookup_list);
 }
 
-
-
-
 void close_file_transfer(Tox *m, struct FileTransfer *ft, int CTRL)
 {
     dbg(9, "close_file_transfer:001\n");
@@ -3743,8 +4208,6 @@ void close_file_transfer(Tox *m, struct FileTransfer *ft, int CTRL)
     memset(ft, 0, sizeof(struct FileTransfer));
     ft->state = FILE_TRANSFER_INACTIVE; // == 0
 }
-
-
 
 struct FileTransfer *get_file_transfer_struct(uint32_t friendnum, uint32_t filenum)
 {
@@ -3800,7 +4263,6 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
     tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, (uint8_t *)msg2, length, NULL);
 #endif
 }
-
 
 void change_nospam_to_new_random_value(Tox *tox)
 {
@@ -6520,6 +6982,11 @@ void end_conf_call(ToxAV *av, int disconnect)
         conf_call_v = NULL;
     }
 
+    pthread_mutex_lock(&group_audio___mutex);
+    global_group_audio_peerbuffers = 0;
+    mixing_audio_free_peer_buffer();
+    pthread_mutex_unlock(&group_audio___mutex);
+
 #endif
     dbg(9, "end_conf_call:099\n");
     en();
@@ -6540,6 +7007,14 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
         conf_call_u = conf_call_y + (conf_call_width * conf_call_height);
         conf_call_v = conf_call_u + ((conf_call_width / 2) * (conf_call_height / 2));
     }
+
+    pthread_mutex_lock(&group_audio___mutex);
+    global_group_audio_peerbuffers = 0;
+    mixing_audio_free_peer_buffer();
+    // -------------------
+    mixing_audio_alloc_peer_buffer();
+    pthread_mutex_unlock(&group_audio___mutex);
+
 
     TOXAV_ERR_ANSWER err;
     int audio_bitrate = DEFAULT_GLOBAL_AUD_BITRATE;
@@ -6612,7 +7087,6 @@ void answer_incoming_av_call(ToxAV *av, uint32_t friend_number, bool audio_enabl
     reset_toxav_call_waiting();
     en();
 }
-
 
 static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enabled, bool video_enabled, void *user_data)
 {
@@ -6984,7 +7458,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     en();
 }
 
-
 static void t_toxav_bit_rate_status_cb(ToxAV *av, uint32_t friend_number,
                                        uint32_t audio_bit_rate, uint32_t video_bit_rate,
                                        void *user_data)
@@ -7119,7 +7592,7 @@ int get_video_trec_counter()
     return ret;
 }
 
-static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
+static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
         uint8_t channels,
@@ -7280,22 +7753,161 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     else
     {
     }
-
-    // CallControl *cc = (CallControl *)user_data;
-    // frame *f = (frame *)malloc(sizeof(uint16_t) + sample_count * sizeof(int16_t) * channels);
-    // memcpy(f->data, pcm, sample_count * sizeof(int16_t) * channels);
-    // f->size = sample_count;
-    // pthread_mutex_lock(cc->arb_mutex);
-    // free(rb_write(cc->arb, f));
-    // pthread_mutex_unlock(cc->arb_mutex);
-    //long long timspan_in_ms;
-    //timspan_in_ms = __utimer_stop(&tm_033, "toxav_receive_video_frame:", 1);
-    //if (timspan_in_ms > 0)
-    //{
-    //    dbg(9, "toxav_receive_audio_frame: %llu ms\n", timspan_in_ms);
-    //}
 }
 
+int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_new, int want_ms_output);
+
+static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
+        int16_t const *pcm,
+        size_t sample_count,
+        uint8_t channels,
+        uint32_t sampling_rate,
+        void *user_data)
+{
+
+#ifdef RPIZEROW
+    t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data);
+#else
+
+    int delta = 0;
+
+    if (pcm)
+    {
+        if (global_confernece_call_active == 1)
+        {
+            if ((int64_t)friend_to_send_conf_video_to == (int64_t)friend_number)
+            {
+                pthread_mutex_lock(&group_audio___mutex);
+                if ((channels == 1) && (sampling_rate == 48000))
+                {
+                    mixing_audio_add_buffer(1, (int16_t *)pcm, sample_count);
+                    pthread_mutex_unlock(&group_audio___mutex);
+                    goto PROCESS_AUDIO_MIX;
+                }
+
+                uint32_t sample_count_new = 0;
+                int16_t *new_pcm_buffer = upsample_to_48khz((int16_t *)pcm, (size_t)sample_count, (uint8_t)channels, (uint32_t)sampling_rate, &sample_count_new);
+
+                if (!new_pcm_buffer)
+                {
+                    if ((channels == 1) && (sampling_rate == 48000))
+                    {
+                        mixing_audio_add_buffer(1, (int16_t *)pcm, sample_count);
+                    }
+                    else
+                    {
+                    }
+                }
+                else
+                {
+                    // use new_pcm_buffer with upsampled data
+                    mixing_audio_add_buffer(1, new_pcm_buffer, sample_count_new);
+                    free(new_pcm_buffer);
+                }
+
+                pthread_mutex_unlock(&group_audio___mutex);
+            }
+            else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
+            {
+                pthread_mutex_lock(&group_audio___mutex);
+                if ((channels == 1) && (sampling_rate == 48000))
+                {
+                    mixing_audio_add_buffer(0, (int16_t *)pcm, sample_count);
+                    pthread_mutex_unlock(&group_audio___mutex);
+                    goto PROCESS_AUDIO_MIX;
+                }
+
+                uint32_t sample_count_new = 0;
+                int16_t *new_pcm_buffer = upsample_to_48khz((int16_t *)pcm, (size_t)sample_count, (uint8_t)channels, (uint32_t)sampling_rate, &sample_count_new);
+
+                if (!new_pcm_buffer)
+                {
+                    if ((channels == 1) && (sampling_rate == 48000))
+                    {
+                        mixing_audio_add_buffer(0, (int16_t *)pcm, sample_count);
+                    }
+                    else
+                    {
+                    }
+                }
+                else
+                {
+                    // use new_pcm_buffer with upsampled data
+                    mixing_audio_add_buffer(0, new_pcm_buffer, sample_count_new);
+                    free(new_pcm_buffer);
+                }
+
+                pthread_mutex_unlock(&group_audio___mutex);
+            }
+            else
+            {
+                goto PROCESS_AUDIO_MIX;
+            }
+        }
+        else
+        {
+            // single caller, just call the wrapper with values as they are
+            t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data);
+        }
+    }
+    else
+    {
+        goto PROCESS_AUDIO_MIX;
+    }
+
+PROCESS_AUDIO_MIX:
+
+    if (global_confernece_call_active == 1)
+    {
+        delta = (int)(current_time_monotonic_default() - audio_mixing_process_last_ts);
+
+        if (delta > 59)
+        {
+            // dbg(9, "process_incoming_mixing_audio:delta=%d\n", delta);
+            audio_mixing_process_last_ts = current_time_monotonic_default();
+            process_incoming_mixing_audio(av, friend_to_send_video_to, 0, 60);
+        }
+    }
+#endif
+
+}
+
+int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_new, int want_ms_output)
+{
+    int64_t start_time = current_time_monotonic_default();
+
+    pthread_mutex_lock(&group_audio___mutex);
+
+    int16_t *pcm_mixed = NULL;
+    int need_process_output = 0;
+
+    const int want_sample_count_40ms = (int)(48000*want_ms_output/1000);
+
+    pcm_mixed = mixing_audio_get_mixed_output_buffer(want_sample_count_40ms);
+
+    if (pcm_mixed)
+    {
+        memcpy((void *)audio_buffer_pcm_2, (void *)pcm_mixed, (size_t)(want_sample_count_40ms * 1 * 2));
+
+        pthread_mutex_unlock(&group_audio___mutex);
+
+        t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, audio_buffer_pcm_2,
+                        want_sample_count_40ms, 1, 48000, NULL);
+
+        // (*jnienv2)->CallStaticVoidMethod(jnienv2, MainActivity,
+        //                          android_toxav_callback_group_audio_receive_frame_cb_method,
+        //                          (jlong)(unsigned long long)global_group_audio_acitve_num,
+        //                          (jlong)(unsigned long long)0,
+        //                          (jlong)want_sample_count_40ms, (jint)1,
+        //                          (jlong)48000
+        //                         );
+        pthread_mutex_lock(&group_audio___mutex);
+    }
+
+    pthread_mutex_unlock(&group_audio___mutex);
+
+    return (int32_t)(current_time_monotonic_default() - start_time);
+}
 
 void update_status_line_on_fb()
 {
@@ -12683,6 +13295,10 @@ void *thread_opengl(void *data)
 int main(int argc, char *argv[])
 {
     on_start();
+
+    // to avoid unused function error
+    current_time_monotonic_default();
+
     // don't accept calls until video device is ready
     accepting_calls = 0;
     show_own_cam = 1;
@@ -12939,6 +13555,11 @@ int main(int argc, char *argv[])
     }
 
 #endif
+
+    if (pthread_mutex_init(&group_audio___mutex, NULL) != 0)
+    {
+    }
+
 
     if (sem_init(&video_play_lock, 0, 1))
     {
@@ -13379,6 +14000,9 @@ int main(int argc, char *argv[])
     sem_destroy(&video_in_frame_copy_sem);
     sem_destroy(&count_video_play_threads);
     sem_destroy(&video_play_lock);
+
+    pthread_mutex_destroy(&group_audio___mutex);
+
 #ifdef HAVE_ALSA_PLAY
     close_sound_play_device();
     sem_destroy(&count_audio_play_threads);
