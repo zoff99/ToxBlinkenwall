@@ -177,8 +177,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 71
-static const char global_version_string[] = "0.99.71";
+#define VERSION_PATCH 72
+static const char global_version_string[] = "0.99.72";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -995,10 +995,10 @@ uint8_t const *video__v;
 int32_t video__ystride;
 int32_t video__ustride;
 int32_t video__vstride;
-uint32_t video__received_ts;
+uint64_t video__received_ts;
 #define VIDEO_RECEIVED_TS_MEAN_NUM 10
 uint32_t video__received_ts_pos = 0;
-uint32_t video__received_ts_mean[VIDEO_RECEIVED_TS_MEAN_NUM];
+uint64_t video__received_ts_mean[VIDEO_RECEIVED_TS_MEAN_NUM];
 
 
 #define MAX_VIDEO_RECORD_THREADS 1
@@ -1032,7 +1032,7 @@ int count_video_record_threads_int;
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
 uint32_t global_video_quality = 1; // 1 -> normal, 0 -> low
-int32_t global_video_dbuf_ms = 250;
+int32_t global_video_dbuf_ms = 40;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
@@ -1101,7 +1101,7 @@ uint32_t global_encoder_video_bitrate_prev = 0;
 uint32_t global_network_round_trip_ms = 0;
 int64_t global_play_delay_ms = 0;
 int64_t global_remote_record_delay = 0;
-uint32_t global_bw_video_play_delay = 0;
+uint64_t global_bw_video_play_delay = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_video_h264_incoming_profile = 0;
 uint32_t global_video_h264_incoming_level = 0;
@@ -8377,7 +8377,7 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
-                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_bw_video_play_delay,
                  (int)global_video_play_buffer_entries,
                  (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
@@ -8390,7 +8390,7 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
-                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_bw_video_play_delay,
                  (int)global_video_play_buffer_entries,
                  (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
@@ -8470,7 +8470,7 @@ static void *video_play(void *dummy)
     int32_t ystride = video__ystride;
     int32_t ustride = video__ustride;
     int32_t vstride = video__vstride;
-    uint32_t received_ts = video__received_ts;
+    uint64_t received_ts = video__received_ts;
     int frame_width_px1 = (int)width;
     int frame_height_px1 = (int)height;
     int ystride_ = (int)ystride;
@@ -9041,12 +9041,12 @@ static void *video_play(void *dummy)
     }
 
 #endif
-    uint32_t video_frame_play_delay_tbw = ((uint32_t)bw_current_time_actual() - received_ts) / 1000;
+    uint64_t video_frame_play_delay_tbw = current_time_monotonic_default() - received_ts;
 
-    if ((video_frame_play_delay_tbw > 5) && (video_frame_play_delay_tbw < 50))
+    if ((video_frame_play_delay_tbw >= 0) && (video_frame_play_delay_tbw < 400))
     {
         video__received_ts_mean[video__received_ts_pos] = video_frame_play_delay_tbw;
-        uint32_t mean_delay_ms = 0;
+        uint64_t mean_delay_ms = 0;
 
         for (int jj = 0; jj < VIDEO_RECEIVED_TS_MEAN_NUM; jj++)
         {
@@ -9054,7 +9054,7 @@ static void *video_play(void *dummy)
         }
 
         mean_delay_ms = mean_delay_ms / VIDEO_RECEIVED_TS_MEAN_NUM;
-        global_bw_video_play_delay = mean_delay_ms * 1000;
+        global_bw_video_play_delay = mean_delay_ms;
         video__received_ts_pos++;
 
         if (video__received_ts_pos >= VIDEO_RECEIVED_TS_MEAN_NUM)
@@ -9097,7 +9097,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
 
 
     // dbg(9, "VP-DEBUG:F:001:video__y=%p %p %p\n", y, u, v);
-    uint32_t rec_video_frame_ts = (uint32_t)bw_current_time_actual();
+    uint64_t rec_video_frame_ts = current_time_monotonic_default();
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     dbg(9, "VP-DEBUG:===========\n");
     struct timeval tm_022;
@@ -10295,10 +10295,17 @@ void *thread_video_av(void *data)
             if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
             {
                 TOXAV_ERR_OPTION_SET error;
-                // dbg(9, "toxav_option_set:%d\n", -((int)(global_bw_video_play_delay / 1000)));
+                dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d\n", (int)global_bw_video_play_delay);
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
-                                            (TOXAV_OPTIONS_OPTION)TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
-                                            -((int)(global_bw_video_play_delay / 1000)), &error);
+                                            TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
+                                            ((int)global_bw_video_play_delay - 40), &error);
+
+                toxav_option_set(av, (uint32_t)friend_to_send_video_to,
+                                 TOXAV_DECODER_VIDEO_BUFFER_MS,
+                                 (int)global_video_dbuf_ms,
+                                 &error);
+                dbg(9, "setting TOXAV_DECODER_VIDEO_BUFFER_MS to:%d res=%d\n", (int)global_video_dbuf_ms, (int)error);
+
                 update_video_delay_every_ms_counter = 0;
             }
 
@@ -12795,7 +12802,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
-                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_bw_video_play_delay,
                  (int)global_video_play_buffer_entries,
                  (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
@@ -12808,7 +12815,7 @@ void draw_fps_to_overlay(ESContext *esContext, float fps)
                  global_network_round_trip_ms,
                  (int)global_remote_record_delay,
                  (int)global_play_delay_ms,
-                 (int)(global_bw_video_play_delay / 1000),
+                 (int)global_bw_video_play_delay,
                  (int)global_video_play_buffer_entries,
                  (int)global_tox_video_incoming_fps,
                  (int)global_video_in_fps);
