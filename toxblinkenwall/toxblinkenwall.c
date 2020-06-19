@@ -996,7 +996,7 @@ int32_t video__ystride;
 int32_t video__ustride;
 int32_t video__vstride;
 uint64_t video__received_ts;
-#define VIDEO_RECEIVED_TS_MEAN_NUM 10
+#define VIDEO_RECEIVED_TS_MEAN_NUM 20
 uint32_t video__received_ts_pos = 0;
 uint64_t video__received_ts_mean[VIDEO_RECEIVED_TS_MEAN_NUM];
 
@@ -10298,13 +10298,14 @@ void *thread_video_av(void *data)
                 dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d\n", (int)global_bw_video_play_delay);
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
-                                            ((int)global_bw_video_play_delay - 40), &error);
+                                            (int)global_bw_video_play_delay, &error);
 
+#if 0
                 toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                  TOXAV_DECODER_VIDEO_BUFFER_MS,
                                  (int)global_video_dbuf_ms,
                                  &error);
-                dbg(9, "setting TOXAV_DECODER_VIDEO_BUFFER_MS to:%d res=%d\n", (int)global_video_dbuf_ms, (int)error);
+#endif
 
                 update_video_delay_every_ms_counter = 0;
             }
