@@ -10295,7 +10295,7 @@ void *thread_video_av(void *data)
             if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
             {
                 TOXAV_ERR_OPTION_SET error;
-                dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d\n", (int)global_bw_video_play_delay);
+                // dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d\n", (int)global_bw_video_play_delay);
                 // 40ms subtracted because audio playing also has some delay that we guess is about 40ms
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
