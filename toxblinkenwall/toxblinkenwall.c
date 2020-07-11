@@ -13301,6 +13301,9 @@ int main(int argc, char *argv[])
     // to avoid unused function error
     current_time_monotonic_default();
 
+    // call function to avoid unused function compiler error
+    bw_current_time_actual();
+
     // don't accept calls until video device is ready
     accepting_calls = 0;
     show_own_cam = 1;
