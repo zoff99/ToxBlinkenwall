@@ -179,6 +179,8 @@ network={
 #define VERSION_MINOR 99
 #define VERSION_PATCH 73
 static const char global_version_string[] = "0.99.73";
+
+#define TBW_GIT_COMMIT_HASH "00000006"
 // ----------- version -----------
 // ----------- version -----------
 
@@ -3597,11 +3599,27 @@ void show_tox_id_qrcode(Tox *tox)
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
             // ------------------------------------
+            // Display commit hash
+            CLEAR(text_line);
+            snprintf(text_line, sizeof(text_line), "tbw git hash: v%s", TBW_GIT_COMMIT_HASH);
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  line_position_x_header, line_position_y, text_line);
+            line_position_y = line_position_y + 20;
+            // ------------------------------------
             CLEAR(text_line);
             int v_1 = (int)tox_version_major();
             int v_2 = (int)tox_version_minor();
             int v_3 = (int)tox_version_patch();
             snprintf(text_line, sizeof(text_line), "Zoxcore v%d.%d.%d", v_1, v_2, v_3);
+            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
+                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                                  line_position_x_header, line_position_y, text_line);
+            line_position_y = line_position_y + 20;
+            // ------------------------------------
+            // Display commit hash
+            CLEAR(text_line);
+            snprintf(text_line, sizeof(text_line), "ct git hash: v%s", TOX_GIT_COMMIT_HASH);
             text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
                                   var_framebuffer_fix_info.line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
@@ -5406,17 +5424,21 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                     if ((vbr_new >= DEFAULT_GLOBAL_MIN_VID_BITRATE) && (vbr_new <= DEFAULT_GLOBAL_MAX_VID_BITRATE))
                     {
-                        DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
-                        global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
-                        update_status_line_1_text();
-
                         if (mytox_av != NULL)
                         {
                             if (friend_to_send_video_to > -1)
                             {
-                                TOXAV_ERR_BIT_RATE_SET error2;
-                                toxav_bit_rate_set(mytox_av, (uint32_t)friend_to_send_video_to, global_audio_bit_rate, global_video_bit_rate, &error2);
-                                dbg(9, "setting vbr to:%d res=%d\n", (int)global_video_bit_rate, (int)error2);
+#ifdef HAVE_TOXAV_OPTION_SET
+                                TOXAV_ERR_OPTION_SET error;
+                                bool res = toxav_option_set(mytox_av, (uint32_t)friend_to_send_video_to,
+                                                            (TOXAV_OPTIONS_OPTION)TOXAV_ENCODER_VIDEO_MAX_BITRATE,
+                                                            (int32_t)vbr_new, &error);
+
+                                DEFAULT_GLOBAL_VID_BITRATE = (int32_t)vbr_new;
+                                global_video_bit_rate = DEFAULT_GLOBAL_VID_BITRATE;
+                                update_status_line_1_text();
+
+#endif
                             }
                         }
                     }
