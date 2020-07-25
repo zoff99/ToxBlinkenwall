@@ -1104,6 +1104,7 @@ uint32_t global_network_round_trip_ms = 0;
 int64_t global_play_delay_ms = 0;
 int64_t global_remote_record_delay = 0;
 uint64_t global_bw_video_play_delay = 0;
+int32_t global_bw_audio_to_video_delay_ms = 0;
 uint32_t global_video_play_buffer_entries = 0;
 uint32_t global_video_h264_incoming_profile = 0;
 uint32_t global_video_h264_incoming_level = 0;
@@ -4764,6 +4765,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
     send_text_message_to_friend(tox, friend_number, " .owncam <0|1>  --> show own video on/off");
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
+    send_text_message_to_friend(tox, friend_number, " .atvd <num>    --> a2v delay in ms (+100)");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .thd           --> toggle camera 480p / 720p");
     send_text_message_to_friend(tox, friend_number, " .tpr           --> toggle H264 profile base / high");
@@ -5218,6 +5220,21 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                         }
 
 #endif
+                    }
+                }
+            }
+            else if (strncmp((char *)message, ".atvd ", strlen((char *)".atvd ")) == 0)
+            {
+                dbg(9, "atvd:len=%d\n", strlen(message));
+                if (strlen(message) > 6) // require min. 1 digits
+                {
+                    dbg(9, "atvd:len=%d\n", strlen(message));
+                    int value_new = get_number_in_string(message, (int)1 + 300);
+                    dbg(9, "atvd:value_new=%d\n", value_new);
+
+                    if ((value_new >= 1) && (value_new <= 950))
+                    {
+                        global_bw_audio_to_video_delay_ms = value_new - 300;
                     }
                 }
             }
@@ -7676,14 +7693,20 @@ static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                 sem_wait(&audio_play_lock);
                 int err;
                 int has_error = 0;
+                float ms_per_frame = (1000.0f / libao_sampling_rate);
+
+                debug_alsa_play_001++;
+
                 snd_pcm_sframes_t avail_frames_in_play_buffer;
                 snd_pcm_sframes_t delay_in_samples;
-                snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
-                float ms_per_frame = (1000.0f / libao_sampling_rate);
-                debug_alsa_play_001++;
+                snd_pcm_sframes_t delay_inframes_;
 
                 if (debug_alsa_play_001 > ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES)
                 {
+                    snd_pcm_avail_delay(audio_play_handle, &avail_frames_in_play_buffer, &delay_in_samples);
+
+                    snd_pcm_delay(audio_play_handle, &delay_inframes_);
+
                     debug_alsa_play_001 = 0;
                     //dbg(9, "snd_pcm_avail avail_frames_p_buffer:%d sample_count=%d delay_in_samples=%d\n",
                     //    avail_frames_in_play_buffer, sample_count, delay_in_samples);
@@ -10317,11 +10340,14 @@ void *thread_video_av(void *data)
             if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
             {
                 TOXAV_ERR_OPTION_SET error;
-                // dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d\n", (int)global_bw_video_play_delay);
-                // 40ms subtracted because audio playing also has some delay that we guess is about 40ms
+                dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d:%d\n", (int)global_bw_video_play_delay,
+                                    (int)global_bw_audio_to_video_delay_ms);
+                // XX ms subtracted because audio playing also has some delay that we guess is about XX ms
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
-                                            (int)global_bw_video_play_delay - 40, &error);
+                                            (int)global_bw_video_play_delay - 0 -
+                                            (int)global_bw_audio_to_video_delay_ms,
+                                            &error);
 
                 update_video_delay_every_ms_counter = 0;
             }
