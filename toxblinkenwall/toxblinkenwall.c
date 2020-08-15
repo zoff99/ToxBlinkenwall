@@ -163,6 +163,20 @@ network={
  * ./v4l2grab -o image.jpg
  */
 
+/*
+ * 
+ *     snd_pcm_status_t *pcm_status;
+    snd_pcm_status_alloca(&pcm_status); //Allocate space on the stack
+    snd_pcm_status(handle, pcm_status);
+    int delay = snd_pcm_status_get_delay(pcm_status);
+    snd_htimestamp_t tstamp;
+    snd_pcm_status_get_audio_htstamp(pcm_status, &tstamp);
+
+    uint64_t Time = tstamp.tv_sec * (uint64_t) 1000000000 + tstamp.tv_nsec;
+    Time += (delay * (uint64_t) 1000000000) / 44100;
+
+ */
+
 #define _GNU_SOURCE
 
 
@@ -13376,7 +13390,7 @@ int main(int argc, char *argv[])
     default_fps_sleep_corrected = DEFAULT_FPS_SLEEP_MS;
     camera_res_high_wanted_prev = video_high;
     logfile = fopen(log_filename, "wb");
-    setvbuf(logfile, NULL, _IONBF, 0);
+    setvbuf(logfile, NULL, _IOLBF, 0);
     v4l2_device = calloc(1, 400);
     snprintf(v4l2_device, 399, "%s", "/dev/video0");
     framebuffer_device = calloc(1, 400);
