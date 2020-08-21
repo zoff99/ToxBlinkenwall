@@ -9470,7 +9470,7 @@ static void paint_conference_video_into_bounding_box_yuv(uint16_t width, uint16_
         uint8_t *conf_call_y_copy = buf_conf_call_y;
         conf_call_y_copy = conf_call_y_copy + (bbox_h_start * buf_conf_call_ystride);
 
-        for (int gg = bbox_h_start; gg < bbox_h_end; gg++)
+        for (int gg = (int)bbox_h_start; gg < (int)bbox_h_end; gg++)
         {
             memset(conf_call_y_copy + bbox_w_start, 0, (bbox_w_end - bbox_w_start));
             conf_call_y_copy = conf_call_y_copy + buf_conf_call_ystride;
@@ -9479,7 +9479,7 @@ static void paint_conference_video_into_bounding_box_yuv(uint16_t width, uint16_
         uint8_t *conf_call_u_copy = buf_conf_call_u;
         conf_call_u_copy = conf_call_u_copy + ((bbox_h_start / 2) * buf_conf_call_ustride);
 
-        for (int gg = (bbox_h_start / 2); gg < (bbox_h_end / 2); gg++)
+        for (int gg = (int)(bbox_h_start / 2); gg < (int)(bbox_h_end / 2); gg++)
         {
             memset(conf_call_u_copy + (int)(bbox_w_start / 2), 128, (int)((bbox_w_end - bbox_w_start) / 2));
             conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
@@ -9488,7 +9488,7 @@ static void paint_conference_video_into_bounding_box_yuv(uint16_t width, uint16_
         uint8_t *conf_call_v_copy = buf_conf_call_v;
         conf_call_v_copy = conf_call_v_copy + ((bbox_h_start / 2) * buf_conf_call_vstride);
 
-        for (int gg = (bbox_h_start / 2); gg < (bbox_h_end / 2); gg++)
+        for (int gg = (int)(bbox_h_start / 2); gg < (int)(bbox_h_end / 2); gg++)
         {
             memset(conf_call_v_copy + (int)(bbox_w_start / 2), 128, (int)((bbox_w_end - bbox_w_start) / 2));
             conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
