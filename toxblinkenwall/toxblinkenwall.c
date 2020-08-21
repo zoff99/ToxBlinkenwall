@@ -191,8 +191,8 @@ network={
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 73
-static const char global_version_string[] = "0.99.73";
+#define VERSION_PATCH 74
+static const char global_version_string[] = "0.99.74";
 
 #define TBW_GIT_COMMIT_HASH "00000006"
 // ----------- version -----------
