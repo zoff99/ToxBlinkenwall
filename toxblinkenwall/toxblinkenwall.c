@@ -9317,6 +9317,309 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
     en();
 }
 
+/*
+ * calculate the bounding box where this video frame should be placed on the confcall video buffer
+ */
+static void get_conference_video_bounding_box(uint32_t active_calls_count, uint32_t current_call_num,
+    uint32_t *w_start, uint32_t *w_end, uint32_t *h_start, uint32_t *h_end,
+    uint32_t conf_call_w, uint32_t conf_call_h)
+{
+    if (active_calls_count > 4)
+    {
+        // ERROR
+        dbg(1, "get_conference_video_bounding_box:too many active calls!\n");
+        *w_start = 0;
+        *w_end = conf_call_w - 1;
+        *h_start = 0;
+        *h_end = conf_call_h - 1;
+        return;
+    }
+
+    if (active_calls_count > 1)
+    {
+        if (active_calls_count == 2)
+        {
+            if (current_call_num == 1)
+            {
+                // left half
+                *w_start = 0;
+                *w_end = (conf_call_w - 2) / 2; // "-2" to make sure we dont overlap
+                *h_start = 0;
+                *h_end = conf_call_h - 1;
+                return;
+            }
+            else // current_call_num == 2
+            {
+                // right half
+                *w_start = conf_call_w / 2;
+                *w_end = conf_call_w - 1;
+                *h_start = 0;
+                *h_end = conf_call_h - 1;
+                return;
+            }
+        }
+        else // active_calls_count == [3..4]
+        {
+            if (current_call_num == 1)
+            {
+                // left top quarter
+                *w_start = 0;
+                *w_end = (conf_call_w - 2) / 2; // "-2" to make sure we dont overlap
+                *h_start = 0;
+                *h_end = (conf_call_h - 2) / 2; // "-2" to make sure we dont overlap
+                return;
+            }
+            else if (current_call_num == 2)
+            {
+                // right top quarter
+                *w_start = conf_call_w / 2;
+                *w_end = conf_call_w - 1;
+                *h_start = 0;
+                *h_end = (conf_call_h - 2) / 2;
+                return;
+            }
+            else if (current_call_num == 3)
+            {
+                // left bottom quarter
+                *w_start = 0;
+                *w_end = (conf_call_w - 2) / 2;
+                *h_start = (conf_call_h) / 2;
+                *h_end = conf_call_h - 1;
+                return;
+            }
+            else // current_call_num == 4
+            {
+                // right bottom quarter
+                *w_start = conf_call_w / 2;
+                *w_end = conf_call_w - 1;
+                *h_start = (conf_call_h) / 2;
+                *h_end = conf_call_h - 1;
+                return;
+            }
+        }
+    }
+    else
+    {
+        // only 1 active call, return full conf video buffer size
+        *w_start = 0;
+        *w_end = conf_call_w - 1;
+        *h_start = 0;
+        *h_end = conf_call_h - 1;
+    }
+}
+
+/*
+ * paint actual incoming yuv video frame into given bounding box in the confcall video buffer.
+ * shrink to fit into bounding box (we do NOT blow up the size, if too small)
+ */
+static void paint_conference_video_into_bounding_box_yuv(uint16_t width, uint16_t height,
+        uint8_t const *y, uint8_t const *u, uint8_t const *v,
+        int32_t ystride, int32_t ustride, int32_t vstride,
+        uint32_t bbox_w_start, uint32_t bbox_w_end, uint32_t bbox_h_start, uint32_t bbox_h_end,
+        uint32_t conf_call_w, uint32_t conf_call_h,
+        uint8_t *buf_conf_call_y,
+        uint8_t *buf_conf_call_u,
+        uint8_t *buf_conf_call_v,
+        int buf_conf_call_ystride,
+        int buf_conf_call_ustride,
+        int buf_conf_call_vstride
+        )
+{
+
+    // calculate shrink factor ----------------------------
+    float shrink;
+    int w_use;
+    int h_use;
+    {
+        shrink = 1.0f;
+        w_use = width;
+
+        if ((bbox_w_end - bbox_w_start) < width)
+        {
+            w_use = (bbox_w_end - bbox_w_start);
+            shrink = (float)width / (float)w_use;
+        }
+
+        h_use = height;
+
+        if ((bbox_h_end - bbox_h_start) < height)
+        {
+            h_use = (bbox_h_end - bbox_h_start);
+            float shrink2 = (float)height / (float)h_use;
+
+            if (shrink2 > shrink)
+            {
+                shrink = shrink2;
+            }
+        }
+
+        if (shrink < 1.0)
+        {
+            shrink = 1.0f;
+        }
+        else if (shrink > 10.0)
+        {
+            shrink = 10.0f;
+        }
+    }
+    // calculate shrink factor ----------------------------
+
+
+    // clear bounding box ---------------------------------
+    {
+        uint8_t *conf_call_y_copy = buf_conf_call_y;
+        conf_call_y_copy = conf_call_y_copy + (bbox_h_start * buf_conf_call_ystride);
+
+        for (int gg = bbox_h_start; gg < bbox_h_end; gg++)
+        {
+            memset(conf_call_y_copy + bbox_w_start, 0, (bbox_w_end - bbox_w_start));
+            conf_call_y_copy = conf_call_y_copy + buf_conf_call_ystride;
+        }
+
+        uint8_t *conf_call_u_copy = buf_conf_call_u;
+        conf_call_u_copy = conf_call_u_copy + ((bbox_h_start / 2) * buf_conf_call_ustride);
+
+        for (int gg = (bbox_h_start / 2); gg < (bbox_h_end / 2); gg++)
+        {
+            memset(conf_call_u_copy + (int)(bbox_w_start / 2), 128, (int)((bbox_w_end - bbox_w_start) / 2));
+            conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
+        }
+
+        uint8_t *conf_call_v_copy = buf_conf_call_v;
+        conf_call_v_copy = conf_call_v_copy + ((bbox_h_start / 2) * buf_conf_call_vstride);
+
+        for (int gg = (bbox_h_start / 2); gg < (bbox_h_end / 2); gg++)
+        {
+            memset(conf_call_v_copy + (int)(bbox_w_start / 2), 128, (int)((bbox_w_end - bbox_w_start) / 2));
+            conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
+        }
+    }
+    // clear bounding box ---------------------------------
+
+
+    // do the actual painting -----------------------------
+    if (shrink > 1.0)
+    {
+        // sanity check -----------------------------------
+        if ((h_use * (int)shrink) > height)
+        {
+            h_use = (height / (int)shrink);
+        }
+
+        if ((w_use * (int)shrink) > width)
+        {
+            w_use = (width / (int)shrink);
+        }
+        // sanity check -----------------------------------
+
+        uint8_t *y_plane = buf_conf_call_y;
+        uint8_t *y_ = (uint8_t *)y;
+        uint8_t *y_plane_save;
+        uint8_t *y_save;
+
+        y_plane = y_plane + (bbox_h_start * buf_conf_call_ystride);
+
+        for (int jj = 0; jj < h_use; jj++)
+        {
+            y_plane_save = y_plane;
+            y_save = y_;
+            y_plane = y_plane + bbox_w_start;
+
+            for (int kk = 0; kk < w_use; kk++)
+            {
+                *y_plane = (uint8_t) * y_;
+                y_plane++;
+                y_ = y_ + (int)shrink;
+            }
+
+            y_plane = y_plane_save + buf_conf_call_ystride;
+            y_ = y_save + (ystride * ((int)shrink));
+        }
+
+        uint8_t *u_plane = buf_conf_call_u;
+        uint8_t *u_ = (uint8_t *)u;
+        uint8_t *u_plane_save;
+        uint8_t *u_save;
+
+        u_plane = u_plane + ((bbox_h_start / 2) * buf_conf_call_ustride);
+
+        for (int jj = 0; jj < (h_use / 2); jj++)
+        {
+            u_plane_save = u_plane;
+            u_save = u_;
+            u_plane = u_plane + (int)(bbox_w_start / 2);
+
+            for (int kk = 0; kk < (w_use / 2); kk++)
+            {
+                *u_plane = (uint8_t) * u_;
+                u_plane++;
+                u_ = u_ + (int)shrink;
+            }
+
+            u_plane = u_plane_save + buf_conf_call_ustride;
+            u_ = u_save + (ustride * ((int)shrink));
+        }
+
+        uint8_t *v_plane = buf_conf_call_v;
+        uint8_t *v_ = (uint8_t *)v;
+        uint8_t *v_plane_save;
+        uint8_t *v_save;
+
+        v_plane = v_plane + ((bbox_h_start / 2) * buf_conf_call_vstride);
+
+        for (int jj = 0; jj < (h_use / 2); jj++)
+        {
+            v_plane_save = v_plane;
+            v_save = v_;
+            v_plane = v_plane + (int)(bbox_w_start / 2);
+
+            for (int kk = 0; kk < (w_use / 2); kk++)
+            {
+                *v_plane = (uint8_t) * v_;
+                v_plane++;
+                v_ = v_ + (int)shrink;
+            }
+
+            v_plane = v_plane_save + buf_conf_call_vstride;
+            v_ = v_save + (vstride * ((int)shrink));
+        }
+    }
+    else // shrink == 1
+    {
+        uint8_t *y_plane = buf_conf_call_y;
+        uint8_t *y_ = (uint8_t *)y;
+
+        for (int jj = 0; jj < h_use; jj++)
+        {
+            memcpy(y_plane + bbox_w_start, y_, w_use);
+            y_plane = y_plane + buf_conf_call_ystride;
+            y_ = y_ + ystride;
+        }
+
+        uint8_t *u_plane = buf_conf_call_u;
+        uint8_t *u_ = (uint8_t *)u;
+
+        for (int jj = 0; jj < (h_use / 2); jj++)
+        {
+            memcpy(u_plane + (int)(bbox_w_start / 2), u_, (w_use / 2));
+            u_plane = u_plane + buf_conf_call_ustride;
+            u_ = u_ + ustride;
+        }
+
+        uint8_t *v_plane = buf_conf_call_v;
+        uint8_t *v_ = (uint8_t *)v;
+
+        for (int jj = 0; jj < (h_use / 2); jj++)
+        {
+            memcpy(v_plane + (int)(bbox_w_start / 2), v_, (w_use / 2));
+            v_plane = v_plane + buf_conf_call_vstride;
+            v_ = v_ + vstride;
+        }
+    }
+    // do the actual painting -----------------------------
+
+}
+
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
@@ -9346,175 +9649,23 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 return;
             }
 
-            // paint conf call video frame to the right
-            float shrink = 1.0f;
-            int w_use_r = width;
+            uint32_t w_start;
+            uint32_t w_end;
+            uint32_t h_start;
+            uint32_t h_end;
+            get_conference_video_bounding_box(2, 2, &w_start, &w_end, &h_start, &h_end,
+                    conf_call_width, conf_call_height);
 
-            if ((conf_call_width / 2) < width)
-            {
-                w_use_r = (conf_call_width / 2);
-                shrink = (float)width / (float)w_use_r;
-            }
+            paint_conference_video_into_bounding_box_yuv(width, height, y, u, v, ystride, ustride, vstride,
+                                w_start, w_end, h_start, h_end,
+                                conf_call_width, conf_call_height,
+                                conf_call_y,
+                                conf_call_u,
+                                conf_call_v,
+                                conf_call_ystride,
+                                conf_call_ustride,
+                                conf_call_vstride);
 
-            int h_use = height;
-
-            if (height > conf_call_height)
-            {
-                h_use = conf_call_height;
-                float shrink2 = (float)height / (float)h_use;
-
-                if (shrink2 > shrink)
-                {
-                    shrink = shrink2;
-                }
-            }
-
-            if (shrink < 1.0)
-            {
-                shrink = 1.0f;
-            }
-            else if (shrink > 10.0)
-            {
-                shrink = 10.0f;
-            }
-
-            // clear this half ---------------------------
-            uint8_t *conf_call_y_copy = conf_call_y;
-
-            for (int gg = 0; gg < conf_call_height; gg++)
-            {
-                memset(conf_call_y_copy + (int)(conf_call_width / 2) - 2, 0, (int)(conf_call_width / 2));
-                conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
-            }
-
-            uint8_t *conf_call_u_copy = conf_call_u;
-
-            for (int gg = 0; gg < (conf_call_height / 2); gg++)
-            {
-                memset(conf_call_u_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
-                conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
-            }
-
-            uint8_t *conf_call_v_copy = conf_call_v;
-
-            for (int gg = 0; gg < (conf_call_height / 2); gg++)
-            {
-                memset(conf_call_v_copy + (int)(conf_call_width / 4) - 1, 128, (int)(conf_call_width / 4));
-                conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
-            }
-
-            // clear this half ---------------------------
-
-            if (shrink > 1.0)
-            {
-                if ((h_use * (int)shrink) > height)
-                {
-                    h_use = (height / (int)shrink);
-                }
-
-                if ((w_use_r * (int)shrink) > width)
-                {
-                    w_use_r = (width / (int)shrink);
-                }
-
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = (uint8_t *)y;
-                uint8_t *y_plane_save;
-                uint8_t *y_save;
-
-                for (int jj = 0; jj < (h_use - 1); jj++)
-                {
-                    y_plane_save = y_plane;
-                    y_save = y_;
-                    y_plane = y_plane + (int)(conf_call_width / 2) - 2;
-
-                    for (int kk = 0; kk < (w_use_r - 1); kk++)
-                    {
-                        *y_plane = (uint8_t) * y_;
-                        y_plane++;
-                        y_ = y_ + (int)shrink;
-                    }
-
-                    y_plane = y_plane_save + conf_call_ystride;
-                    y_ = y_save + (ystride * ((int)shrink));
-                }
-
-                uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = (uint8_t *)u;
-                uint8_t *u_plane_save;
-                uint8_t *u_save;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    u_plane_save = u_plane;
-                    u_save = u_;
-                    u_plane = u_plane + (int)(conf_call_width / 4) - 1;
-
-                    for (int kk = 0; kk < (w_use_r / 2); kk++)
-                    {
-                        *u_plane = (uint8_t) * u_;
-                        u_plane++;
-                        u_ = u_ + (int)shrink;
-                    }
-
-                    u_plane = u_plane_save + conf_call_ustride;
-                    u_ = u_save + (ustride * ((int)shrink));
-                }
-
-                uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = (uint8_t *)v;
-                uint8_t *v_plane_save;
-                uint8_t *v_save;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    v_plane_save = v_plane;
-                    v_save = v_;
-                    v_plane = v_plane + (int)(conf_call_width / 4) - 1;
-
-                    for (int kk = 0; kk < (w_use_r / 2); kk++)
-                    {
-                        *v_plane = (uint8_t) * v_;
-                        v_plane++;
-                        v_ = v_ + (int)shrink;
-                    }
-
-                    v_plane = v_plane_save + conf_call_vstride;
-                    v_ = v_save + (vstride * ((int)shrink));
-                }
-            }
-            else
-            {
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = (uint8_t *)y;
-
-                for (int jj = 0; jj < h_use; jj++)
-                {
-                    memcpy(y_plane + (int)(conf_call_width / 2) - 2, y_, w_use_r);
-                    y_plane = y_plane + conf_call_ystride;
-                    y_ = y_ + ystride;
-                }
-
-                uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = (uint8_t *)u;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    memcpy(u_plane + (int)(conf_call_width / 4) - 1, u_, (w_use_r / 2));
-                    u_plane = u_plane + conf_call_ustride;
-                    u_ = u_ + ustride;
-                }
-
-                uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = (uint8_t *)v;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    memcpy(v_plane + (int)(conf_call_width / 4) - 1, v_, (w_use_r / 2));
-                    v_plane = v_plane + conf_call_vstride;
-                    v_ = v_ + vstride;
-                }
-            }
         }
         else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
@@ -9523,172 +9674,22 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 return;
             }
 
-            // paint main call video frame to the left
-            float shrink = 1.0f;
-            int w_use_r = width;
+            uint32_t w_start;
+            uint32_t w_end;
+            uint32_t h_start;
+            uint32_t h_end;
+            get_conference_video_bounding_box(2, 1, &w_start, &w_end, &h_start, &h_end,
+                    conf_call_width, conf_call_height);
 
-            if ((conf_call_width / 2) < width)
-            {
-                w_use_r = (conf_call_width / 2);
-                shrink = (float)width / (float)w_use_r;
-            }
-
-            int h_use = height;
-
-            if (height > conf_call_height)
-            {
-                h_use = conf_call_height;
-                float shrink2 = (float)height / (float)h_use;
-
-                if (shrink2 > shrink)
-                {
-                    shrink = shrink2;
-                }
-            }
-
-            if (shrink < 1.0)
-            {
-                shrink = 1.0f;
-            }
-            else if (shrink > 10.0)
-            {
-                shrink = 10.0f;
-            }
-
-            // clear this half ---------------------------
-            uint8_t *conf_call_y_copy = conf_call_y;
-
-            for (int gg = 0; gg < conf_call_height; gg++)
-            {
-                memset(conf_call_y_copy, 0, (int)(conf_call_width / 2) - 2);
-                conf_call_y_copy = conf_call_y_copy + conf_call_ystride;
-            }
-
-            uint8_t *conf_call_u_copy = conf_call_u;
-
-            for (int gg = 0; gg < (conf_call_height / 2); gg++)
-            {
-                memset(conf_call_u_copy, 128, (int)(conf_call_width / 4) - 1);
-                conf_call_u_copy = conf_call_u_copy + conf_call_ustride;
-            }
-
-            uint8_t *conf_call_v_copy = conf_call_v;
-
-            for (int gg = 0; gg < (conf_call_height / 2); gg++)
-            {
-                memset(conf_call_v_copy, 128, (int)(conf_call_width / 4) - 1);
-                conf_call_v_copy = conf_call_v_copy + conf_call_vstride;
-            }
-
-            // clear this half ---------------------------
-
-            if (shrink > 1.0)
-            {
-                if ((h_use * (int)shrink) > height)
-                {
-                    h_use = (height / (int)shrink);
-                }
-
-                if ((w_use_r * (int)shrink) > width)
-                {
-                    w_use_r = (width / (int)shrink);
-                }
-
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = (uint8_t *)y;
-                uint8_t *y_plane_save;
-                uint8_t *y_save;
-
-                for (int jj = 0; jj < (h_use - 1); jj++)
-                {
-                    y_plane_save = y_plane;
-                    y_save = y_;
-
-                    for (int kk = 0; kk < (w_use_r - 2); kk++)
-                    {
-                        *y_plane = (uint8_t) * y_;
-                        y_plane++;
-                        y_ = y_ + (int)shrink;
-                    }
-
-                    y_plane = y_plane_save + conf_call_ystride;
-                    y_ = y_save + (ystride * ((int)shrink));
-                }
-
-                uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = (uint8_t *)u;
-                uint8_t *u_plane_save;
-                uint8_t *u_save;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    u_plane_save = u_plane;
-                    u_save = u_;
-
-                    for (int kk = 0; kk < ((w_use_r / 2) - 1); kk++)
-                    {
-                        *u_plane = (uint8_t) * u_;
-                        u_plane++;
-                        u_ = u_ + (int)shrink;
-                    }
-
-                    u_plane = u_plane_save + conf_call_ustride;
-                    u_ = u_save + (ustride * ((int)shrink));
-                }
-
-                uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = (uint8_t *)v;
-                uint8_t *v_plane_save;
-                uint8_t *v_save;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    v_plane_save = v_plane;
-                    v_save = v_;
-
-                    for (int kk = 0; kk < ((w_use_r / 2) - 1); kk++)
-                    {
-                        *v_plane = (uint8_t) * v_;
-                        v_plane++;
-                        v_ = v_ + (int)shrink;
-                    }
-
-                    v_plane = v_plane_save + conf_call_vstride;
-                    v_ = v_save + (vstride * ((int)shrink));
-                }
-            }
-            else
-            {
-                uint8_t *y_plane = conf_call_y;
-                uint8_t *y_ = (uint8_t *)y;
-
-                for (int jj = 0; jj < h_use; jj++)
-                {
-                    memcpy(y_plane, y_, w_use_r);
-                    y_plane = y_plane + conf_call_ystride;
-                    y_ = y_ + ystride;
-                }
-
-                uint8_t *u_plane = conf_call_u;
-                uint8_t *u_ = (uint8_t *)u;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    memcpy(u_plane, u_, (w_use_r / 2));
-                    u_plane = u_plane + conf_call_ustride;
-                    u_ = u_ + ustride;
-                }
-
-                uint8_t *v_plane = conf_call_v;
-                uint8_t *v_ = (uint8_t *)v;
-
-                for (int jj = 0; jj < (h_use / 2); jj++)
-                {
-                    memcpy(v_plane, v_, (w_use_r / 2));
-                    v_plane = v_plane + conf_call_vstride;
-                    v_ = v_ + vstride;
-                }
-            }
+            paint_conference_video_into_bounding_box_yuv(width, height, y, u, v, ystride, ustride, vstride,
+                                w_start, w_end, h_start, h_end,
+                                conf_call_width, conf_call_height,
+                                conf_call_y,
+                                conf_call_u,
+                                conf_call_v,
+                                conf_call_ystride,
+                                conf_call_ustride,
+                                conf_call_vstride);
         }
         else
         {
