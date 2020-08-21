@@ -9137,7 +9137,6 @@ static void *video_play(void *dummy)
     pthread_exit(0);
 }
 
-
 static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
