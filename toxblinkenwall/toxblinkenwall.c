@@ -935,7 +935,7 @@ int full_height = 480; // gets set later, this is just as last resort
 int vid_width = 192; // ------- blinkenwall resolution -------
 int vid_height = 144; // ------- blinkenwall resolution -------
 // uint8_t *bf_out_data = NULL; // global buffer, !!please write me better!!
-#define MAX_PARALLEL_VIDEO_CALLS 3 // call to 3 other people at the same time (not counting the "main" call in progress)
+#define MAX_PARALLEL_VIDEO_CALLS 8 // call to X other people at the same time (not counting the "main" call in progress)
 int64_t global_conference_calls_active[MAX_PARALLEL_VIDEO_CALLS];
 int32_t global_conference_call_active = 0;
 int32_t friend_to_send_conf_video_to = -1;
@@ -9458,7 +9458,7 @@ static void get_conference_video_bounding_box(uint32_t active_calls_count, uint3
     uint32_t *w_start, uint32_t *w_end, uint32_t *h_start, uint32_t *h_end,
     uint32_t conf_call_w, uint32_t conf_call_h)
 {
-    if (active_calls_count > 4)
+    if (active_calls_count > (MAX_PARALLEL_VIDEO_CALLS + 1))
     {
         // ERROR
         dbg(1, "get_conference_video_bounding_box:too many active calls!\n");
@@ -9492,7 +9492,7 @@ static void get_conference_video_bounding_box(uint32_t active_calls_count, uint3
                 return;
             }
         }
-        else // active_calls_count == [3..4]
+        else if ((active_calls_count > 2) && (active_calls_count < 5)) // active_calls_count == [3..4]
         {
             if (current_call_num == 1)
             {
@@ -9527,6 +9527,94 @@ static void get_conference_video_bounding_box(uint32_t active_calls_count, uint3
                 *w_start = conf_call_w / 2;
                 *w_end = conf_call_w - 1;
                 *h_start = (conf_call_h) / 2;
+                *h_end = conf_call_h - 1;
+                return;
+            }
+        }
+        else // active_calls_count == [5..9]
+        {
+            if (current_call_num == 1)
+            {
+                // left top box
+                *w_start = 0;
+                *w_end = (conf_call_w - 3) / 3; // "-3" to make sure we dont overlap
+                *h_start = 0;
+                *h_end = (conf_call_h - 3) / 3; // "-3" to make sure we dont overlap
+                return;
+            }
+            else if (current_call_num == 2)
+            {
+                // middle top box
+                *w_start = (conf_call_w / 3);
+                *w_end = (conf_call_w - 3) / 3 * 2;
+                *h_start = 0;
+                *h_end = (conf_call_h - 3) / 3;
+                return;
+            }
+            else if (current_call_num == 3)
+            {
+                // right top box
+                *w_start = (conf_call_w / 3 * 2);
+                *w_end = conf_call_w - 1;
+                *h_start = 0;
+                *h_end = (conf_call_h - 3) / 3;
+                return;
+            }
+            //
+            //
+            else if (current_call_num == 4)
+            {
+                // left middle box
+                *w_start = 0;
+                *w_end = (conf_call_w - 3) / 3;
+                *h_start = (conf_call_h / 3);
+                *h_end = (conf_call_h - 3) / 3 * 2;
+                return;
+            }
+            else if (current_call_num == 5)
+            {
+                // middle middle box
+                *w_start = (conf_call_w / 3);
+                *w_end = (conf_call_w - 3) / 3 * 2;
+                *h_start = (conf_call_h / 3);
+                *h_end = (conf_call_h - 3) / 3 * 2;
+                return;
+            }
+            else if (current_call_num == 6)
+            {
+                // right middle box
+                *w_start = (conf_call_w / 3 * 2);
+                *w_end = conf_call_w - 1;
+                *h_start = (conf_call_h / 3);
+                *h_end = (conf_call_h - 3) / 3 * 2;
+                return;
+            }
+            //
+            //
+            else if (current_call_num == 7)
+            {
+                // left bottom box
+                *w_start = 0;
+                *w_end = (conf_call_w - 3) / 3;
+                *h_start = (conf_call_h / 3 * 2);
+                *h_end = conf_call_h - 1;
+                return;
+            }
+            else if (current_call_num == 8)
+            {
+                // middle bottom box
+                *w_start = (conf_call_w / 3);
+                *w_end = (conf_call_w - 3) / 3 * 2;
+                *h_start = (conf_call_h / 3 * 2);
+                *h_end = conf_call_h - 1;
+                return;
+            }
+            else // current_call_num == 9
+            {
+                // right bottom box
+                *w_start = (conf_call_w / 3 * 2);
+                *w_end = conf_call_w - 1;
+                *h_start = (conf_call_h / 3 * 2);
                 *h_end = conf_call_h - 1;
                 return;
             }
