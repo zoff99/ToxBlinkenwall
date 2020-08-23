@@ -833,6 +833,7 @@ bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_ra
 void end_conf_call(ToxAV *av, uint32_t friend_number, int disconnect);
 void conf_calls_reset_state_all();
 bool conf_calls_is_active_friend(uint32_t friend_number);
+void conf_calls_clear_video_buffer();
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -2084,7 +2085,7 @@ int get_number_in_string(const char *str, int default_value)
 void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
                         const char *message, void *user_data)
 {
-    dbg(9, "%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
+    dbg(9, "C-TOXCORE:%d:%s:%d:%s:%s\n", (int)level, file, (int)line, func, message);
 }
 
 void write_ownname_to_file(Tox *tox)
@@ -6970,26 +6971,9 @@ bool toxav_call_control_wrapper(ToxAV *av, uint32_t friend_number, TOXAV_CALL_CO
                                 TOXAV_ERR_CALL_CONTROL *error, int with_locking)
 {
     sta();
-
-    if (with_locking == 1)
-    {
-        // dbg(9, "SEM:wait:001\n");
-        /* LCK1 */ //sem_wait(&tox_call_control_sem);
-        // dbg(9, "SEM:wait:001_\n");
-    }
-
     dbg(9, "toxav_call_control_wrapper:002:fn=%d ctrl=%d\n", friend_number, (int)control);
-    // only call "toxav_call_control" when no iterate function is active!!
     bool ret = toxav_call_control(av, friend_number, control, error);
     dbg(9, "toxav_call_control_wrapper:003\n");
-
-    if (with_locking == 1)
-    {
-        // dbg(9, "SEM:post:001\n");
-        /* LCK1 */ //sem_post(&tox_call_control_sem);
-        // dbg(9, "SEM:post:001_\n");
-    }
-
     en();
     return ret;
 }
@@ -7016,14 +7000,17 @@ void conf_calls_end_all(ToxAV *av)
             TOXAV_ERR_CALL_CONTROL error = 0;
             toxav_call_control_wrapper(av, (uint32_t)global_conference_calls_active[jk],
                                        TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+            dbg(9, "TOXAV_CALL_CONTROL_CANCEL:toxav_call_control_wrapper:001:fnum=%d\n", (uint32_t)global_conference_calls_active[jk]);
             dbg(9, "conf_calls_end_all:toxav_call_control_wrapper:end\n");
-            
             global_conference_calls_active[jk] = -1;
         }
     }
 
     // sanity check
     conf_calls_reset_state_all();
+    conf_calls_clear_video_buffer();
+
+    global_conference_call_active = 0;
 }
 
 /*
@@ -7072,40 +7059,6 @@ int conf_calls_count_num_active_friend(uint32_t friend_number)
     return -1;
 }
 
-// tu|grep -e 'end_conf_call' -e 'toxav_call_wrapper' -e 'toxav_call_control_wrapper' -e 'answer_incoming_conf_av_call' -e 'answer_incoming_av_call' -e 't_toxav_call_cb' -e 't_toxav_call_state_cb' -e 'Somebody_else' -e 'Call_already'
-
-/*
-
-2020-08-22 22:17:13:D:t_toxav_call_cb:fn=0
-2020-08-22 22:17:13:D:t_toxav_call_cb:answer_first_call
-2020-08-22 22:17:14:D:answer_incoming_av_call:fn=0
-
-2020-08-22 22:17:29:D:t_toxav_call_cb:fn=4
-2020-08-22 22:17:29:D:t_toxav_call_cb:22:fn=4:gav=1:gcca=0
-2020-08-22 22:17:29:D:t_toxav_call_cb:33:fn=4:gav=1:count=0
-2020-08-22 22:17:29:D:t_toxav_call_cb:44:fn=4:gav=1
-2020-08-22 22:17:29:D:answer_incoming_conf_av_call:fn=4:enter
-2020-08-22 22:17:29:D:answer_incoming_conf_av_call:alloc frame
-
-2020-08-22 22:19:56:D:t_toxav_call_cb:fn=3
-2020-08-22 22:19:56:D:t_toxav_call_cb:22:fn=3:gav=1:gcca=1
-2020-08-22 22:19:56:D:t_toxav_call_cb:33:fn=3:gav=1:count=1
-2020-08-22 22:19:56:D:t_toxav_call_cb:44:fn=3:gav=1
-2020-08-22 22:19:56:D:answer_incoming_conf_av_call:fn=3:enter
-
-
-incoming av call:
------------------
-t_toxav_call_cb
-   -> answer_incoming_av_call
-
-remote hangup:
------------------
-t_toxav_call_state_cb [state==2:TOXAV_FRIEND_CALL_STATE_FINISHED]
-   -> end_conf_call
-
-*/
-
 int64_t conf_calls_get_active_friend_from_count_num(int count_num)
 {
     int count_num_current = 0;
@@ -7128,10 +7081,21 @@ int64_t conf_calls_get_active_friend_from_count_num(int count_num)
     return -1;
 }
 
+void conf_calls_clear_video_buffer()
+{
+    if (conf_call_y != NULL)
+    {
+        dbg(9, "conf_calls_add_active:clear frame\n");
+        memset(conf_call_y, 0, (conf_call_width * conf_call_height));
+        memset(conf_call_u, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
+        memset(conf_call_v, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
+    }
+}
 
 void conf_calls_add_active(uint32_t friend_number)
 {
     dbg(9, "conf_calls_add_active:fnum:%d\n", friend_number);
+    conf_calls_clear_video_buffer();
 
     if (conf_calls_is_active_friend(friend_number))
     {
@@ -7171,25 +7135,33 @@ void end_conf_call(ToxAV *av, uint32_t friend_number, int disconnect)
 {
     // zzzzzzzzzzzzzz
     sta();
-    dbg(9, "end_conf_call:enter\n");
-    global_conference_call_active = 0;
+    dbg(9, "end_conf_call:enter:fn=%d\n", friend_number);
 
-    if (disconnect == 1)
+    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
     {
-        for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
+        if (global_conference_calls_active[jk] == (int64_t)friend_number)
         {
-            if (global_conference_calls_active[jk] == (int64_t)friend_number)
+            dbg(9, "end_conf_call:toxav_call_control_wrapper:start:slotnum=%d\n", jk);
+            global_conference_calls_active[jk] = -1;
+            if (disconnect == 1)
             {
-                dbg(9, "end_conf_call:toxav_call_control_wrapper:start:num=%d\n", jk);
                 TOXAV_ERR_CALL_CONTROL error = 0;
                 toxav_call_control_wrapper(av, (uint32_t)global_conference_calls_active[jk],
                                            TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+                dbg(9, "TOXAV_CALL_CONTROL_CANCEL:toxav_call_control_wrapper:002:fnum=%d\n", (uint32_t)global_conference_calls_active[jk]);
                 dbg(9, "end_conf_call:toxav_call_control_wrapper:end\n");
-                global_conference_calls_active[jk] = -1;
             }
+            break;
         }
     }
 
+    if (conf_calls_count_active() < 1)
+    {
+        dbg(9, "end_conf_call:global_conference_call_active=0\n");
+        global_conference_call_active = 0;
+    }
+
+    conf_calls_clear_video_buffer();
 
 #if 0
 
@@ -7323,7 +7295,11 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
         dbg(2, "t_toxav_call_cb:Not accepting calls yet\n");
         TOXAV_ERR_CALL_CONTROL error = 0;
         toxav_call_control_wrapper(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+        dbg(9, "TOXAV_CALL_CONTROL_CANCEL:toxav_call_control_wrapper:003:fnum=%d\n", (uint32_t)friend_number);
         // global_video_active = 0;
+
+        conf_calls_clear_video_buffer();
+
         ret();
         return;
     }
@@ -7350,6 +7326,9 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
                 TOXAV_ERR_CALL_CONTROL error = 0;
                 toxav_call_control_wrapper(av, friend_number, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
                 dbg(9, "t_toxav_call_cb:Somebody_else is already in a call, hang up\n");
+                dbg(9, "TOXAV_CALL_CONTROL_CANCEL:toxav_call_control_wrapper:004:fnum=%d\n", friend_number);
+
+                conf_calls_clear_video_buffer();
             }
         }
         else
@@ -7521,10 +7500,10 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         if (conf_calls_is_active_friend(friend_number))
         {
-            // zzzzzzzzzzzz            
+            // zzzzzzzz            
             if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
             {
-                dbg(9, "t_toxav_call_state_cb:got hangup on conf call\n");
+                dbg(9, "t_toxav_call_state_cb:got hangup on conf call [TOXAV_FRIEND_CALL_STATE_FINISHED]\n");
                 end_conf_call(av, friend_number, 0);
             }
 
@@ -7563,6 +7542,8 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
 
     if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
     {
+        dbg(9, "t_toxav_call_state_cb:TOXAV_FRIEND_CALL_STATE_FINISHED:Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
+
         // zzzzzzzzzzzz
         // global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
         conf_calls_end_all(av);
@@ -9549,7 +9530,7 @@ static void get_conference_video_bounding_box(uint32_t active_calls_count, uint3
         }
         else if ((active_calls_count > 2) && (active_calls_count < 5)) // active_calls_count == [3..4]
         {
-            dbg(9, "active_calls_count[2]=%d\n", active_calls_count);
+            // dbg(9, "active_calls_count[2]=%d\n", active_calls_count);
 
             if (current_call_num == 1)
             {
@@ -9590,7 +9571,7 @@ static void get_conference_video_bounding_box(uint32_t active_calls_count, uint3
         }
         else // active_calls_count == [5..9]
         {
-            dbg(9, "active_calls_count[3]=%d\n", active_calls_count);
+            // dbg(9, "active_calls_count[3]=%d\n", active_calls_count);
 
             if (current_call_num == 1)
             {
@@ -9909,7 +9890,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     sta();
 
+    dbg(9, "XX:000:A:==============================================\n");
     dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
+    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
+    {
+        dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
+    }
+    dbg(9, "XX:000:A:==============================================\n");
 
     if (global_video_active != 1)
     {
@@ -9925,19 +9912,15 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 
     if (global_conference_call_active == 1)
     {
-        dbg(9, "XX:001:fn=%d\n", friend_number);
         if (conf_calls_is_active_friend(friend_number))
         {
-            dbg(9, "XX:002:fn=%d\n", friend_number);
             if (!conf_call_y)
             {
                 return;
             }
 
             int countnum = conf_calls_count_num_active_friend(friend_number);
-
-             dbg(9, "XX:003:fn=%d call=%d\n", friend_number, countnum);
-
+            dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
             if (countnum == -1)
             {
                 return;
@@ -9949,8 +9932,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             uint32_t h_end;
             get_conference_video_bounding_box((conf_calls_count_active() + 1), (countnum + 2), &w_start, &w_end, &h_start, &h_end,
                     conf_call_width, conf_call_height);
-
-            dbg(9, "fn=%d ca=%d call=%d bbox=%d %d %d %d\n", friend_number, conf_calls_count_active(), (countnum + 2), w_start, w_end, h_start, h_end);
 
             paint_conference_video_into_bounding_box_yuv(width, height, y, u, v, ystride, ustride, vstride,
                                 w_start, w_end, h_start, h_end,
@@ -9965,8 +9946,6 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         }
         else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
-            dbg(9, "XX:066:fn=%d\n", friend_number);
-            
             if (!conf_call_y)
             {
                 return;
@@ -10722,11 +10701,14 @@ void av_local_disconnect(ToxAV *av, uint32_t num)
     dbg(9, "av_local_disconnect\n");
     TOXAV_ERR_CALL_CONTROL error = 0;
     toxav_call_control_wrapper(av, num, TOXAV_CALL_CONTROL_CANCEL, &error, 0);
+    dbg(9, "TOXAV_CALL_CONTROL_CANCEL:toxav_call_control_wrapper:005:fnum=%d\n", num);
     global_video_active = 0;
     on_end_call();
     dbg(9, "av_local_disconnect: global_video_active=%d\n", global_video_active);
     global_send_first_frame = 0;
     friend_to_send_video_to = -1;
+
+    conf_calls_clear_video_buffer();
 
     if (really_in_call == 1)
     {
