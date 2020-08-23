@@ -1476,7 +1476,7 @@ float volumeMultiplier = -20.0f;
 int16_t *audio_buffer_pcm_2 = NULL;
 uint64_t audio_mixing_process_last_ts = 0;
 
-#define FIXED_MAX_AUDIO_PEERS 2
+#define FIXED_MAX_AUDIO_PEERS 10
 #define PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS 60
 #define MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES ((48000*(PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS * 10)/1000) * 2) // XY ms PCM16 buffer @48kHz mono int16_t values
 
@@ -7215,33 +7215,72 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
     int res11 = toxav_answer(av, friend_number, audio_bitrate, video_bitrate, &err);
     dbg(9, "answer_incoming_conf_av_call:fn=%d:toxav_answer:res=%d\n", friend_number, res11);
 
+    conf_calls_add_active(friend_number);
+    global_conference_call_active = 1;
+
     // now send .confcall message to all active callers -------------------
     char message_str[1000];
     int j;
     // ---
 
-#if 0
-    j = find_friend_in_friendlist((uint32_t) friend_to_send_conf_video_to);
-
-    if (j > -1)
+#if 1
+    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
     {
-        CLEAR(message_str);
-        snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
-        memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
-        dbg(9, "answer_incoming_conf_av_call:1:%s\n", message_str);
-        send_text_message_to_friend(toxav_get_tox(av), friend_to_send_video_to, message_str);
+        // send all conf callers to the main-caller
+        if (global_conference_calls_active[jk] != -1)
+        {
+            j = find_friend_in_friendlist((uint32_t)global_conference_calls_active[jk]);
+            if (j > -1)
+            {
+                CLEAR(message_str);
+                snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
+                memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
+                dbg(9, "answer_incoming_conf_av_call:1:%s\n", message_str);
+                send_text_message_to_friend(toxav_get_tox(av), friend_to_send_video_to, message_str);
+            }
+        }
     }
-
     // ---
-    j = find_friend_in_friendlist((uint32_t) friend_to_send_video_to);
 
-    if (j > -1)
+
+    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
     {
-        CLEAR(message_str);
-        snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
-        memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
-        dbg(9, "answer_incoming_conf_av_call:2:%s\n", message_str);
-        send_text_message_to_friend(toxav_get_tox(av), friend_to_send_conf_video_to, message_str);
+        if (global_conference_calls_active[jk] != -1)
+        {
+            j = find_friend_in_friendlist((uint32_t)global_conference_calls_active[jk]);
+            if (j > -1)
+            {
+                for (int cc2=0;cc2<MAX_PARALLEL_VIDEO_CALLS;cc2++)
+                {
+                    if (global_conference_calls_active[cc2] != -1)
+                    {
+                        int g = find_friend_in_friendlist((uint32_t)global_conference_calls_active[cc2]);
+                        if (g > -1)
+                        {
+                            if (jk != cc2)
+                            {
+                                CLEAR(message_str);
+                                snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j].pubkey_string);
+                                memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
+                                dbg(9, "answer_incoming_conf_av_call:2:%s\n", message_str);
+                                send_text_message_to_friend(toxav_get_tox(av), (uint32_t)global_conference_calls_active[cc2], message_str);
+                            }
+                        }
+                    }
+                }
+
+                int j2 = find_friend_in_friendlist((uint32_t) friend_to_send_video_to);
+                if (j2 > -1)
+                {
+                    CLEAR(message_str);
+                    snprintf(message_str, 1000, ".confcall %s", (const char *)Friends.list[j2].pubkey_string);
+                    memset(message_str + 10 + (TOX_PUBLIC_KEY_SIZE * 2), 0, (TOX_ADDRESS_SIZE * 2) - (TOX_PUBLIC_KEY_SIZE * 2) + 1);
+                    dbg(9, "answer_incoming_conf_av_call:3:%s\n", message_str);
+                    send_text_message_to_friend(toxav_get_tox(av), (uint32_t)global_conference_calls_active[jk], message_str);
+                }
+            }
+
+        }
     }
 #endif
 
@@ -7316,8 +7355,6 @@ static void t_toxav_call_cb(ToxAV *av, uint32_t friend_number, bool audio_enable
             {
                 dbg(9, "t_toxav_call_cb:44:fn=%d:gav=%d\n", friend_number, global_video_active);
                 answer_incoming_conf_av_call(mytox_av, friend_number);
-                global_conference_call_active = 1;
-                conf_calls_add_active(friend_number);
                 ret();
                 return;
             }
@@ -9890,13 +9927,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     sta();
 
-    dbg(9, "XX:000:A:==============================================\n");
-    dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
-    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
-    {
-        dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
-    }
-    dbg(9, "XX:000:A:==============================================\n");
+    // dbg(9, "XX:000:A:==============================================\n");
+    // dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
+    // for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
+    // {
+    //     dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
+    // }
+    // dbg(9, "XX:000:A:==============================================\n");
 
     if (global_video_active != 1)
     {
@@ -9920,7 +9957,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
             int countnum = conf_calls_count_num_active_friend(friend_number);
-            dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
+            // dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
             if (countnum == -1)
             {
                 return;
