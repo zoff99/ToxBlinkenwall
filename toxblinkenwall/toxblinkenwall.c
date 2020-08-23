@@ -7085,7 +7085,7 @@ void conf_calls_clear_video_buffer()
 {
     if (conf_call_y != NULL)
     {
-        dbg(9, "conf_calls_add_active:clear frame\n");
+        dbg(9, "conf_calls_clear_video_buffer:clear frame\n");
         memset(conf_call_y, 0, (conf_call_width * conf_call_height));
         memset(conf_call_u, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
         memset(conf_call_v, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
@@ -11837,7 +11837,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
         {
             dbg(9, "call_conf_pubkey:.confcall:global_conference_call_active=%d\n", global_conference_call_active);
 
-            if (global_conference_call_active == 0)
+            if (!conf_calls_is_active_friend(new_friend_id))
             {
                 // zzzzzzzzzzzzzzzzz
                 TOXAV_ERR_CALL error444 = 0;
@@ -11866,7 +11866,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
             {
                 dbg(9, "call_conf_pubkey:.confcall:global_conference_call_active=%d\n", (int)global_conference_call_active);
 
-                if (global_conference_call_active == 0)
+                if (!conf_calls_is_active_friend(new_friend_id))
                 {
                     // zzzzzzzzzzzzzzzzzzz
                     TOXAV_ERR_CALL error555 = 0;
