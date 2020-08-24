@@ -11859,9 +11859,6 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 
 
 
-
-
-
     {
         int64_t entry_num_friendnum = friend_number_for_entry(tox, bin_toxpubkey);
         dbg(9, "call_conf_pubkey:.confcall:entry_num_friendnum=%d\n", (int)entry_num_friendnum);
@@ -11874,7 +11871,7 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
             {
                 dbg(9, "call_conf_pubkey:.confcall:global_conference_call_active=%d\n", (int)global_conference_call_active);
 
-                if (!conf_calls_is_active_friend(new_friend_id))
+                if (!conf_calls_is_active_friend(entry_num_friendnum))
                 {
                     // zzzzzzzzzzzzzzzzzzz
                     TOXAV_ERR_CALL error555 = 0;
