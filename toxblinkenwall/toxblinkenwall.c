@@ -11823,11 +11823,12 @@ void *thread_record_alsa_audio(void *data)
 
 void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 {
-    TOX_ERR_FRIEND_ADD error;
-    uint32_t new_friend_id = tox_friend_add_norequest(tox, (uint8_t *) bin_toxpubkey, &error);
-    dbg(9, "call_conf_pubkey:.confcall:new_friend_id=%d\n", new_friend_id);
-    dbg(9, "call_conf_pubkey:.confcall:error=%d\n", error);
+    // TOX_ERR_FRIEND_ADD error;
+    // uint32_t new_friend_id = tox_friend_add_norequest(tox, (uint8_t *) bin_toxpubkey, &error);
+    // dbg(9, "call_conf_pubkey:.confcall:new_friend_id=%d\n", new_friend_id);
+    // dbg(9, "call_conf_pubkey:.confcall:error=%d\n", error);
 
+#if 0
     if (error == TOX_ERR_FRIEND_ADD_OK)
     {
         dbg(9, "call_conf_pubkey:.confcall:global_video_active=%d\n", global_video_active);
@@ -11854,6 +11855,13 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
         }
     }
     else
+#endif
+
+
+
+
+
+
     {
         int64_t entry_num_friendnum = friend_number_for_entry(tox, bin_toxpubkey);
         dbg(9, "call_conf_pubkey:.confcall:entry_num_friendnum=%d\n", (int)entry_num_friendnum);
@@ -11883,6 +11891,9 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
             }
         }
     }
+
+
+
 }
 
 void call_entry_num(Tox *tox, int entry_num)
