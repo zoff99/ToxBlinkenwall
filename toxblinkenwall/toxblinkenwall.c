@@ -2229,6 +2229,61 @@ static void write_ring_status_to_file(uint8_t ringstatus)
     fclose(fp);
 }
 
+bool is_h264_sps(const uint8_t *data, const uint32_t data_len)
+{
+    if (data_len > 7) {
+        //dbg(9, "SPS:len=%d bytes:%d %d %d %d %d %d %d %d\n", data_len, data[0], data[1], data[2], data[3], data[4],
+        //             data[5], data[6], data[7]);
+
+        if (
+            (data[0] == 0x00)
+            &&
+            (data[1] == 0x00)
+            &&
+            (data[2] == 0x00)
+            &&
+            (data[3] == 0x01)
+            &&
+            ((data[4] & 0x1F) == 7) // only the lower 5bits of the 4th byte denote the NAL type
+            // 7 --> SPS
+            // 8 --> PPS
+            // (data[4] == 0x67)
+        ) {
+
+#if 0
+            // we found a NAL unit containing the SPS
+            uint8_t h264_profile = data[5];
+            uint8_t h264_constraint_set0_flag = ((data[6] >> 3)  & 0x01);
+            uint8_t h264_constraint_set3_flag = (data[6]  & 0x01);
+            uint8_t h264_level = data[7];
+
+            if ((h264_profile == 66) && (h264_constraint_set3_flag = 0)) {
+                dbg(9, "profile=%s level=%d\n", "baseline", h264_level);
+            } else if ((h264_profile == 66) && (h264_constraint_set3_flag = 1)) {
+                dbg(9, "profile=%s level=%d\n", "contrained baseline", h264_level);
+            } else if ((h264_profile == 77) && (h264_constraint_set0_flag = 0)) {
+                dbg(9, "profile=%s level=%d\n", "main", h264_level);
+            } else if ((h264_profile == 77) && (h264_constraint_set0_flag = 1)) {
+                dbg(9, "profile=%s level=%d\n", "extended", h264_level);
+            } else if (h264_profile == 100) {
+                dbg(9, "profile=%s level=%d\n", "high", h264_level);
+            } else if (h264_profile == 110) {
+                dbg(9, "profile=%s level=%d\n", "high10", h264_level);
+            } else if (h264_profile == 122) {
+                dbg(9, "profile=%s level=%d\n", "high422", h264_level);
+            } else if (h264_profile == 244) {
+                dbg(9, "profile=%s level=%d\n", "high444", h264_level);
+            } else {
+                dbg(9, "profile=%s level=%d\n", "unkwn", h264_level);
+            }
+#endif
+
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void toggle_own_cam(int on_off)
 {
@@ -10230,12 +10285,17 @@ void *thread_av(void *data)
     dbg(2, "--- accepting calls NOW ---\n");
     global_timespan_video_out = 0;
     h264_bufcounter = 0;
+    uint8_t *saved_sps = NULL;
+    uint32_t saved_sps_size = 0;
+    bool current_frame_has_sps = false;
 #ifdef RPIZEROW
     uint8_t *black_yuv_y = (uint8_t *)calloc(1, 200 * 200);
 #endif
 
     while (toxav_iterate_thread_stop != 1)
     {
+        dbg(9, "global_video_active=%d\n", global_video_active);
+        
         if (global_video_active == 1)
         {
 #ifdef RPIZEROW
@@ -10340,6 +10400,33 @@ void *thread_av(void *data)
 #endif
                 }
 
+                if (using_h264_hw_accel == 1)
+                {
+                    current_frame_has_sps = false;
+                    // save SPS
+                    if (is_h264_sps((const uint8_t *)av_video_frame.h264_buf, (const uint32_t)av_video_frame.buf_len))
+                    {
+                        current_frame_has_sps = true;
+                        if (!saved_sps)
+                        {
+                            saved_sps = (uint8_t *)calloc((size_t)av_video_frame.buf_len, 1);
+                            saved_sps_size = (uint32_t)av_video_frame.buf_len;
+                            memcpy(saved_sps, av_video_frame.h264_buf, (size_t)av_video_frame.buf_len);
+                        }
+                        else
+                        {
+                            if ((uint32_t)av_video_frame.buf_len != saved_sps_size)
+                            {
+                                free(saved_sps);
+                                saved_sps = (uint8_t *)calloc((size_t)av_video_frame.buf_len, 1);
+                                saved_sps_size = (uint32_t)av_video_frame.buf_len;
+                            }
+                            memcpy(saved_sps, av_video_frame.h264_buf, (size_t)av_video_frame.buf_len);
+                        }
+                    }
+                }
+
+
                 if (friend_to_send_video_to != -1)
                 {
                     if (global_camera_orientation_angle_prev != global_camera_orientation_angle)
@@ -10436,10 +10523,24 @@ void *thread_av(void *data)
 
                     TOXAV_ERR_SEND_FRAME error = 0;
 
+
+                    dbg(9, "friend_to_send_video_to=%d\n", (int)friend_to_send_video_to);
                     if (friend_to_send_video_to > -1)
                     {
                         if (using_h264_hw_accel == 1)
                         {
+                            dbg(9, "using_h264_hw_accel=%d\n", (int)using_h264_hw_accel);
+
+                            if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
+                            {
+                                toxav_video_send_frame_h264(av, friend_to_send_video_to,
+                                                            av_video_frame.h264_w,
+                                                            av_video_frame.h264_h,
+                                                            saved_sps,
+                                                            saved_sps_size,
+                                                            &error);
+                            }
+
                             toxav_video_send_frame_h264(av, friend_to_send_video_to,
                                                         av_video_frame.h264_w,
                                                         av_video_frame.h264_h,
@@ -10458,14 +10559,27 @@ void *thread_av(void *data)
                                                             &error);
                             }
 
+                            dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
                             if (global_conference_call_active == 1)
                             {
                                 int count_conf_calls = conf_calls_count_active();
+                                dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
                                 for (int jk=0;jk<count_conf_calls;jk++)
                                 {
                                     int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
+                                    dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
                                     if (fnum_from_count != -1)
                                     {
+                                        if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
+                                        {
+                                            toxav_video_send_frame_h264(av, (uint32_t)fnum_from_count,
+                                                                        av_video_frame.h264_w,
+                                                                        av_video_frame.h264_h,
+                                                                        saved_sps,
+                                                                        saved_sps_size,
+                                                                        &error);
+                                        }
+
                                         toxav_video_send_frame_h264(av, (uint32_t)fnum_from_count,
                                                                     av_video_frame.h264_w,
                                                                     av_video_frame.h264_h,
@@ -10478,6 +10592,8 @@ void *thread_av(void *data)
                         }
                         else
                         {
+                            dbg(9, "using_h264_hw_accel:NO:%d\n", (int)using_h264_hw_accel);
+
                             toxav_video_send_frame(av, friend_to_send_video_to,
                                                    av_video_frame.w,
                                                    av_video_frame.h,
@@ -10498,12 +10614,15 @@ void *thread_av(void *data)
                                                        &error);
                             }
 
+                            dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
                             if (global_conference_call_active == 1)
                             {
                                 int count_conf_calls = conf_calls_count_active();
+                                dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
                                 for (int jk=0;jk<count_conf_calls;jk++)
                                 {
                                     int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
+                                    dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
                                     if (fnum_from_count != -1)
                                     {
                                         toxav_video_send_frame(av, (uint32_t)fnum_from_count,
