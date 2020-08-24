@@ -9983,7 +9983,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     sta();
 
     dbg(9, "XX:000:A:==============================================\n");
-    dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
+    dbg(9, "XX:000:fn=%d y=%p conf_call_y=%p gva=%d gcca=%d\n", friend_number, y, conf_call_y, global_video_active, global_conference_call_active);
     for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
     {
         dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
