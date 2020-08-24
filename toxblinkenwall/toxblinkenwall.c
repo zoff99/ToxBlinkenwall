@@ -10516,7 +10516,7 @@ void *thread_av(void *data)
 
                                         if (error == TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL)
                                         {
-                                            dbg(9, "TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL:fnum=%d\n", fnum_from_count);
+                                            // dbg(9, "TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL:fnum=%d\n", fnum_from_count);
                                         }
                                     }
                                 }
