@@ -9982,13 +9982,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     sta();
 
-    // dbg(9, "XX:000:A:==============================================\n");
-    // dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
-    // for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
-    // {
-    //     dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
-    // }
-    // dbg(9, "XX:000:A:==============================================\n");
+    dbg(9, "XX:000:A:==============================================\n");
+    dbg(9, "XX:000:fn=%d gva=%d\n", friend_number, global_video_active);
+    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
+    {
+        dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
+    }
+    dbg(9, "XX:000:A:==============================================\n");
 
     if (global_video_active != 1)
     {
@@ -10012,7 +10012,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
             int countnum = conf_calls_count_num_active_friend(friend_number);
-            // dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
+            dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
             if (countnum == -1)
             {
                 return;
