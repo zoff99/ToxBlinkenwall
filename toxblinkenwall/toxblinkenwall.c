@@ -11976,6 +11976,22 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
                 if (error444 == TOXAV_ERR_CALL_OK)
                 {
                     // friend_to_send_conf_video_to = new_friend_id;
+
+                    if (conf_call_y == NULL)
+                    {
+                        dbg(9, "call_conf_pubkey:alloc frame\n");
+                        conf_call_y = calloc(1, (conf_call_width * conf_call_height) * 3 / 2);
+                        conf_call_u = conf_call_y + (conf_call_width * conf_call_height);
+                        conf_call_v = conf_call_u + ((conf_call_width / 2) * (conf_call_height / 2));
+                    }
+
+                    pthread_mutex_lock(&group_audio___mutex);
+                    global_group_audio_peerbuffers = 0;
+                    mixing_audio_free_peer_buffer();
+                    // -------------------
+                    mixing_audio_alloc_peer_buffer();
+                    pthread_mutex_unlock(&group_audio___mutex);
+
                     conf_calls_add_active(new_friend_id);
                     global_conference_call_active = 1;
                 }
