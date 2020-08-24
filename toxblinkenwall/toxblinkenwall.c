@@ -32,6 +32,21 @@
 // LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
 /*
 
+## limit process I/O:
+
+apt install cgroup-tools
+grep blkio /proc/mounts || mkdir -p /cgroup/blkio ; mount -t cgroup -o blkio none /cgroup/blkio
+cgcreate -g blkio:/iothrottle
+rootdev_mm_norm=$(findmnt -o 'MAJ:MIN' -n /|tr -d ' ')
+rootdev_mm_pi="$(echo $rootdev_mm_norm|cut -d':' -f1):0"
+## blkio.throttle.read_bps_device: 
+## blkio.throttle.write_bps_device: 
+cgset -r blkio.throttle.read_iops_device="$rootdev_mm_norm 50" iothrottle
+cgset -r blkio.throttle.write_iops_device="$rootdev_mm_norm 50" iothrottle
+cgset -r blkio.throttle.read_iops_device="$rootdev_mm_pi 50" iothrottle
+cgset -r blkio.throttle.write_iops_device="$rootdev_mm_pi 50" iothrottle
+cgexec -g blkio:/iothrottle <command>
+
 
 # sudo dpkg --configure -a # to correct after dpkg was interrupted!!
 
@@ -4066,7 +4081,7 @@ static int find_friend_in_friendlist(uint32_t friendnum)
 {
     size_t i;
 
-    for (i = 0; i <= Friends.max_idx; ++i)
+    for (i = 0; i < Friends.max_idx; ++i)
     {
         if (Friends.list)
         {
@@ -4167,15 +4182,15 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
     }
     else
     {
+        // TODO: zzzzz: protect this ----------------
         // dbg(9, "friendlist_onFriendAdded:001.b realloc %d friend struct, max_id=%d, num=%d\n", (int)(Friends.max_idx + 1), (int)Friends.max_idx, (int)num);
         Friends.list = realloc(Friends.list, ((Friends.max_idx + 1) * sizeof(ToxicFriend)));
+        // TODO: zzzzz: protect this ----------------
     }
 
     // dbg(9, "friendlist_onFriendAdded:001.c set friend to all 0 values\n");
     memset(&Friends.list[Friends.max_idx], 0, sizeof(ToxicFriend)); // fill friend with "0" bytes
     // dbg(2, "friendlist_onFriendAdded:003:%d\n", (int)Friends.max_idx);
-    Friends.list[Friends.max_idx].num = num;
-    Friends.list[Friends.max_idx].active = true;
     Friends.list[Friends.max_idx].connection_status = TOX_CONNECTION_NONE;
     Friends.list[Friends.max_idx].status = TOX_USER_STATUS_NONE;
     Friends.list[Friends.max_idx].waiting_for_answer = 0;
@@ -4188,6 +4203,9 @@ void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
     {
         dbg(0, "tox_friend_get_public_key failed (error %d)\n", pkerr);
     }
+
+    Friends.list[Friends.max_idx].num = num;
+    Friends.list[Friends.max_idx].active = true;
 
     bin_id_to_string(Friends.list[Friends.max_idx].pub_key, (size_t) TOX_ADDRESS_SIZE,
                      Friends.list[Friends.max_idx].pubkey_string, (size_t)(TOX_ADDRESS_SIZE * 2 + 1));
