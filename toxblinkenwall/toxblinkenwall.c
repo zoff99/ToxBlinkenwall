@@ -10513,6 +10513,11 @@ void *thread_av(void *data)
                                                                av_video_frame.u,
                                                                av_video_frame.v,
                                                                &error);
+
+                                        if (error == TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL)
+                                        {
+                                            dbg(9, "TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL:fnum=%d\n", fnum_from_count);
+                                        }
                                     }
                                 }
                             }
@@ -10532,6 +10537,10 @@ void *thread_av(void *data)
                             //debug_error("uToxVideo:\tToxAV disagrees with our AV state for friend %lu, self %u, friend %u\n",
                             //  i, friend[i].call_state_self, friend[i].call_state_friend);
                             // dbg(0, "TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED\n");
+                        }
+                        else if (error == TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL)
+                        {
+                            // dont log this error here
                         }
                         else
                         {
@@ -11856,7 +11865,6 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
     }
     else
 #endif
-
 
 
     {
