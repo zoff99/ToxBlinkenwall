@@ -263,6 +263,11 @@ static const char global_version_string[] = "0.99.75";
 // #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
 #define HAVE_OUTPUT_OMX 1    // OMX HW accelerated output for the Pi3
 // --------- video output: choose only 1 of those! ---------
+
+// --------- Framebuffer: choose only if HAVE_FRAMEBUFFER is 1 ! ---------
+// #define HAVE_X11_AS_FB 1   // X11 instead of framebuffer output
+// --------- Framebuffer: choose only if HAVE_FRAMEBUFFER is 1 ! ---------
+
 //
 // --------- audio recording: choose only 1 of those! ---------
 #define HAVE_ALSA_REC 1      // for audio recording [* DEFAULT]
@@ -356,6 +361,24 @@ int show_own_cam = 1;
 #define PI_NORMAL_CAM_H_1080 1080
 
 #include <linux/fb.h>
+
+#ifdef HAVE_X11_AS_FB
+    #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
+
+    Display *x11_display;
+    Window x11_window;
+    GC x11_gc;
+    Atom x11_wm_delete_window;
+    int x11_screen;
+    uint8_t *x11_buf_data = NULL;
+    size_t x11_buf_bytes = 0;
+    uint16_t x11_pixbuf_w = 640;
+    uint16_t x11_pixbuf_h = 480;
+    Pixmap x11_pixmap;
+    XImage x11_image;
+    bool x11_pixmap_valid = false;
+#endif
 
 #ifdef HAVE_OUTPUT_OMX
     #include "omx.h"
@@ -992,6 +1015,9 @@ sem_t count_tox_write_savedata;
 
 pthread_t ringtone_thread;
 int ringtone_thread_stop = 0;
+
+pthread_t x11_thread;
+int x11_thread_stop = 0;
 
 pthread_t networktraffic_thread;
 int networktraffic_thread_stop = 1;
@@ -6387,6 +6413,299 @@ int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
 }
 
 
+
+// ------------------- X11 stuff ---------------------
+// ------------------- X11 stuff ---------------------
+// ------------------- X11 stuff ---------------------
+#ifdef HAVE_X11_AS_FB
+
+void *loop_x11(void *data)
+{
+    dbg(2, "X11:thread starting\n");
+
+    XEvent myevent;
+
+    while (x11_thread_stop == 0)
+    {
+        if (x11_thread_stop == 1)
+        {
+            break;
+        }
+
+#if 0
+        // dbg(9, "loop_x11:XNextEvent:001:A\n");
+        // XNextEvent(x11_display, &myevent);
+        // dbg(9, "loop_x11:XNextEvent:001:B\n");
+        if (myevent.type == ClientMessage)
+        {
+            if ((Atom)myevent.xclient.data.l[0] == x11_wm_delete_window)
+            {
+                dbg(9, "loop_x11:can not close that window [1]\n");
+            }
+        }
+#endif
+
+        yieldcpu(2 * 1000);
+        dbg(9, "loop_x11:window was displayed (probably)\n");
+
+        // XFillRectangle(x11_display, x11_window, DefaultGC(x11_display, x11_screen), 20, 20, 10, 10);
+
+        // XEvent myevent;
+        // XNextEvent(x11_display, &myevent);
+
+        if (x11_thread_stop == 1)
+        {
+            break;
+        }
+
+#if 0
+        const char *msg = "ToxBlinkenwall for X11";
+        XDrawImageString(x11_display,
+                     x11_window,
+                     x11_gc, 
+                     50, 50, 
+                     msg, strlen(msg));
+        dbg(9, "loop_x11:XDrawImageString\n");
+
+        if (x11_thread_stop == 1)
+        {
+            break;
+        }
+#endif
+
+        // XFlush(x11_display);
+
+        while (true)
+        {
+#if 0
+            dbg(9, "loop_x11:XNextEvent:002:A\n");
+            XNextEvent(x11_display, &myevent);
+            dbg(9, "loop_x11:XNextEvent:002:B\n");
+
+            if (myevent.type == ClientMessage)
+            {
+                if ((Atom)myevent.xclient.data.l[0] == x11_wm_delete_window)
+                {
+                    dbg(9, "loop_x11:can not close that window [2]\n");
+                }
+            }
+#endif
+
+            yieldcpu(50); // "n" ms sleep
+
+            if (x11_thread_stop == 1)
+            {
+                break;
+            }
+
+        }
+    }
+
+    dbg(2, "X11:Clean thread exit!\n");
+    pthread_exit(0);
+
+}
+
+void x11_open()
+{
+    dbg(9, "x11_open:enter\n");
+    x11_display = XOpenDisplay(NULL);
+
+    if (x11_display == NULL)
+    {
+        dbg(1, "Cannot open X11 display\n");
+    }
+
+    x11_screen = DefaultScreen(x11_display);
+
+    XSizeHints hint;
+    hint.x = 0;
+    hint.y = 0;
+    hint.width = 640;
+    hint.height = 480;
+    hint.flags = PSize; // PPosition|PSize;
+    int border_width = 8;
+
+    unsigned long myforeground = BlackPixel(x11_display, x11_screen);
+    unsigned long mybackground = WhitePixel(x11_display, x11_screen);
+
+    x11_window = XCreateSimpleWindow(x11_display, DefaultRootWindow(x11_display),
+                                 hint.x, hint.y, hint.width, hint.height,
+                                 border_width, myforeground, mybackground);
+
+    XStoreName(x11_display, x11_window, "TBW Video");
+
+    x11_gc = XCreateGC(x11_display, x11_window, 0, 0);
+    // XSetBackground(x11_display, x11_gc, mybackground);
+    // XSetForeground(x11_display, x11_gc, myforeground);
+
+    XMapRaised(x11_display, x11_window);
+    dbg(9, "x11_open:XMapRaised\n");
+
+    x11_wm_delete_window = XInternAtom(x11_display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(x11_display, x11_window, &x11_wm_delete_window, 1);
+
+    x11_thread_stop = 0;
+    if (pthread_create(&x11_thread, NULL, loop_x11, (void *)NULL) != 0)
+    {
+        dbg(0, "X11 Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(loop_x11, "t_x11");
+        dbg(2, "X11 Thread successfully created\n");
+    }
+
+    dbg(9, "x11_close:done\n");
+}
+
+void x11_close()
+{
+    dbg(9, "x11_close:enter\n");
+
+    ringtone_thread_stop = 1;
+
+    XFreeGC(x11_display,x11_gc);
+    dbg(9, "x11_close:XFreeGC called\n");
+    XDestroyWindow(x11_display, x11_window);
+    dbg(9, "x11_close:XDestroyWindow called\n");
+
+    // just wait 4 seconds, then just kill all X11 stuff
+    yieldcpu(2 * 1000);
+
+    if (x11_buf_data)
+    {
+        x11_buf_bytes = 0;
+        free(x11_buf_data);
+        x11_buf_data = NULL;
+    }
+
+    // pthread_join(x11_thread, NULL); // --> now this blocks forever
+    // dbg(9, "x11_close:x11 thread finished\n");
+
+    // XCloseDisplay(x11_display);  // --> now this blocks forever
+    dbg(9, "x11_close:done\n");
+}
+
+void x11_scale_rgbx_image(uint8_t *old_rgbx, uint16_t old_width, uint16_t old_height, uint8_t *new_rgbx, uint16_t new_width,
+                      uint16_t new_height)
+{
+    for (int y = 0; y != new_height; y++)
+    {
+        const int y0 = y * old_height / new_height;
+        for (int x = 0; x != new_width; x++)
+        {
+            const int x0 = x * old_width / new_width;
+            const int a         = x + y * new_width;
+            const int b         = x0 + y0 * old_width;
+            new_rgbx[a * 4]     = old_rgbx[b * 4];
+            new_rgbx[a * 4 + 1] = old_rgbx[b * 4 + 1];
+            new_rgbx[a * 4 + 2] = old_rgbx[b * 4 + 2];
+        }
+    }
+}
+
+void x11_draw_video_frame(uint8_t *img_data, uint16_t width, uint16_t height, bool dummy)
+{
+    if (!img_data)
+    {
+        dbg(9, "Received a null video frame. Skipping...\n");
+        return;
+    }
+
+    if ((x11_pixbuf_w != width) || (x11_pixbuf_h != height))
+    {
+        XWindowChanges changes = {.width = width, .height = height };
+        XConfigureWindow(x11_display, x11_window, CWWidth | CWHeight, &changes);
+
+        x11_pixbuf_w = width;
+        x11_pixbuf_h = height;
+    }
+
+    if (x11_pixmap_valid)
+    {
+        XFreePixmap(x11_display, x11_pixmap);
+    }
+
+    x11_pixmap_valid = false;
+
+    XWindowAttributes attrs;
+    uint8_t *new_data = NULL;
+
+    if (!x11_pixmap_valid)
+    {
+        XGetWindowAttributes(x11_display, x11_window, &attrs);
+
+        XImage x11_image_tmp = {
+            .width            = attrs.width,
+            .height           = attrs.height,
+            .depth            = 24,
+            .bits_per_pixel   = 32,
+            .format           = ZPixmap,
+            .byte_order       = LSBFirst,
+            .bitmap_unit      = 8,
+            .bitmap_bit_order = LSBFirst,
+            .bytes_per_line   = attrs.width * 4,
+            .red_mask         = 0xFF0000,
+            .green_mask       = 0xFF00,
+            .blue_mask        = 0xFF,
+            .data             = (char *)img_data
+        };
+
+        // HINT: XImage is a define ? so here is this hack then
+        x11_image.width = x11_image_tmp.width;
+        x11_image.height = x11_image_tmp.height;
+        x11_image.depth = x11_image_tmp.depth;
+        x11_image.bits_per_pixel = x11_image_tmp.bits_per_pixel;
+        x11_image.format = x11_image_tmp.format;
+        x11_image.byte_order = x11_image_tmp.byte_order;
+        x11_image.bitmap_unit = x11_image_tmp.bitmap_unit;
+        x11_image.bitmap_bit_order = x11_image_tmp.bitmap_bit_order;
+        x11_image.bytes_per_line = x11_image_tmp.bytes_per_line;
+        x11_image.red_mask = x11_image_tmp.red_mask;
+        x11_image.green_mask = x11_image_tmp.green_mask;
+        x11_image.blue_mask = x11_image_tmp.blue_mask;
+        x11_image.data = x11_image_tmp.data;
+
+        /* scale image if needed */
+        if (attrs.width != width && attrs.height != height)
+        {
+            new_data = calloc(1, (attrs.width * attrs.height * 4));
+            if (!new_data)
+            {
+                dbg(9, "Could not allocate memory for scaled image.\n");
+            }
+
+            x11_scale_rgbx_image(img_data, width, height, new_data, attrs.width, attrs.height);
+            x11_image.data = (char *)new_data;
+        }
+
+        int depth = DefaultDepth(x11_display, x11_screen); 
+        x11_pixmap = XCreatePixmap(x11_display, x11_window, attrs.width, attrs.height, depth);
+
+        x11_pixmap_valid = true;
+
+        XPutImage(x11_display, x11_pixmap, x11_gc, &x11_image, 0, 0, 0, 0, attrs.width, attrs.height);
+        XCopyArea(x11_display, x11_pixmap, x11_window, x11_gc, 0, 0, attrs.width, attrs.height, 0, 0);
+        XFlush(x11_display);
+
+    }
+    else
+    {
+        XPutImage(x11_display, x11_pixmap, x11_gc, &x11_image, 0, 0, 0, 0, attrs.width, attrs.height);
+        XCopyArea(x11_display, x11_pixmap, x11_window, x11_gc, 0, 0, attrs.width, attrs.height, 0, 0);
+        XFlush(x11_display);
+    }
+
+    if (new_data)
+    {
+        free(new_data);
+    }
+}
+
+#endif
+
+
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
 // ------------------- V4L2 stuff ---------------------
@@ -7011,6 +7330,10 @@ void close_cam()
     }
 
     dbg(2, "closing Framebuffer\n");
+
+#ifdef HAVE_X11_AS_FB
+    x11_close();
+#endif
 
     if (global_framebuffer_device_fd > 0)
     {
@@ -8251,15 +8574,6 @@ int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_n
 void update_status_line_on_fb()
 {
 #ifdef HAVE_FRAMEBUFFER
-#if 0
-    unsigned char *bf_out_real_fb = framebuffer_mappedmem;
-    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                          10, var_framebuffer_info.yres - 50, status_line_1_str);
-    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
-                          10, var_framebuffer_info.yres - 30, status_line_2_str);
-#endif
 #else
     global_update_opengl_status_text = 1;
 #endif
@@ -9085,6 +9399,7 @@ static void *video_play(void *dummy)
     // -
 #ifdef HAVE_FRAMEBUFFER
 
+
     // -- draw OSD for framebuffer output --
     if (omx_osd_y == NULL)
     {
@@ -9110,6 +9425,74 @@ static void *video_play(void *dummy)
     }
 
     // -- draw OSD for framebuffer output --
+
+
+#ifdef HAVE_X11_AS_FB
+
+
+    int x11_buf_w = frame_width_px1;
+    int x11_buf_h = frame_height_px1;
+    size_t x11_buf_bytes_cur = x11_buf_w * x11_buf_h * (32 / 8);
+    // dbg(9, "x11___:%p %d %d %d %d\n", y, x11_buf_w, x11_buf_h, x11_buf_bytes_cur, x11_buf_bytes);
+    
+    if (x11_buf_data)
+    {
+        if (x11_buf_bytes_cur != x11_buf_bytes)
+        {
+            free(x11_buf_data);
+            x11_buf_data = NULL;
+            x11_buf_bytes = x11_buf_bytes_cur;
+        }
+    }
+    
+    if (!x11_buf_data)
+    {
+        x11_buf_data = (uint8_t *)calloc(1, x11_buf_bytes_cur);
+    }
+    else
+    {
+        memset(x11_buf_data, 0, x11_buf_bytes);
+    }
+
+    if (x11_buf_data)
+    {
+        // DEBUG: all grey // memset(x11_buf_data, 128, x11_buf_bytes);
+
+        long int i;
+        long int j;
+        int i_src;
+        int j_src;
+        int yx;
+        int ux;
+        int vx;
+        uint8_t *point = NULL;
+
+        for (i = 0; i < frame_height_px1; i++)
+        {
+            i_src = i;
+
+            for (j = 0; j < frame_width_px1; j++)
+            {
+                point = (uint8_t *) x11_buf_data + 4 * ((i * (int)frame_width_px1) + j);
+                j_src = j;
+                yx = y[(i_src * abs(ystride)) + j_src];
+                ux = u[((i_src / 2) * abs(ustride)) + (j_src / 2)];
+                vx = v[((i_src / 2) * abs(vstride)) + (j_src / 2)];
+                point[0] = YUV2B(yx, ux, vx); // B
+                point[1] = YUV2G(yx, ux, vx); // G
+                point[2] = YUV2R(yx, ux, vx); // R
+                // point[3] = 0; // A
+            }
+        }
+
+        sem_wait(&video_play_lock);
+        x11_draw_video_frame(x11_buf_data, x11_buf_w, x11_buf_h, true);
+        sem_post(&video_play_lock);
+    }
+
+
+#else
+
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
     // dbg(9, "frame_width_px1=%d frame_height_px1=%d vid_width=%d vid_height=%d\n", (int)frame_width_px1, (int)frame_height_px1, (int)vid_width ,(int)vid_height);
@@ -9265,15 +9648,6 @@ static void *video_play(void *dummy)
             bf_out_data = NULL;
         }
 
-#if 0
-        text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                              var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
-                              10, var_framebuffer_info.yres - 50, status_line_1_str);
-        text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                              var_framebuffer_fix_info.line_length, bf_out_data_upscaled,
-                              10, var_framebuffer_info.yres - 30, status_line_2_str);
-#endif
-
         if (bf_out_data_upscaled != NULL)
         {
             sem_wait(&video_play_lock);
@@ -9355,14 +9729,6 @@ static void *video_play(void *dummy)
             }
         }
 
-#if 0
-        text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                              var_framebuffer_fix_info.line_length, bf_out_data,
-                              10, var_framebuffer_info.yres - 50, status_line_1_str);
-        text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                              var_framebuffer_fix_info.line_length, bf_out_data,
-                              10, var_framebuffer_info.yres - 30, status_line_2_str);
-#endif
 
         if (bf_out_data != NULL)
         {
@@ -9380,6 +9746,8 @@ static void *video_play(void *dummy)
     }
 
 #endif
+#endif
+
     uint64_t video_frame_play_delay_tbw = current_time_monotonic_default() - received_ts;
 
     if ((video_frame_play_delay_tbw >= 0) && (video_frame_play_delay_tbw < 400))
@@ -10283,6 +10651,10 @@ void *thread_av(void *data)
         {
             dbg(2, "mmap Framebuffer: %p\n", framebuffer_mappedmem);
         }
+
+#ifdef HAVE_X11_AS_FB
+        x11_open();
+#endif
 
         // --------------- start up the camera ---------------
         // --------------- start up the camera ---------------
@@ -11756,7 +12128,6 @@ int get_audio_record_t_counter()
     sem_post(&count_audio_record_threads);
     return ret;
 }
-// r -u /dev/fb0 -j 640 -k 480
 
 void audio_record__(int16_t *buf_pointer)
 {
@@ -13875,6 +14246,13 @@ int main(int argc, char *argv[])
 
     // call function to avoid unused function compiler error
     bw_current_time_actual();
+
+    // create "./db" directory if it does not exist
+    struct stat diretory_db_stat = {0};
+    if (stat("./db", &diretory_db_stat) == -1)
+    {
+        mkdir("./db", 0700);
+    }
 
     // don't accept calls until video device is ready
     accepting_calls = 0;
