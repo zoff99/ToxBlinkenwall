@@ -10000,13 +10000,13 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
 {
     sta();
 
-    dbg(9, "XX:000:A:==============================================\n");
-    dbg(9, "XX:000:fn=%d y=%p conf_call_y=%p gva=%d gcca=%d\n", friend_number, y, conf_call_y, global_video_active, global_conference_call_active);
-    for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
-    {
-        dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
-    }
-    dbg(9, "XX:000:A:==============================================\n");
+    // dbg(9, "XX:000:A:==============================================\n");
+    // dbg(9, "XX:000:fn=%d y=%p conf_call_y=%p gva=%d gcca=%d\n", friend_number, y, conf_call_y, global_video_active, global_conference_call_active);
+    // for (int jk=0;jk<MAX_PARALLEL_VIDEO_CALLS;jk++)
+    // {
+    //     dbg(9, "XX:000:A:%d:%d\n", jk, (int32_t)global_conference_calls_active[jk]);
+    // }
+    // dbg(9, "XX:000:A:==============================================\n");
 
     if (global_video_active != 1)
     {
@@ -10030,7 +10030,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             }
 
             int countnum = conf_calls_count_num_active_friend(friend_number);
-            dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
+            // dbg(9, "XX:001:fn=%d countnum=%d\n", friend_number, countnum);
             if (countnum == -1)
             {
                 return;
@@ -10312,7 +10312,7 @@ void *thread_av(void *data)
 
     while (toxav_iterate_thread_stop != 1)
     {
-        dbg(9, "global_video_active=%d\n", global_video_active);
+        // dbg(9, "global_video_active=%d\n", global_video_active);
         
         if (global_video_active == 1)
         {
@@ -10542,12 +10542,12 @@ void *thread_av(void *data)
                     TOXAV_ERR_SEND_FRAME error = 0;
 
 
-                    dbg(9, "friend_to_send_video_to=%d\n", (int)friend_to_send_video_to);
+                    // dbg(9, "friend_to_send_video_to=%d\n", (int)friend_to_send_video_to);
                     if (friend_to_send_video_to > -1)
                     {
                         if (using_h264_hw_accel == 1)
                         {
-                            dbg(9, "using_h264_hw_accel=%d\n", (int)using_h264_hw_accel);
+                            // dbg(9, "using_h264_hw_accel=%d\n", (int)using_h264_hw_accel);
 
                             if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
                             {
@@ -10577,15 +10577,15 @@ void *thread_av(void *data)
                                                             &error);
                             }
 
-                            dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
+                            // dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
                             if (global_conference_call_active == 1)
                             {
                                 int count_conf_calls = conf_calls_count_active();
-                                dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
+                                // dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
                                 for (int jk=0;jk<count_conf_calls;jk++)
                                 {
                                     int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
-                                    dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
+                                    // dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
                                     if (fnum_from_count != -1)
                                     {
                                         if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
@@ -10610,7 +10610,7 @@ void *thread_av(void *data)
                         }
                         else
                         {
-                            dbg(9, "using_h264_hw_accel:NO:%d\n", (int)using_h264_hw_accel);
+                            // dbg(9, "using_h264_hw_accel:NO:%d\n", (int)using_h264_hw_accel);
 
                             toxav_video_send_frame(av, friend_to_send_video_to,
                                                    av_video_frame.w,
@@ -10632,15 +10632,15 @@ void *thread_av(void *data)
                                                        &error);
                             }
 
-                            dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
+                            // dbg(9, "global_conference_call_active=%d\n", (int)global_conference_call_active);
                             if (global_conference_call_active == 1)
                             {
                                 int count_conf_calls = conf_calls_count_active();
-                                dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
+                                // dbg(9, "count_conf_calls=%d\n", (int)count_conf_calls);
                                 for (int jk=0;jk<count_conf_calls;jk++)
                                 {
                                     int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
-                                    dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
+                                    // dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
                                     if (fnum_from_count != -1)
                                     {
                                         toxav_video_send_frame(av, (uint32_t)fnum_from_count,
