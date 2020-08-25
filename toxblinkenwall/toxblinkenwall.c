@@ -6552,7 +6552,7 @@ void x11_open()
     }
     else
     {
-        pthread_setname_np(loop_x11, "t_x11");
+        pthread_setname_np(x11_thread, "t_x11");
         dbg(2, "X11 Thread successfully created\n");
     }
 
