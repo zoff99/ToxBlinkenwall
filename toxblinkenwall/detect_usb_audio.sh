@@ -181,6 +181,59 @@ defaults.pcm.!card ALSA
 fi
 
 
+
+
+if [ 1 == 2 ]; then
+
+# detect Logitech, Inc. QuickCam Pro for Notebooks ----------------
+cat /proc/asound/card*/usbid |grep '046d:0991' >/dev/null 2>/dev/null
+res=$?
+if [ $res -eq 0 ]; then
+    echo "USB QuickCam Pro for Notebooks detected ..." >> "$logfile" 2>&1
+
+	cp /usr/share/alsa/alsa.conf_ORIG /tmp/alsa.$$.cfg
+	echo '
+pcm.usb
+{
+    type hw
+    card U0x46d0x991
+}
+
+pcm.card_bcm {
+    type hw
+    card ALSA
+}
+
+pcm.!default {
+    type asym
+
+    playback.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+
+    capture.pcm
+    {
+        type plug
+        slave.pcm "usb"
+    }
+}
+
+defaults.pcm.!card ALSA
+' >> /tmp/alsa.$$.cfg
+
+
+	sudo cp /tmp/alsa.$$.cfg /usr/share/alsa/alsa.conf
+	rm -f /tmp/alsa.$$.cfg
+	echo "using device ... READY" >> "$logfile" 2>&1
+    detected_supported_device=1
+fi
+
+fi
+
+
+
 # detect USB PhoneReceiver ----------------
 cat /proc/asound/card*/usbid |grep '04b4:0306' >/dev/null 2>/dev/null
 res=$?
@@ -295,6 +348,9 @@ if [ -p "/home/pi/ToxBlinkenwall/toxblinkenwall/ext_keys.fifo" ]; then
 fi
 
 fi
+
+
+
 
 ## --------------- VIDEO ---------------
 
