@@ -576,7 +576,7 @@ struct alsa_audio_play_data_block
 #define MAX_RESEND_FILE_BEFORE_ASK 6
 #define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
 
-#define VIDEO_BUFFER_COUNT 2 // 3 is ok --> HINT: more buffer will cause more video delay!
+#define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 
 #define DEFAULT_GLOBAL_VID_BITRATE_NORMAL_QUALITY 600 // kbit/sec // need these 2 values to be different!!
 #define DEFAULT_GLOBAL_VID_BITRATE_HIGHER_QUALITY 1600 // kbit/sec // need these 2 values to be different!!
