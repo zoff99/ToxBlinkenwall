@@ -3614,11 +3614,14 @@ void create_tox_id_qrcode(Tox *tox)
 
 void delete_qrcode_generate_touchfile()
 {
+#ifndef HAVE_X11_AS_FB
     unlink(image_createqr_touchfile);
+#endif
 }
 
 int is_qrcode_generated()
 {
+#ifndef HAVE_X11_AS_FB
     int is_ready = 0;
     FILE *file = NULL;
     file = fopen(image_createqr_touchfile, "r");
@@ -3633,6 +3636,10 @@ int is_qrcode_generated()
     }
 
     return is_ready;
+#else
+    // always return "ready"
+    return 1;
+#endif
 }
 
 void show_tox_id_qrcode_real(Tox *tox)
