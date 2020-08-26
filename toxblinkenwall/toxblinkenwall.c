@@ -1043,6 +1043,7 @@ uint32_t debug_network_wifi_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 uint32_t debug_network_incoming_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 uint32_t debug_network_outgoing_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 
+int stdin_thread_stop = 1;
 
 #define AUDIO_VU_MIN_VALUE -20
 #define AUDIO_VU_MED_VALUE 110
@@ -12791,6 +12792,71 @@ void write_phonebook_names_to_files(Tox *tox)
     }
 }
 
+void *thread_stdin(void *data)
+{
+    Tox *tox = (Tox *)data;
+    char c = '\0';
+
+    while (stdin_thread_stop == 0)
+    {
+        /* Notice that EOF is also turned off in the non-canonical mode*/
+        c=getchar();
+        // putchar(c);
+        dbg(9, "STDIN:%c\n", c);
+        if (c == (int)'0')
+        {
+            dbg(9, "STDIN:hangup\n");
+            disconnect_all_calls(tox);
+        }
+        else if (c == (int)'1')
+        {
+            dbg(9, "STDIN:call:1\n");
+            call_entry_num(tox, 1);
+        }
+        else if (c == (int)'2')
+        {
+            dbg(9, "STDIN:call:2\n");
+            call_entry_num(tox, 2);
+        }
+        else if (c == (int)'3')
+        {
+            dbg(9, "STDIN:call:3\n");
+            call_entry_num(tox, 3);
+        }
+        else if (c == (int)'4')
+        {
+            dbg(9, "STDIN:call:4\n");
+            call_entry_num(tox, 4);
+        }
+        else if (c == (int)'5')
+        {
+            dbg(9, "STDIN:call:5\n");
+            call_entry_num(tox, 5);
+        }
+        else if (c == (int)'6')
+        {
+            dbg(9, "STDIN:call:6\n");
+            call_entry_num(tox, 6);
+        }
+        else if (c == (int)'7')
+        {
+            dbg(9, "STDIN:call:7\n");
+            call_entry_num(tox, 7);
+        }
+        else if (c == (int)'8')
+        {
+            dbg(9, "STDIN:call:8\n");
+            call_entry_num(tox, 8);
+        }
+        else if (c == (int)'9')
+        {
+            dbg(9, "STDIN:call:9\n");
+            call_entry_num(tox, 9);
+        }
+    }
+
+    pthread_exit(0);
+}
 
 void *thread_phonebook_invite(void *data)
 {
@@ -14592,6 +14658,34 @@ int main(int argc, char *argv[])
         }
     }
 
+#ifdef HAVE_X11_AS_FB
+    // thanks to:
+    // https://stackoverflow.com/questions/1798511/how-to-avoid-pressing-enter-with-getchar-for-reading-a-single-character-only
+
+#include <termios.h>            //termios, TCSANOW, ECHO, ICANON
+
+    setvbuf(stdin, NULL, _IONBF, 0);
+
+    struct termios oldt, newt;
+
+    /*tcgetattr gets the parameters of the current terminal
+    STDIN_FILENO will tell tcgetattr that it should write the settings
+    of stdin to oldt*/
+    tcgetattr( STDIN_FILENO, &oldt);
+    /*now the settings will be copied*/
+    newt = oldt;
+
+    /*ICANON normally takes care that one line at a time will be processed
+    that means it will return if it sees a "\n" or an EOF or an EOL*/
+    newt.c_lflag &= ~(ICANON);
+
+    /*Those new settings will be set to STDIN
+    TCSANOW tells tcsetattr to change attributes immediately. */
+    tcsetattr( STDIN_FILENO, TCSANOW, &newt);
+
+
+#endif
+
     CLEAR(status_line_1_str);
     CLEAR(status_line_2_str);
     global_video_in_fps = 0;
@@ -14867,10 +14961,11 @@ int main(int argc, char *argv[])
 #endif
     // init AV callbacks -------------------------------
     // start toxav thread ------------------------------
-    pthread_t tid[7]; // 0 -> toxav_iterate thread, 1 -> video send thread
+    pthread_t tid[8]; // 0 -> toxav_iterate thread, 1 -> video send thread
     // 2 -> audio recording thread, 3 -> read keys from pipe
     // 4 -> invite phonebook entries, 5 -> openGL thread
     // 6 -> toxav_audio_iterate thread
+    // 7 -> stdin input reader (only for X11 mode)
     // start toxav thread ------------------------------
     toxav_iterate_thread_stop = 0;
 
@@ -14972,6 +15067,21 @@ int main(int argc, char *argv[])
     }
 
 #endif
+
+#ifdef HAVE_X11_AS_FB
+    stdin_thread_stop = 0;
+
+    if (pthread_create(&(tid[7]), NULL, thread_stdin, (void *)tox) != 0)
+    {
+        dbg(0, "stdin Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(tid[7], "t_stdin");
+        dbg(2, "stdin Thread successfully created\n");
+    }
+#endif
+
     // ------ thread priority ------
     yieldcpu(800); // wait for other thread to start up, and set their priority
     // struct sched_param param;
@@ -15120,6 +15230,8 @@ int main(int argc, char *argv[])
     toxav_audioiterate_thread_stop = 1;
     ringtone_thread_stop = 1;
     networktraffic_thread_stop = 1;
+    stdin_thread_stop = 1;
+
 #ifdef HAVE_OUTPUT_OPENGL
     opengl_shutdown = 1;
     yieldcpu(100);
@@ -15159,6 +15271,11 @@ int main(int argc, char *argv[])
 #ifdef HAVE_EXTERNAL_KEYS
     do_read_ext_keys = 0;
     yieldcpu(10);
+#endif
+
+#ifdef HAVE_X11_AS_FB
+    /*restore the old settings*/
+    tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 #endif
 
     if (logfile)
