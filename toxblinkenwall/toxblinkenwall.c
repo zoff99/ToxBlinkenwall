@@ -380,6 +380,9 @@ int show_own_cam = 1;
 
     Window x11_main_window;
     GC x11_main_gc;
+    Pixmap x11_main_pixmap;
+    XImage x11_main_image;
+    int x11_main_depth;
 
     uint8_t *x11_main_buf_data = NULL;
     size_t x11_main_buf_bytes = 0;
@@ -388,6 +391,7 @@ int show_own_cam = 1;
 
 
     bool x11_pixmap_valid = false;
+    bool x11_main_pixmap_valid = false;
     bool x11_open_done = false;
 #endif
 
@@ -3674,7 +3678,24 @@ void show_tox_id_qrcode(Tox *tox)
         {
             // dbg(9, "Friends:A:000.0\n");
             fb_fill_black();
+
+#ifdef HAVE_X11_AS_FB
+            if (!x11_main_pixmap_valid)
+            {
+                return;
+            }
+            unsigned char *bf_out_real_fb = x11_main_buf_data;
+            uint32_t var_framebuffer_info_xres = x11_main_pixbuf_w;
+            uint32_t var_framebuffer_info_yres = x11_main_pixbuf_h;
+            uint32_t var_framebuffer_fix_info_line_length = x11_main_pixbuf_w * (32 / 8);
+            // dbg(9, "x11:drawing main screen\n");
+#else
             unsigned char *bf_out_real_fb = framebuffer_mappedmem;
+            uint32_t var_framebuffer_info_xres = var_framebuffer_info.xres;
+            uint32_t var_framebuffer_info_yres = var_framebuffer_info.yres;
+            uint32_t var_framebuffer_fix_info_line_length = var_framebuffer_fix_info.line_length;
+#endif
+
             uint32_t line_position_y = 30;
             const uint32_t line_position_x = 30;
             const uint32_t line_position_x_header = 10;
@@ -3719,8 +3740,8 @@ void show_tox_id_qrcode(Tox *tox)
                     break;
             }
 
-            left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                         var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            left_top_bar_into_bgra_frame(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                         var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                          line_position_x_header, line_position_y, 126, 8,
                                          color_r, color_g, color_b);
             line_position_y = line_position_y + 9;
@@ -3728,16 +3749,16 @@ void show_tox_id_qrcode(Tox *tox)
             // Display version
             CLEAR(text_line);
             snprintf(text_line, sizeof(text_line), "ToxBlinkenwall v%s", global_version_string);
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
             // ------------------------------------
             // Display commit hash
             CLEAR(text_line);
             snprintf(text_line, sizeof(text_line), "tbw git hash: v%s", TBW_GIT_COMMIT_HASH);
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
             // ------------------------------------
@@ -3746,16 +3767,16 @@ void show_tox_id_qrcode(Tox *tox)
             int v_2 = (int)tox_version_minor();
             int v_3 = (int)tox_version_patch();
             snprintf(text_line, sizeof(text_line), "Zoxcore v%d.%d.%d", v_1, v_2, v_3);
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
             // ------------------------------------
             // Display commit hash
             CLEAR(text_line);
             snprintf(text_line, sizeof(text_line), "ct git hash: v%s", TOX_GIT_COMMIT_HASH);
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
             line_position_y = line_position_y + 20;
             //
@@ -3774,8 +3795,8 @@ void show_tox_id_qrcode(Tox *tox)
                     CLEAR(ownname);
                     tox_self_get_name(tox, (uint8_t *)ownname);
                     snprintf(text_line, sizeof(text_line), "name: %s", ownname);
-                    text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                          var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                    text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                          var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                           line_position_x_header, line_position_y, text_line);
                     line_position_y = line_position_y + 20;
                 }
@@ -3789,8 +3810,8 @@ void show_tox_id_qrcode(Tox *tox)
             // ------------------------------------
             // Display Phonebook first
             int j3;
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, "Phonebook:");
             line_position_y = line_position_y + 20;
 
@@ -3841,8 +3862,8 @@ void show_tox_id_qrcode(Tox *tox)
                             {
                             }
 
-                            left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                                         var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                            left_top_bar_into_bgra_frame(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                                         var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                                          line_position_x_header, line_position_y, 12, 12,
                                                          color_r, color_g, color_b);
 
@@ -3862,8 +3883,8 @@ void show_tox_id_qrcode(Tox *tox)
                                 snprintf(text_line, sizeof(text_line), "P%d: %s %d", j3, "Phonebook", j3);
                             }
 
-                            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                                   line_position_x, line_position_y, text_line);
                             line_position_y = line_position_y + 20;
                         }
@@ -3878,8 +3899,8 @@ void show_tox_id_qrcode(Tox *tox)
             //
             // Display all Friends second
             // dbg(9, "Friends.max_idx=%d\n", Friends.max_idx);
-            text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                  var_framebuffer_fix_info.line_length, bf_out_real_fb,
+            text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                  var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, "Friends:");
             line_position_y = line_position_y + 20;
             uint32_t max_display = 10;
@@ -3942,8 +3963,8 @@ void show_tox_id_qrcode(Tox *tox)
                 {
                 }
 
-                left_top_bar_into_bgra_frame(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                             var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                left_top_bar_into_bgra_frame(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                             var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                              line_position_x_header, line_position_y, 12, 12,
                                              color_r, color_g, color_b);
 
@@ -3963,12 +3984,24 @@ void show_tox_id_qrcode(Tox *tox)
                     snprintf(text_line, sizeof(text_line), "%d: %s %d", j, "Friend", j);
                 }
 
-                text_on_bgra_frame_xy(var_framebuffer_info.xres, var_framebuffer_info.yres,
-                                      var_framebuffer_fix_info.line_length, bf_out_real_fb,
+                text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
+                                      var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                       line_position_x, line_position_y, text_line);
                 line_position_y = line_position_y + 20;
                 j++;
             }
+
+
+
+#ifdef HAVE_X11_AS_FB
+            if (x11_main_pixmap_valid)
+            {
+                XPutImage(x11_display, x11_main_pixmap, x11_gc, &x11_main_image, 0, 0, 0, 0, x11_main_image.width, x11_main_image.height);
+                XCopyArea(x11_display, x11_main_pixmap, x11_main_window, x11_main_gc, 0, 0, x11_main_image.width, x11_main_image.height, 0, 0);
+                XFlush(x11_display);
+            }
+#endif
+
         }
 
         // dbg(9, "Friends:A:099\n");
@@ -6534,6 +6567,24 @@ void x11_open()
         dbg(1, "Cannot open X11 display\n");
     }
 
+    // --- alloc X11 buffer for main window ---
+    size_t x11_main_buf_bytes_cur = x11_main_pixbuf_w * x11_main_pixbuf_h * (32 / 8);
+
+    if (x11_main_buf_data)
+    {
+        free(x11_main_buf_data);
+        x11_main_buf_data = NULL;
+    }
+
+    if (!x11_main_buf_data)
+    {
+        x11_main_buf_data = (uint8_t *)calloc(1, x11_main_buf_bytes_cur);
+    }
+    x11_main_buf_bytes = x11_main_buf_bytes_cur;
+    memset(x11_main_buf_data, 0, x11_main_buf_bytes);
+
+    // --- alloc X11 buffer for main window ---
+
     x11_screen = DefaultScreen(x11_display);
     x11_wm_delete_window = XInternAtom(x11_display, "WM_DELETE_WINDOW", False);
 
@@ -6597,6 +6648,55 @@ void x11_open()
         dbg(2, "X11 Thread successfully created\n");
     }
 
+    XWindowAttributes attrs;
+    XGetWindowAttributes(x11_display, x11_main_window, &attrs);
+
+    yieldcpu(2 * 100);
+
+    XImage x11_image_tmp = {
+        .width            = attrs.width,
+        .height           = attrs.height,
+        .depth            = 24,
+        .bits_per_pixel   = 32,
+        .format           = ZPixmap,
+        .byte_order       = LSBFirst,
+        .bitmap_unit      = 8,
+        .bitmap_bit_order = LSBFirst,
+        .bytes_per_line   = attrs.width * 4,
+        .red_mask         = 0xFF0000,
+        .green_mask       = 0xFF00,
+        .blue_mask        = 0xFF,
+        .data             = (char *)x11_main_buf_data
+    };
+
+    // HINT: XImage is a define ? so here is this hack then
+    x11_main_image.width = x11_image_tmp.width;
+    x11_main_image.height = x11_image_tmp.height;
+    x11_main_image.depth = x11_image_tmp.depth;
+    x11_main_image.bits_per_pixel = x11_image_tmp.bits_per_pixel;
+    x11_main_image.format = x11_image_tmp.format;
+    x11_main_image.byte_order = x11_image_tmp.byte_order;
+    x11_main_image.bitmap_unit = x11_image_tmp.bitmap_unit;
+    x11_main_image.bitmap_bit_order = x11_image_tmp.bitmap_bit_order;
+    x11_main_image.bytes_per_line = x11_image_tmp.bytes_per_line;
+    x11_main_image.red_mask = x11_image_tmp.red_mask;
+    x11_main_image.green_mask = x11_image_tmp.green_mask;
+    x11_main_image.blue_mask = x11_image_tmp.blue_mask;
+    x11_main_image.data = x11_image_tmp.data;
+
+    x11_main_depth = DefaultDepth(x11_display, x11_screen);
+    x11_main_pixmap = XCreatePixmap(x11_display, x11_main_window, attrs.width, attrs.height, x11_main_depth);
+
+    yieldcpu(2 * 100);
+
+    XPutImage(x11_display, x11_main_pixmap, x11_gc, &x11_main_image, 0, 0, 0, 0, attrs.width, attrs.height);
+    XCopyArea(x11_display, x11_main_pixmap, x11_main_window, x11_main_gc, 0, 0, attrs.width, attrs.height, 0, 0);
+    XFlush(x11_display);
+
+    yieldcpu(2 * 100);
+
+    x11_main_pixmap_valid = true;
+
     x11_open_done = true;
 }
 
@@ -6617,6 +6717,19 @@ void x11_close()
     dbg(9, "x11_close:XFreeGC called:main\n");
     XDestroyWindow(x11_display, x11_main_window);
     dbg(9, "x11_close:XDestroyWindow called:main\n");
+
+    if (x11_pixmap_valid)
+    {
+        dbg(9, "x11_close:XFreePixmap called:video\n");
+        XFreePixmap(x11_display, x11_pixmap);
+    }
+
+    if (x11_main_pixmap_valid)
+    {
+        dbg(9, "x11_close:XFreePixmap called:main\n");
+        XFreePixmap(x11_display, x11_main_pixmap);
+    }
+
 
     // just wait x seconds, then just kill all X11 stuff
     yieldcpu(2 * 1000);
@@ -10551,6 +10664,13 @@ void fb_fill_black()
     {
         memset(framebuffer_mappedmem, 0x0, framebuffer_screensize);
     }
+
+#ifdef HAVE_X11_AS_FB
+    if (x11_main_pixmap_valid)
+    {
+        memset(x11_main_buf_data, 0, x11_main_buf_bytes);
+    }
+#endif
 }
 
 void fb_fill_xxx()
