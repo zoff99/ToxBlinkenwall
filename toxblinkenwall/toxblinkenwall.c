@@ -377,7 +377,18 @@ int show_own_cam = 1;
     uint16_t x11_pixbuf_h = 480;
     Pixmap x11_pixmap;
     XImage x11_image;
+
+    Window x11_main_window;
+    GC x11_main_gc;
+
+    uint8_t *x11_main_buf_data = NULL;
+    size_t x11_main_buf_bytes = 0;
+    uint16_t x11_main_pixbuf_w = 1280;
+    uint16_t x11_main_pixbuf_h = 720;
+
+
     bool x11_pixmap_valid = false;
+    bool x11_open_done = false;
 #endif
 
 #ifdef HAVE_OUTPUT_OMX
@@ -6524,8 +6535,10 @@ void x11_open()
     }
 
     x11_screen = DefaultScreen(x11_display);
+    x11_wm_delete_window = XInternAtom(x11_display, "WM_DELETE_WINDOW", False);
 
     XSizeHints hint;
+
     hint.x = 0;
     hint.y = 0;
     hint.width = 640;
@@ -6533,24 +6546,45 @@ void x11_open()
     hint.flags = PSize; // PPosition|PSize;
     int border_width = 8;
 
-    unsigned long myforeground = BlackPixel(x11_display, x11_screen);
-    unsigned long mybackground = WhitePixel(x11_display, x11_screen);
+    unsigned long myforeground = WhitePixel(x11_display, x11_screen);
+    unsigned long mybackground = BlackPixel(x11_display, x11_screen);
 
     x11_window = XCreateSimpleWindow(x11_display, DefaultRootWindow(x11_display),
                                  hint.x, hint.y, hint.width, hint.height,
                                  border_width, myforeground, mybackground);
 
     XStoreName(x11_display, x11_window, "TBW Video");
-
     x11_gc = XCreateGC(x11_display, x11_window, 0, 0);
-    // XSetBackground(x11_display, x11_gc, mybackground);
-    // XSetForeground(x11_display, x11_gc, myforeground);
 
+    yieldcpu(3 * 100);
+
+    hint.x = 0;
+    hint.y = 0;
+    hint.width = x11_main_pixbuf_w;
+    hint.height = x11_main_pixbuf_h;
+    hint.flags = PSize; // PPosition|PSize;
+    border_width = 8;
+
+    x11_main_window = XCreateSimpleWindow(x11_display, DefaultRootWindow(x11_display),
+                                 hint.x, hint.y, hint.width, hint.height,
+                                 border_width, myforeground, mybackground);
+    XStoreName(x11_display, x11_main_window, "TBW Menu");
+    x11_main_gc = XCreateGC(x11_display, x11_main_window, 0, 0);
+
+    yieldcpu(3 * 100);
+    XMapRaised(x11_display, x11_main_window);
+    dbg(9, "x11_open:XMapRaised:main\n");
+
+    yieldcpu(3 * 100);
     XMapRaised(x11_display, x11_window);
-    dbg(9, "x11_open:XMapRaised\n");
+    dbg(9, "x11_open:XMapRaised:video\n");
 
-    x11_wm_delete_window = XInternAtom(x11_display, "WM_DELETE_WINDOW", False);
+
+    yieldcpu(3 * 100);
     XSetWMProtocols(x11_display, x11_window, &x11_wm_delete_window, 1);
+    yieldcpu(3 * 100);
+    XSetWMProtocols(x11_display, x11_main_window, &x11_wm_delete_window, 1);
+
 
     x11_thread_stop = 0;
     if (pthread_create(&x11_thread, NULL, loop_x11, (void *)NULL) != 0)
@@ -6563,21 +6597,28 @@ void x11_open()
         dbg(2, "X11 Thread successfully created\n");
     }
 
-    dbg(9, "x11_close:done\n");
+    x11_open_done = true;
 }
 
 void x11_close()
 {
     dbg(9, "x11_close:enter\n");
 
-    ringtone_thread_stop = 1;
+    x11_open_done = false;
+
+    x11_thread_stop = 1;
 
     XFreeGC(x11_display,x11_gc);
-    dbg(9, "x11_close:XFreeGC called\n");
+    dbg(9, "x11_close:XFreeGC called:video\n");
     XDestroyWindow(x11_display, x11_window);
-    dbg(9, "x11_close:XDestroyWindow called\n");
+    dbg(9, "x11_close:XDestroyWindow called:video\n");
 
-    // just wait 4 seconds, then just kill all X11 stuff
+    XFreeGC(x11_display,x11_main_gc);
+    dbg(9, "x11_close:XFreeGC called:main\n");
+    XDestroyWindow(x11_display, x11_main_window);
+    dbg(9, "x11_close:XDestroyWindow called:main\n");
+
+    // just wait x seconds, then just kill all X11 stuff
     yieldcpu(2 * 1000);
 
     if (x11_buf_data)
@@ -6585,6 +6626,13 @@ void x11_close()
         x11_buf_bytes = 0;
         free(x11_buf_data);
         x11_buf_data = NULL;
+    }
+
+    if (x11_main_buf_data)
+    {
+        x11_main_buf_bytes = 0;
+        free(x11_main_buf_data);
+        x11_main_buf_data = NULL;
     }
 
     // pthread_join(x11_thread, NULL); // --> now this blocks forever
