@@ -3689,7 +3689,7 @@ void show_tox_id_qrcode(Tox *tox)
             uint32_t var_framebuffer_info_xres = x11_main_pixbuf_w;
             uint32_t var_framebuffer_info_yres = x11_main_pixbuf_h;
             uint32_t var_framebuffer_fix_info_line_length = x11_main_pixbuf_w * (32 / 8);
-            // dbg(9, "x11:drawing main screen\n");
+            dbg(9, "x11:drawing main screen\n");
 #else
             unsigned char *bf_out_real_fb = framebuffer_mappedmem;
             uint32_t var_framebuffer_info_xres = var_framebuffer_info.xres;
