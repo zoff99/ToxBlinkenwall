@@ -3667,7 +3667,7 @@ void show_tox_id_qrcode_real(Tox *tox)
 
     if (system(cmd_str)) {}
 
-    dbg(2, "show_tox_id_qrcode()\n");
+    dbg(2, "show_tox_id_qrcode_real()\n");
     global_is_qrcode_showing_on_screen = 1;
 }
 
@@ -3675,9 +3675,15 @@ void show_tox_id_qrcode(Tox *tox)
 {
     if (QRCODE_AS_DEFAULT_SCREEN == 2)
     {
+        dbg(9, "show_tox_id_qrcode:A:000.0\n");
+
+#ifdef HAVE_X11_AS_FB
+        if (tox != NULL)
+#else
         if ((tox != NULL) && (global_fb_device_stats_filled == 1))
+#endif
         {
-            dbg(9, "Friends:A:000.0\n");
+            dbg(9, "show_tox_id_qrcode:A:000.1:global_fb_device_stats_filled=%d\n", global_fb_device_stats_filled);
             fb_fill_black();
 
 #ifdef HAVE_X11_AS_FB
