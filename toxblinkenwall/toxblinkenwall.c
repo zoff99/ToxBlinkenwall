@@ -3675,28 +3675,23 @@ void show_tox_id_qrcode(Tox *tox)
 {
     if (QRCODE_AS_DEFAULT_SCREEN == 2)
     {
-        dbg(9, "show_tox_id_qrcode:A:000.0\n");
-
 #ifdef HAVE_X11_AS_FB
         if (tox != NULL)
 #else
         if ((tox != NULL) && (global_fb_device_stats_filled == 1))
 #endif
         {
-            dbg(9, "show_tox_id_qrcode:A:000.1:global_fb_device_stats_filled=%d\n", global_fb_device_stats_filled);
             fb_fill_black();
 
 #ifdef HAVE_X11_AS_FB
             if (!x11_main_pixmap_valid)
             {
-                dbg(9, "x11:x11_main_pixmap_valid == false\n");
                 return;
             }
             unsigned char *bf_out_real_fb = x11_main_buf_data;
             uint32_t var_framebuffer_info_xres = x11_main_pixbuf_w;
             uint32_t var_framebuffer_info_yres = x11_main_pixbuf_h;
             uint32_t var_framebuffer_fix_info_line_length = x11_main_pixbuf_w * (32 / 8);
-            dbg(9, "x11:drawing main screen\n");
 #else
             unsigned char *bf_out_real_fb = framebuffer_mappedmem;
             uint32_t var_framebuffer_info_xres = var_framebuffer_info.xres;
