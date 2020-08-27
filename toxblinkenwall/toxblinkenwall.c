@@ -3677,12 +3677,13 @@ void show_tox_id_qrcode(Tox *tox)
     {
         if ((tox != NULL) && (global_fb_device_stats_filled == 1))
         {
-            // dbg(9, "Friends:A:000.0\n");
+            dbg(9, "Friends:A:000.0\n");
             fb_fill_black();
 
 #ifdef HAVE_X11_AS_FB
             if (!x11_main_pixmap_valid)
             {
+                dbg(9, "x11:x11_main_pixmap_valid == false\n");
                 return;
             }
             unsigned char *bf_out_real_fb = x11_main_buf_data;
@@ -6637,18 +6638,6 @@ void x11_open()
     yieldcpu(3 * 100);
     XSetWMProtocols(x11_display, x11_main_window, &x11_wm_delete_window, 1);
 
-
-    x11_thread_stop = 0;
-    if (pthread_create(&x11_thread, NULL, loop_x11, (void *)NULL) != 0)
-    {
-        dbg(0, "X11 Thread create failed\n");
-    }
-    else
-    {
-        pthread_setname_np(x11_thread, "t_x11");
-        dbg(2, "X11 Thread successfully created\n");
-    }
-
     XWindowAttributes attrs;
     XGetWindowAttributes(x11_display, x11_main_window, &attrs);
 
@@ -6696,9 +6685,22 @@ void x11_open()
 
     yieldcpu(2 * 100);
 
+    x11_thread_stop = 0;
+    if (pthread_create(&x11_thread, NULL, loop_x11, (void *)NULL) != 0)
+    {
+        dbg(0, "X11 Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(x11_thread, "t_x11");
+        dbg(2, "X11 Thread successfully created\n");
+    }
+
     x11_main_pixmap_valid = true;
+    dbg(2, "x11_open:x11_main_pixmap_valid\n");
 
     x11_open_done = true;
+    dbg(2, "x11_open:x11_open_done\n");
 }
 
 void x11_close()
