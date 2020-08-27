@@ -3413,6 +3413,7 @@ void print_tox_id(Tox *tox)
 
 void show_video_calling(uint32_t fnum, bool with_delay)
 {
+#ifndef HAVE_X11_AS_FB
     char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
@@ -3471,6 +3472,7 @@ void show_video_calling(uint32_t fnum, bool with_delay)
     {
         yieldcpu(600);
     }
+#endif
 }
 
 void show_text_as_image(const char *display_text)
