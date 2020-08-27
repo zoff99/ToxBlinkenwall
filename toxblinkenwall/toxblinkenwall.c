@@ -12801,8 +12801,7 @@ void *thread_stdin(void *data)
     {
         /* Notice that EOF is also turned off in the non-canonical mode*/
         c=getchar();
-        // putchar(c);
-        dbg(9, "STDIN:%c\n", c);
+        // dbg(9, "STDIN:%c\n", c);
         if (c == (int)'0')
         {
             dbg(9, "STDIN:hangup\n");
@@ -12853,6 +12852,8 @@ void *thread_stdin(void *data)
             dbg(9, "STDIN:call:9\n");
             call_entry_num(tox, 9);
         }
+
+        yieldcpu(50);
     }
 
     pthread_exit(0);
