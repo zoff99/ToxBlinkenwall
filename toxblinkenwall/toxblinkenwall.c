@@ -10973,6 +10973,7 @@ void *thread_av(void *data)
 
                 if (using_h264_hw_accel == 1)
                 {
+#if 0
                     current_frame_has_sps = false;
                     // save SPS
                     if (is_h264_sps((const uint8_t *)av_video_frame.h264_buf, (const uint32_t)av_video_frame.buf_len))
@@ -10995,6 +10996,7 @@ void *thread_av(void *data)
                             memcpy(saved_sps, av_video_frame.h264_buf, (size_t)av_video_frame.buf_len);
                         }
                     }
+#endif
                 }
 
 
@@ -11102,6 +11104,7 @@ void *thread_av(void *data)
                         {
                             // dbg(9, "using_h264_hw_accel=%d\n", (int)using_h264_hw_accel);
 
+#if 0
                             if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
                             {
                                 toxav_video_send_frame_h264(av, friend_to_send_video_to,
@@ -11111,6 +11114,7 @@ void *thread_av(void *data)
                                                             saved_sps_size,
                                                             &error);
                             }
+#endif
 
                             toxav_video_send_frame_h264(av, friend_to_send_video_to,
                                                         av_video_frame.h264_w,
@@ -11141,6 +11145,7 @@ void *thread_av(void *data)
                                     // dbg(9, "fnum_from_count=%d\n", (int)fnum_from_count);
                                     if (fnum_from_count != -1)
                                     {
+#if 0
                                         if ((!current_frame_has_sps) && (saved_sps) && (saved_sps_size > 7))
                                         {
                                             toxav_video_send_frame_h264(av, (uint32_t)fnum_from_count,
@@ -11150,6 +11155,7 @@ void *thread_av(void *data)
                                                                         saved_sps_size,
                                                                         &error);
                                         }
+#endif
 
                                         toxav_video_send_frame_h264(av, (uint32_t)fnum_from_count,
                                                                     av_video_frame.h264_w,
