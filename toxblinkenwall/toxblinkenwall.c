@@ -1044,6 +1044,7 @@ uint32_t debug_network_incoming_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_
 uint32_t debug_network_outgoing_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_DISPLAY];
 
 int stdin_thread_stop = 1;
+int thread_play_mixed_audio_stop = 1;
 
 #define AUDIO_VU_MIN_VALUE -20
 #define AUDIO_VU_MED_VALUE 110
@@ -8615,7 +8616,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
                 {
                     mixing_audio_add_buffer(0, (int16_t *)pcm, sample_count);
                     pthread_mutex_unlock(&group_audio___mutex);
-                    goto PROCESS_AUDIO_MIX;
+                    goto END_RETURN;
                 }
 
                 uint32_t sample_count_new = 0;
@@ -8642,42 +8643,45 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
             }
             else if (conf_calls_is_active_friend(friend_number))
             {
-                // zzzzzzzzzzzzzzz
-                uint32_t peernum = 1;
-                
-                pthread_mutex_lock(&group_audio___mutex);
-                if ((channels == 1) && (sampling_rate == 48000))
+                int countnum = conf_calls_count_num_active_friend(friend_number);
+                if (countnum > -1)
                 {
-                    mixing_audio_add_buffer(peernum, (int16_t *)pcm, sample_count);
-                    pthread_mutex_unlock(&group_audio___mutex);
-                    goto PROCESS_AUDIO_MIX;
-                }
+                    uint32_t peernum = countnum + 1;
 
-                uint32_t sample_count_new = 0;
-                int16_t *new_pcm_buffer = upsample_to_48khz((int16_t *)pcm, (size_t)sample_count, (uint8_t)channels, (uint32_t)sampling_rate, &sample_count_new);
-
-                if (!new_pcm_buffer)
-                {
+                    pthread_mutex_lock(&group_audio___mutex);
                     if ((channels == 1) && (sampling_rate == 48000))
                     {
                         mixing_audio_add_buffer(peernum, (int16_t *)pcm, sample_count);
+                        pthread_mutex_unlock(&group_audio___mutex);
+                        goto END_RETURN;
+                    }
+
+                    uint32_t sample_count_new = 0;
+                    int16_t *new_pcm_buffer = upsample_to_48khz((int16_t *)pcm, (size_t)sample_count, (uint8_t)channels, (uint32_t)sampling_rate, &sample_count_new);
+
+                    if (!new_pcm_buffer)
+                    {
+                        if ((channels == 1) && (sampling_rate == 48000))
+                        {
+                            mixing_audio_add_buffer(peernum, (int16_t *)pcm, sample_count);
+                        }
+                        else
+                        {
+                        }
                     }
                     else
                     {
+                        // use new_pcm_buffer with upsampled data
+                        mixing_audio_add_buffer(peernum, new_pcm_buffer, sample_count_new);
+                        free(new_pcm_buffer);
                     }
-                }
-                else
-                {
-                    // use new_pcm_buffer with upsampled data
-                    mixing_audio_add_buffer(peernum, new_pcm_buffer, sample_count_new);
-                    free(new_pcm_buffer);
-                }
 
-                pthread_mutex_unlock(&group_audio___mutex);
+                    pthread_mutex_unlock(&group_audio___mutex);
+                }
             }
             else
             {
-                goto PROCESS_AUDIO_MIX;
+                goto END_RETURN;
             }
         }
         else
@@ -8688,24 +8692,52 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
     }
     else
     {
-        goto PROCESS_AUDIO_MIX;
+        goto END_RETURN;
     }
 
-PROCESS_AUDIO_MIX:
+END_RETURN:
 
-    if (global_conference_call_active == 1)
-    {
-        delta = (int)(current_time_monotonic_default() - audio_mixing_process_last_ts);
-
-        if (delta > 59)
-        {
-            // dbg(9, "process_incoming_mixing_audio:delta=%d\n", delta);
-            audio_mixing_process_last_ts = current_time_monotonic_default();
-            process_incoming_mixing_audio(av, friend_to_send_video_to, 0, 60);
-        }
-    }
+    return;
 #endif
 
+}
+
+void *thread_play_mixed_audio(void *data)
+{
+    ToxAV *av = (ToxAV *) data;
+    pthread_t id = pthread_self();
+
+    int audio_frame_in_ms = 60;
+    int need_sleep_ms = 60;
+    int64_t ts1;
+    int64_t ts2;
+
+    while (thread_play_mixed_audio_stop != 1)
+    {
+        if (global_conference_call_active == 1)
+        {
+            if (friend_to_send_video_to != -1)
+            {
+                ts1 = current_time_monotonic_default();
+                process_incoming_mixing_audio(av, friend_to_send_video_to, 0, audio_frame_in_ms);
+                ts2 = current_time_monotonic_default();
+                need_sleep_ms = audio_frame_in_ms - (int)(ts2 - ts1);
+                // dbg(9, "need_sleep_ms=%d\n", need_sleep_ms);
+                yieldcpu(need_sleep_ms);
+            }
+            else
+            {
+                yieldcpu(audio_frame_in_ms);
+            }
+        }
+        else
+        {
+            yieldcpu(audio_frame_in_ms);
+        }
+    }
+
+    dbg(2, "ToxAudio:Clean audio mixing thread exit!\n");
+    pthread_exit(0);
 }
 
 int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_new, int want_ms_output)
@@ -8726,19 +8758,11 @@ int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_n
         memcpy((void *)audio_buffer_pcm_2, (void *)pcm_mixed, (size_t)(want_sample_count_40ms * 1 * 2));
 
         pthread_mutex_unlock(&group_audio___mutex);
-
         t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, audio_buffer_pcm_2,
                         want_sample_count_40ms, 1, 48000, NULL);
-
-        // (*jnienv2)->CallStaticVoidMethod(jnienv2, MainActivity,
-        //                          android_toxav_callback_group_audio_receive_frame_cb_method,
-        //                          (jlong)(unsigned long long)global_group_audio_acitve_num,
-        //                          (jlong)(unsigned long long)0,
-        //                          (jlong)want_sample_count_40ms, (jint)1,
-        //                          (jlong)48000
-        //                         );
         pthread_mutex_lock(&group_audio___mutex);
     }
+    // TODO: play empty (silence) buffer when we dont have mixed audio available
 
     pthread_mutex_unlock(&group_audio___mutex);
 
@@ -14973,11 +14997,13 @@ int main(int argc, char *argv[])
 #endif
     // init AV callbacks -------------------------------
     // start toxav thread ------------------------------
-    pthread_t tid[8]; // 0 -> toxav_iterate thread, 1 -> video send thread
+    pthread_t tid[9];
+    // 0 -> toxav_iterate thread, 1 -> video send thread
     // 2 -> audio recording thread, 3 -> read keys from pipe
     // 4 -> invite phonebook entries, 5 -> openGL thread
     // 6 -> toxav_audio_iterate thread
     // 7 -> stdin input reader (only for X11 mode)
+    // 8 -> audio play thread (for multi calls)
     // start toxav thread ------------------------------
     toxav_iterate_thread_stop = 0;
 
@@ -15093,6 +15119,19 @@ int main(int argc, char *argv[])
         dbg(2, "stdin Thread successfully created\n");
     }
 #endif
+
+    thread_play_mixed_audio_stop = 0;
+
+    if (pthread_create(&(tid[8]), NULL, thread_play_mixed_audio, (void *)mytox_av) != 0)
+    {
+        dbg(0, "AV playmixed Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(tid[8], "t_mix_audio");
+        dbg(2, "AV playmixed Thread successfully created\n");
+    }
+
 
     // ------ thread priority ------
     yieldcpu(800); // wait for other thread to start up, and set their priority
@@ -15240,6 +15279,7 @@ int main(int argc, char *argv[])
 
     toxav_video_thread_stop = 1;
     toxav_audioiterate_thread_stop = 1;
+    thread_play_mixed_audio_stop = 1;
     ringtone_thread_stop = 1;
     networktraffic_thread_stop = 1;
     stdin_thread_stop = 1;
