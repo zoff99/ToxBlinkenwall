@@ -887,6 +887,8 @@ void end_conf_call(ToxAV *av, uint32_t friend_number, int disconnect);
 void conf_calls_reset_state_all();
 bool conf_calls_is_active_friend(uint32_t friend_number);
 void conf_calls_clear_video_buffer();
+int conf_calls_count_active();
+int64_t conf_calls_get_active_friend_from_count_num(int count_num);
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -927,11 +929,12 @@ const char *shell_cmd__start_endless_loading_anim = "./scripts/show_loading_endl
 const char *shell_cmd__stop_endless_loading_anim = "./scripts/stop_loading_endless.sh 2> /dev/null";
 const char *shell_cmd__show_video_calling = "./scripts/show_video_calling.sh 2> /dev/null";
 const char *shell_cmd__start_endless_image_anim =
-    "./scripts/show_image_endless_in_bg.sh"; // needs image filename paramter
+    "./scripts/show_image_endless_in_bg.sh 2> /dev/null"; // needs image filename paramter
 const char *shell_cmd__stop_endless_image_anim = "./scripts/stop_image_endless.sh 2> /dev/null";
 const char *shell_cmd__show_text_as_image =
-    "./scripts/show_text_as_image.sh"; // needs text as parameter. Caution filter out any bad characters!!
-const char *shell_cmd__show_text_as_image_stop = "./scripts/show_text_as_image_stop.sh";
+    "./scripts/show_text_as_image.sh 2> /dev/null"; // needs text as parameter. Caution filter out any bad characters!!
+const char *shell_cmd__show_text_as_image_stop = "./scripts/show_text_as_image_stop.sh 2> /dev/null";
+const char *shell_cmd__thread_realtime = "./scripts/thread_realtime.sh 2> /dev/null";
 const char *shell_cmd__onstart = "./scripts/on_start.sh 2> /dev/null";
 const char *shell_cmd__oncallstart = "./scripts/on_callstart.sh 2> /dev/null";
 const char *shell_cmd__oncallend = "./scripts/on_callend.sh 2> /dev/null";
@@ -1126,8 +1129,10 @@ int toxav_iterate_thread_stop = 0;
 int toxav_audioiterate_thread_stop = 0;
 
 uint32_t global_av_iterate_ms = 2;
+uint32_t global_av_iterate_conference_ms = 4;
 uint32_t global_av_audio_iterate_ms = 2;
 uint32_t global_iterate_ms = 2;
+uint32_t global_iterate_conference_ms = 2;
 int global_opengl_iterate_ms = 2;
 
 
@@ -2480,6 +2485,17 @@ void playback_volume_down()
     else
     {
     }
+}
+
+void set_thread_realtime()
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+    pid_t cur_thread_id = gettid();
+    snprintf(cmd_str, sizeof(cmd_str), "%s \"%d\"", shell_cmd__thread_realtime, (int)cur_thread_id);
+    char output_str[1000];
+    CLEAR(output_str);
+    run_cmd_return_output(cmd_str, output_str, 1);
 }
 
 void button_a()
@@ -5657,6 +5673,27 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                             dbg(9, "setting dbuf to:%d res=%d\n", (int)value_new, (int)error);
 #endif
                         }
+
+                        if (global_conference_call_active == 1)
+                        {
+                            int count_conf_calls = conf_calls_count_active();
+                            for (int jk=0;jk<count_conf_calls;jk++)
+                            {
+                                int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
+                                if (fnum_from_count != -1)
+                                {
+#ifdef HAVE_TOXAV_OPTION_SET
+                                    TOXAV_ERR_OPTION_SET error;
+                                    toxav_option_set(mytox_av, (uint32_t)fnum_from_count,
+                                                     TOXAV_DECODER_VIDEO_BUFFER_MS,
+                                                     global_video_dbuf_ms,
+                                                     &error);
+                                    dbg(9, "setting dbuf to:%d res=%d\n", (int)value_new, (int)error);
+#endif
+                                }
+                            }
+                        }
+
                     }
                 }
             }
@@ -8707,6 +8744,32 @@ void *thread_play_mixed_audio(void *data)
     ToxAV *av = (ToxAV *) data;
     pthread_t id = pthread_self();
 
+    // ------ thread priority ------
+    struct sched_param param;
+    int policy;
+    int s;
+    display_thread_sched_attr("Scheduler attributes of [1]: thread_play_mixed_audio");
+    get_policy('f', &policy);
+#if 1
+    param.sched_priority = strtol("99", NULL, 0);
+    // param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    s = pthread_setschedparam(pthread_self(), policy, &param);
+
+    set_thread_realtime();
+
+    if (s != 0)
+    {
+        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of thread_play_mixed_audio\n");
+    }
+    else
+    {
+    }
+
+    display_thread_sched_attr("Scheduler attributes of [3]: thread_play_mixed_audio");
+#endif
+    // ------ thread priority ------
+
+
     int audio_frame_in_ms = 60;
     int need_sleep_ms = 60;
     int64_t ts1;
@@ -11318,6 +11381,32 @@ void *thread_audio_av(void *data)
     ToxAV *av = (ToxAV *) data;
     pthread_t id = pthread_self();
 
+    // ------ thread priority ------
+    struct sched_param param;
+    int policy;
+    int s;
+    display_thread_sched_attr("Scheduler attributes of [1]: thread_audio_av");
+    get_policy('f', &policy);
+#if 0
+    param.sched_priority = strtol("99", NULL, 0);
+    // param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    s = pthread_setschedparam(pthread_self(), policy, &param);
+
+    set_thread_realtime();
+
+    if (s != 0)
+    {
+        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of thread_audio_av\n");
+    }
+    else
+    {
+    }
+
+    display_thread_sched_attr("Scheduler attributes of [3]: thread_audio_av");
+#endif
+    // ------ thread priority ------
+
+
     while (toxav_audioiterate_thread_stop != 1)
     {
         toxav_audio_iterate(av);
@@ -11385,7 +11474,14 @@ void *thread_video_av(void *data)
 #ifdef RPIZEROW
             usleep_usec((500 * 1000));
 #else
-            usleep_usec((global_av_iterate_ms * 1000));
+            if (global_conference_call_active == 1)
+            {
+                usleep_usec((global_av_iterate_conference_ms * 1000));
+            }
+            else
+            {
+                usleep_usec((global_av_iterate_ms * 1000));
+            }
 #ifdef HAVE_TOXAV_OPTION_SET
             update_video_delay_every_ms_counter++;
 
@@ -11400,6 +11496,24 @@ void *thread_video_av(void *data)
                                             (int)global_bw_video_play_delay - 0 -
                                             (int)global_bw_audio_to_video_delay_ms,
                                             &error);
+
+                if (global_conference_call_active == 1)
+                {
+                    int count_conf_calls = conf_calls_count_active();
+                    for (int jk=0;jk<count_conf_calls;jk++)
+                    {
+                        int64_t fnum_from_count = conf_calls_get_active_friend_from_count_num(jk);
+                        if (fnum_from_count != -1)
+                        {
+                            bool res2 = toxav_option_set(av, (uint32_t)fnum_from_count,
+                                                        TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
+                                                        (int)global_bw_video_play_delay - 0 -
+                                                        (int)global_bw_audio_to_video_delay_ms,
+                                                        &error);
+                        }
+                    }
+                }
+
 
                 update_video_delay_every_ms_counter = 0;
             }
@@ -15206,7 +15320,14 @@ int main(int argc, char *argv[])
 
         if (global_video_active == 1)
         {
-            usleep_usec(global_iterate_ms * 1000); // 3 ms while in a video/audio call
+            if (global_conference_call_active == 1)
+            {
+                usleep_usec(global_iterate_conference_ms * 1000); // n ms while in a video/audio conference call
+            }
+            else
+            {
+                usleep_usec(global_iterate_ms * 1000); // n ms while in a video/audio call
+            }
         }
         else
         {
