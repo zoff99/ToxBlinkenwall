@@ -1001,9 +1001,13 @@ const int conf_call_height = 720;
 uint8_t *conf_call_y = NULL;
 uint8_t *conf_call_u = NULL;
 uint8_t *conf_call_v = NULL;
+uint8_t *conf_call_y_2 = NULL;
+uint8_t *conf_call_u_2 = NULL;
+uint8_t *conf_call_v_2 = NULL;
 const int conf_call_ystride = 1280;
 const int conf_call_ustride = 1280 / 2;
 const int conf_call_vstride = 1280 / 2;
+int conf_call_show_frame_toggle_count = 0;
 
 #ifdef HAVE_EXTERNAL_KEYS
     int ext_keys_fd;
@@ -1059,6 +1063,9 @@ sem_t video_in_frame_copy_sem;
 
 sem_t tox_call_control_sem;
 sem_t tox_call_sem;
+
+sem_t video_conf_copy_sem;
+int conf_video_paint_threads = 0;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
@@ -7698,6 +7705,13 @@ void conf_calls_clear_video_buffer()
         memset(conf_call_u, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
         memset(conf_call_v, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
     }
+
+    if (conf_call_y_2 != NULL)
+    {
+        memset(conf_call_y_2, 0, (conf_call_width * conf_call_height));
+        memset(conf_call_u_2, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
+        memset(conf_call_v_2, 128, ((conf_call_width / 2) * (conf_call_height / 2)));
+    }
 }
 
 void conf_calls_add_active(uint32_t friend_number)
@@ -7771,24 +7785,6 @@ void end_conf_call(ToxAV *av, uint32_t friend_number, int disconnect)
 
     conf_calls_clear_video_buffer();
 
-#if 0
-
-    // TODO: make thread safe!!
-    if (conf_call_y)
-    {
-        dbg(9, "end_conf_call:free frame\n");
-        free(conf_call_y);
-        conf_call_y = NULL;
-        conf_call_u = NULL;
-        conf_call_v = NULL;
-    }
-
-    pthread_mutex_lock(&group_audio___mutex);
-    global_group_audio_peerbuffers = 0;
-    mixing_audio_free_peer_buffer();
-    pthread_mutex_unlock(&group_audio___mutex);
-
-#endif
     dbg(9, "end_conf_call:099\n");
     en();
 }
@@ -7807,6 +7803,13 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
         conf_call_y = calloc(1, (conf_call_width * conf_call_height) * 3 / 2);
         conf_call_u = conf_call_y + (conf_call_width * conf_call_height);
         conf_call_v = conf_call_u + ((conf_call_width / 2) * (conf_call_height / 2));
+    }
+
+    if (conf_call_y_2 == NULL)
+    {
+        conf_call_y_2 = calloc(1, (conf_call_width * conf_call_height) * 3 / 2);
+        conf_call_u_2 = conf_call_y_2 + (conf_call_width * conf_call_height);
+        conf_call_v_2 = conf_call_u_2 + ((conf_call_width / 2) * (conf_call_height / 2));
     }
 
     pthread_mutex_lock(&group_audio___mutex);
@@ -8745,26 +8748,8 @@ void *thread_play_mixed_audio(void *data)
     pthread_t id = pthread_self();
 
     // ------ thread priority ------
-    struct sched_param param;
-    int policy;
-    int s;
-    display_thread_sched_attr("Scheduler attributes of [1]: thread_play_mixed_audio");
-    get_policy('f', &policy);
 #if 1
-    param.sched_priority = strtol("99", NULL, 0);
-    // param.sched_priority = sched_get_priority_max(SCHED_FIFO);
-    s = pthread_setschedparam(pthread_self(), policy, &param);
-
     set_thread_realtime();
-
-    if (s != 0)
-    {
-        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of thread_play_mixed_audio\n");
-    }
-    else
-    {
-    }
-
     display_thread_sched_attr("Scheduler attributes of [3]: thread_play_mixed_audio");
 #endif
     // ------ thread priority ------
@@ -10621,6 +10606,58 @@ static void paint_conference_video_into_bounding_box_yuv(uint16_t width, uint16_
 
 }
 
+
+struct video_conf_paint_data
+{
+    uint16_t width;
+    uint16_t height;
+    uint8_t const *y;
+    uint8_t const *u;
+    uint8_t const *v;
+    int32_t ystride;
+    int32_t ustride;
+    int32_t vstride;
+    int countnum;
+};
+
+static void *video_conf_paint(void *data)
+{
+    struct video_conf_paint_data *vcpd = (struct video_conf_paint_data *) data;
+
+    uint32_t w_start;
+    uint32_t w_end;
+    uint32_t h_start;
+    uint32_t h_end;
+
+    get_conference_video_bounding_box((conf_calls_count_active() + 1), (vcpd->countnum + 2),
+                        &w_start, &w_end, &h_start, &h_end,
+                        conf_call_width, conf_call_height);
+
+    paint_conference_video_into_bounding_box_yuv(vcpd->width, vcpd->height, vcpd->y, vcpd->u, vcpd->v,
+                        vcpd->ystride, vcpd->ustride, vcpd->vstride,
+                        w_start, w_end, h_start, h_end,
+                        conf_call_width, conf_call_height,
+                        conf_call_y_2,
+                        conf_call_u_2,
+                        conf_call_v_2,
+                        conf_call_ystride,
+                        conf_call_ustride,
+                        conf_call_vstride);
+
+    free((void *)vcpd->y);
+    free(vcpd);
+
+    sem_wait(&video_conf_copy_sem);
+    // copy from buffer2 into buffer1
+    memcpy(conf_call_y, conf_call_y_2, (conf_call_width * conf_call_height) * 3 / 2);
+    //memcpy(conf_call_u, conf_call_u_2, ((conf_call_width / 2) * (conf_call_height / 2)));
+    //memcpy(conf_call_v, conf_call_v_2, ((conf_call_width / 2) * (conf_call_height / 2)));
+    conf_video_paint_threads--;
+    sem_post(&video_conf_copy_sem);
+
+    pthread_exit(0);
+}
+
 static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
@@ -10665,23 +10702,61 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 return;
             }
 
-            uint32_t w_start;
-            uint32_t w_end;
-            uint32_t h_start;
-            uint32_t h_end;
-            get_conference_video_bounding_box((conf_calls_count_active() + 1), (countnum + 2), &w_start, &w_end, &h_start, &h_end,
-                    conf_call_width, conf_call_height);
+            sem_wait(&video_conf_copy_sem);
+            conf_video_paint_threads++;
+            sem_post(&video_conf_copy_sem);
 
-            paint_conference_video_into_bounding_box_yuv(width, height, y, u, v, ystride, ustride, vstride,
-                                w_start, w_end, h_start, h_end,
-                                conf_call_width, conf_call_height,
-                                conf_call_y,
-                                conf_call_u,
-                                conf_call_v,
-                                conf_call_ystride,
-                                conf_call_ustride,
-                                conf_call_vstride);
+            if (conf_video_paint_threads > 2)
+            {
+                sem_wait(&video_conf_copy_sem);
+                dbg(9, "XX:001:a:conf_video_paint_threads=%d\n", conf_video_paint_threads);
+                conf_video_paint_threads--;
+                sem_post(&video_conf_copy_sem);
+            }
+            else
+            {
+                int y_layer_size = (int) max(width, abs(ystride)) * height;
+                int u_layer_size = (int) max((width / 2), abs(ustride)) * (height / 2);
+                int v_layer_size = (int) max((width / 2), abs(vstride)) * (height / 2);
 
+                uint8_t *conf_call_input_for_paint_y = calloc(1, y_layer_size + u_layer_size + v_layer_size);
+                uint8_t *conf_call_input_for_paint_u = conf_call_input_for_paint_y + y_layer_size;
+                uint8_t *conf_call_input_for_paint_v = conf_call_input_for_paint_u + u_layer_size;
+
+                memcpy(conf_call_input_for_paint_y, y, y_layer_size);
+                memcpy(conf_call_input_for_paint_u, u, u_layer_size);
+                memcpy(conf_call_input_for_paint_v, v, v_layer_size);
+
+                struct video_conf_paint_data *vcpd = calloc(1, sizeof(struct video_conf_paint_data));
+
+                vcpd->width = width;
+                vcpd->height = height;
+                vcpd->y = conf_call_input_for_paint_y;
+                vcpd->u = conf_call_input_for_paint_u;
+                vcpd->v = conf_call_input_for_paint_v;
+                vcpd->ystride = ystride;
+                vcpd->ustride = ustride;
+                vcpd->vstride = vstride;
+                vcpd->countnum = countnum;
+
+                pthread_t video_conf_paint_thread;
+                int res_ = pthread_create(&video_conf_paint_thread, NULL, video_conf_paint, (void *)vcpd);
+
+                if (res_ != 0)
+                {
+                    sem_wait(&video_conf_copy_sem);
+                    conf_video_paint_threads--;
+                    sem_post(&video_conf_copy_sem);
+
+                    dbg(0, "error creating video_conf_paint_thread ERRNO=%d\n", res_);
+                    free(conf_call_input_for_paint_y);
+                    free(vcpd);
+                }
+                else
+                {
+                    pthread_detach(video_conf_paint_thread);
+                }
+            }
         }
         else if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
@@ -10690,22 +10765,61 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
                 return;
             }
 
-            uint32_t w_start;
-            uint32_t w_end;
-            uint32_t h_start;
-            uint32_t h_end;
-            get_conference_video_bounding_box((conf_calls_count_active() + 1), 1, &w_start, &w_end, &h_start, &h_end,
-                    conf_call_width, conf_call_height);
+            sem_wait(&video_conf_copy_sem);
+            conf_video_paint_threads++;
+            sem_post(&video_conf_copy_sem);
 
-            paint_conference_video_into_bounding_box_yuv(width, height, y, u, v, ystride, ustride, vstride,
-                                w_start, w_end, h_start, h_end,
-                                conf_call_width, conf_call_height,
-                                conf_call_y,
-                                conf_call_u,
-                                conf_call_v,
-                                conf_call_ystride,
-                                conf_call_ustride,
-                                conf_call_vstride);
+            if (conf_video_paint_threads > 2)
+            {
+                sem_wait(&video_conf_copy_sem);
+                dbg(9, "XX:001:b:conf_video_paint_threads=%d\n", conf_video_paint_threads);
+                conf_video_paint_threads--;
+                sem_post(&video_conf_copy_sem);
+            }
+            else
+            {
+                int y_layer_size = (int) max(width, abs(ystride)) * height;
+                int u_layer_size = (int) max((width / 2), abs(ustride)) * (height / 2);
+                int v_layer_size = (int) max((width / 2), abs(vstride)) * (height / 2);
+
+                uint8_t *conf_call_input_for_paint_y = calloc(1, y_layer_size + u_layer_size + v_layer_size);
+                uint8_t *conf_call_input_for_paint_u = conf_call_input_for_paint_y + y_layer_size;
+                uint8_t *conf_call_input_for_paint_v = conf_call_input_for_paint_u + u_layer_size;
+
+                memcpy(conf_call_input_for_paint_y, y, y_layer_size);
+                memcpy(conf_call_input_for_paint_u, u, u_layer_size);
+                memcpy(conf_call_input_for_paint_v, v, v_layer_size);
+
+                struct video_conf_paint_data *vcpd = calloc(1, sizeof(struct video_conf_paint_data));
+
+                vcpd->width = width;
+                vcpd->height = height;
+                vcpd->y = conf_call_input_for_paint_y;
+                vcpd->u = conf_call_input_for_paint_u;
+                vcpd->v = conf_call_input_for_paint_v;
+                vcpd->ystride = ystride;
+                vcpd->ustride = ustride;
+                vcpd->vstride = vstride;
+                vcpd->countnum = -1;
+
+                pthread_t video_conf_paint_thread;
+                int res_ = pthread_create(&video_conf_paint_thread, NULL, video_conf_paint, (void *)vcpd);
+
+                if (res_ != 0)
+                {
+                    sem_wait(&video_conf_copy_sem);
+                    conf_video_paint_threads--;
+                    sem_post(&video_conf_copy_sem);
+
+                    dbg(0, "error creating video_conf_paint_thread ERRNO=%d\n", res_);
+                    free(conf_call_input_for_paint_y);
+                    free(vcpd);
+                }
+                else
+                {
+                    pthread_detach(video_conf_paint_thread);
+                }
+            }
         }
         else
         {
@@ -10713,9 +10827,21 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             return;
         }
 
-        t_toxav_receive_video_frame_cb_wrapper(av, friend_to_send_video_to,
+        if (conf_call_show_frame_toggle_count >= conf_calls_count_active())
+        {
+            // dbg(9, "conf_call_show_frame_toggle_count=%d,PAINT\n", conf_call_show_frame_toggle_count);
+            conf_call_show_frame_toggle_count = 0;
+            sem_wait(&video_conf_copy_sem);
+            t_toxav_receive_video_frame_cb_wrapper(av, friend_to_send_video_to,
                                                conf_call_width, conf_call_height,
                                                conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, user_data);
+            sem_post(&video_conf_copy_sem);
+        }
+        else
+        {
+            // dbg(9, "conf_call_show_frame_toggle_count=%d,-hold-\n", conf_call_show_frame_toggle_count);
+            conf_call_show_frame_toggle_count++;
+        }
     }
     else
     {
@@ -11382,26 +11508,8 @@ void *thread_audio_av(void *data)
     pthread_t id = pthread_self();
 
     // ------ thread priority ------
-    struct sched_param param;
-    int policy;
-    int s;
-    display_thread_sched_attr("Scheduler attributes of [1]: thread_audio_av");
-    get_policy('f', &policy);
-#if 0
-    param.sched_priority = strtol("99", NULL, 0);
-    // param.sched_priority = sched_get_priority_max(SCHED_FIFO);
-    s = pthread_setschedparam(pthread_self(), policy, &param);
-
+#if 1
     set_thread_realtime();
-
-    if (s != 0)
-    {
-        dbg(0, "Scheduler attributes of [2]: error setting scheduling attributes of thread_audio_av\n");
-    }
-    else
-    {
-    }
-
     display_thread_sched_attr("Scheduler attributes of [3]: thread_audio_av");
 #endif
     // ------ thread priority ------
@@ -14956,6 +15064,11 @@ int main(int argc, char *argv[])
         dbg(0, "Error in sem_init for video_in_frame_copy_sem\n");
     }
 
+    if (sem_init(&video_conf_copy_sem, 0, 1))
+    {
+        dbg(0, "Error in sem_init for video_conf_copy_sem\n");
+    }
+
     if (sem_init(&tox_call_control_sem, 0, 1))
     {
         dbg(0, "Error in sem_init for tox_call_control_sem\n");
@@ -15424,6 +15537,7 @@ int main(int argc, char *argv[])
     sem_destroy(&tox_call_sem);
     sem_destroy(&tox_call_control_sem);
     sem_destroy(&video_in_frame_copy_sem);
+    sem_destroy(&video_conf_copy_sem);
     sem_destroy(&count_video_play_threads);
     sem_destroy(&video_play_lock);
 
