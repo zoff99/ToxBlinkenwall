@@ -309,7 +309,10 @@ static const char global_version_string[] = "0.99.83";
 
 // #define WANT_OS_UPDATE_FULL 1
 // #define DEBUG_INCOMING_VIDEO_FRAME_TIMING 1
+// #define VISUALLY_CHECK_FPS 1
 
+int visual_check_fps_toggle_2 = 0;
+int visual_check_fps_counter_1 = 0;
 
 // ---------- dirty hack ----------
 // ---------- dirty hack ----------
@@ -9546,6 +9549,35 @@ static void *video_play(void *dummy)
         dec_video_t_counter();
         pthread_exit(0);
     }
+
+#ifdef VISUALLY_CHECK_FPS
+
+    if (visual_check_fps_toggle_2 == 120)
+    {
+        visual_check_fps_toggle_2 = 0;
+    }
+    else
+    {
+        visual_check_fps_toggle_2 = 120;
+    }
+
+    left_top_bar_into_yuv_frame_ptr(y, ystride_, frame_height_px,
+                                    100 + visual_check_fps_toggle_2, 300,
+                                    100, 100,
+                                    255, 0, 0);
+
+    left_top_bar_into_yuv_frame_ptr(y, ystride_, frame_height_px,
+                                    50 + (visual_check_fps_counter_1 * 40), 500 + (visual_check_fps_counter_1 * 5),
+                                    100, 100,
+                                    0, 0, 255 - (visual_check_fps_counter_1 * 4));
+
+    visual_check_fps_counter_1++;
+    if (visual_check_fps_counter_1 > 29)
+    {
+        visual_check_fps_counter_1 = 0;
+    }
+
+#endif
 
     memcpy(buf, y, y_layer_size);
     memcpy(buf + y_layer_size, u, u_layer_size);

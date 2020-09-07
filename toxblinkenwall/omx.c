@@ -49,6 +49,7 @@ void usleep_usec2(uint64_t usec)
  */
 
 static const int VIDEO_RENDER_PORT = 90;
+static void *global_st_buffers = 0;
 
 static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
                                   OMX_EVENTTYPE eEvent, OMX_U32 nData1, OMX_U32 nData2,
@@ -138,6 +139,9 @@ static OMX_ERRORTYPE EmptyBufferDone(OMX_HANDLETYPE hComponent,
     (void) pBuffer;
     /* TODO: Wrap every call that can generate an event,
      * and panic if an unexpected event arrives */
+
+    // dbg(9, "omx.EmptyBufferDone:called:ptr=%p pnum=%d\n", (void *)pBuffer, (int)((void *)pBuffer - (void *)global_st_buffers));
+
     return 0;
 }
 
@@ -200,6 +204,8 @@ static void free_omx_buffers(struct omx_state *st)
         st->num_buffers = 0;
         st->current_buffer = 0;
     }
+
+    global_st_buffers = 0;
 }
 
 static void block_until_flushed(void)
@@ -580,6 +586,16 @@ int omx_display_enable(struct omx_state *st,
         portdef.format.video.nStride,
         portdef.format.video.nSliceHeight);
     //
+
+    int want_buffers = 3;
+
+    portdef.nBufferCountActual = want_buffers;
+    if ((int)portdef.nBufferCountActual < (int)portdef.nBufferCountMin)
+    {
+        portdef.nBufferCountActual = portdef.nBufferCountMin;
+        want_buffers = portdef.nBufferCountMin;
+    }
+
     dbg(9, "OMX_SetParameter(4)\n");
     err = OMX_SetParameter(st->video_render,
                            OMX_IndexParamPortDefinition, &portdef);
@@ -606,12 +622,18 @@ int omx_display_enable(struct omx_state *st,
 
     if (!st->buffers)
     {
+        dbg(9, "OMX_Buffer_counts:nBufferCountActual=%d want_buffers=%d nBufferCountMin=%d\n",
+        (int)portdef.nBufferCountActual,
+        (int)want_buffers,
+        (int)portdef.nBufferCountMin);
+
         st->buffers =
-            malloc(portdef.nBufferCountActual * sizeof(void *));
-        st->num_buffers = portdef.nBufferCountActual;
+            calloc(1, want_buffers * sizeof(void *));
+        global_st_buffers = (void *)st->buffers;
+        st->num_buffers = want_buffers;
         st->current_buffer = 0;
 
-        for (i = 0; i < portdef.nBufferCountActual; i++)
+        for (i = 0; i < want_buffers; i++)
         {
             dbg(9, "OMX_AllocateBuffer\n");
             err = OMX_AllocateBuffer(st->video_render,
@@ -684,6 +706,9 @@ int omx_get_display_input_buffer(struct omx_state *st,
     *plen = st->buffers[buf_idx]->nAllocLen;
     st->buffers[buf_idx]->nFilledLen = *plen;
     st->buffers[buf_idx]->nOffset = 0;
+
+    // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
+
     return 0;
 }
 
@@ -708,6 +733,10 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
     if (OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx]) != OMX_ErrorNone)
     {
         dbg(9, "OMX_EmptyThisBuffer error\n");
+    }
+    else
+    {
+        // dbg(9, "omx_display_flush_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
     }
 
     return 0;
