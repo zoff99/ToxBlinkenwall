@@ -1088,6 +1088,7 @@ int32_t video__ystride;
 int32_t video__ustride;
 int32_t video__vstride;
 uint64_t video__received_ts;
+uint64_t video__pts;
 #define VIDEO_RECEIVED_TS_MEAN_NUM 20
 uint32_t video__received_ts_pos = 0;
 uint64_t video__received_ts_mean[VIDEO_RECEIVED_TS_MEAN_NUM];
@@ -9358,6 +9359,9 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
 }
 
+static uint64_t global_last_video_ts = 0;
+static uint64_t global_last_video_pts = 0;
+
 static void *video_play(void *dummy)
 {
     sta();
@@ -9373,6 +9377,7 @@ static void *video_play(void *dummy)
     int32_t ustride = video__ustride;
     int32_t vstride = video__vstride;
     uint64_t received_ts = video__received_ts;
+    uint64_t pts = video__pts;
     int frame_width_px1 = (int)width;
     int frame_height_px1 = (int)height;
     int ystride_ = (int)ystride;
@@ -9671,8 +9676,58 @@ static void *video_play(void *dummy)
         prepare_omx_osd_network_bars_yuv(buf, frame_width_px1, frame_height_px1, ystride);
     }
 
+
+    // -- de-jitter video frame a bit -----------------------------
+    if (pts != 0)
+    {
+        uint64_t ts1 = current_time_monotonic_default();
+        int pts_delta = (int)(pts - global_last_video_pts);
+        int local_delta = (int)(ts1 - global_last_video_ts);
+        int abs1 = abs(ts1 - global_last_video_ts);
+        int abs2 = abs(pts - global_last_video_pts);
+        int local_delta_correction = pts_delta - local_delta;
+        int local_delta_correction_abs = abs(local_delta - pts_delta);
+
+        // dbg(9, "incoming_video_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d\n",
+        //         (int)pts,
+        //         (int)ts1,
+        //         pts_delta,
+        //         local_delta,
+        //         local_delta_correction,
+        //         local_delta_correction_abs
+        //         );
+
+        const int sync_ms_max_range = 7;
+        int sync_ms = sync_ms_max_range + local_delta_correction;
+
+        if (sync_ms > (sync_ms_max_range * 2))
+        {
+            sync_ms = sync_ms_max_range;
+            local_delta_correction = 0;
+        }
+
+        if (sync_ms < 0)
+        {
+            sync_ms = sync_ms_max_range;
+            local_delta_correction = 0;
+        }
+
+        global_last_video_pts = pts;
+        global_last_video_ts = ts1 + local_delta_correction;
+
+        // dbg(9, "incoming_video_frame:sync_ms=%d local_delta_correction=%d\n", sync_ms, local_delta_correction);
+        yieldcpu(sync_ms);
+    }
+    // -- de-jitter video frame a bit -----------------------------
+
+
+
     // OSD --------
+    //
+    // --> push frame to actual display via OMX --------------
     omx_display_flush_buffer(&omx, yuf_data_buf_len);
+    // --> push frame to actual display via OMX --------------
+    //
 #endif
     // -
 #ifdef HAVE_FRAMEBUFFER
@@ -10067,7 +10122,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
         int32_t ystride, int32_t ustride, int32_t vstride,
-        void *user_data)
+        uint64_t pts)
 {
     sta();
 #ifdef RPIZEROW
@@ -10171,6 +10226,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                 video__ustride = ustride;
                 video__vstride = vstride;
                 video__received_ts = rec_video_frame_ts;
+                video__pts = pts;
                 pthread_t video_play_thread;
 
                 if (get_video_t_counter() < MAX_VIDEO_PLAY_THREADS)
@@ -10690,11 +10746,11 @@ static void *video_conf_paint(void *data)
     pthread_exit(0);
 }
 
-static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
+static void t_toxav_receive_video_frame_cb_with_pts(ToxAV *av, uint32_t friend_number,
         uint16_t width, uint16_t height,
         uint8_t const *y, uint8_t const *u, uint8_t const *v,
         int32_t ystride, int32_t ustride, int32_t vstride,
-        void *user_data)
+        void *user_data, uint64_t incoming_pts)
 {
     sta();
 
@@ -10866,7 +10922,7 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
             sem_wait(&video_conf_copy_sem);
             t_toxav_receive_video_frame_cb_wrapper(av, friend_to_send_video_to,
                                                conf_call_width, conf_call_height,
-                                               conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, user_data);
+                                               conf_call_y, conf_call_u, conf_call_v, conf_call_ystride, conf_call_ustride, conf_call_vstride, 0);
             sem_post(&video_conf_copy_sem);
         }
         else
@@ -10877,12 +10933,37 @@ static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
     }
     else
     {
-        t_toxav_receive_video_frame_cb_wrapper(av, friend_number, width, height, y, u, v, ystride, ustride, vstride, user_data);
+        t_toxav_receive_video_frame_cb_wrapper(av, friend_number, width, height, y, u, v, ystride, ustride, vstride, incoming_pts);
     }
 
     en();
 }
 
+static void t_toxav_receive_video_frame_cb(ToxAV *av, uint32_t friend_number,
+        uint16_t width, uint16_t height,
+        uint8_t const *y, uint8_t const *u, uint8_t const *v,
+        int32_t ystride, int32_t ustride, int32_t vstride,
+        void *user_data)
+{
+    t_toxav_receive_video_frame_cb_with_pts(av, friend_number,
+            width, height,
+            y, u, v,
+            ystride, ustride, vstride,
+            user_data, 0);
+}
+
+static void t_toxav_receive_video_frame_pts_cb(ToxAV *av, uint32_t friend_number,
+        uint16_t width, uint16_t height,
+        const uint8_t *y, const uint8_t *u, const uint8_t *v,
+        int32_t ystride, int32_t ustride, int32_t vstride,
+        void *user_data, uint64_t pts)
+{
+    t_toxav_receive_video_frame_cb_with_pts(av, friend_number,
+            width, height,
+            y, u, v,
+            ystride, ustride, vstride,
+            user_data, pts);
+}
 
 void set_av_video_frame()
 {
@@ -15250,6 +15331,7 @@ int main(int argc, char *argv[])
     toxav_callback_call_state(mytox_av, t_toxav_call_state_cb, &mytox_CC);
     toxav_callback_bit_rate_status(mytox_av, t_toxav_bit_rate_status_cb, &mytox_CC);
     toxav_callback_video_receive_frame(mytox_av, t_toxav_receive_video_frame_cb, &mytox_CC);
+    toxav_callback_video_receive_frame_pts(mytox_av, t_toxav_receive_video_frame_pts_cb, &mytox_CC);
     toxav_callback_audio_receive_frame(mytox_av, t_toxav_receive_audio_frame_cb, &mytox_CC);
 #ifdef TOX_HAVE_TOXAV_CALLBACKS_002
     toxav_callback_call_comm(mytox_av, t_toxav_call_comm_cb, &mytox_CC);
