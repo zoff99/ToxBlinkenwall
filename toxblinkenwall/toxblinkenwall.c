@@ -190,6 +190,11 @@ network={
     uint64_t Time = tstamp.tv_sec * (uint64_t) 1000000000 + tstamp.tv_nsec;
     Time += (delay * (uint64_t) 1000000000) / 44100;
 
+
+
+# set performance governor
+echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
  */
 
 #define _GNU_SOURCE
@@ -8464,12 +8469,28 @@ int get_video_trec_counter()
     return ret;
 }
 
+static uint64_t global_last_video_ts = 0;
+static uint64_t global_last_video_pts = 0;
+static uint64_t global_last_video_ts_no_correction = 0;
+
+static uint64_t global_last_audio_ts = 0;
+static uint64_t global_last_audio_pts = 0;
+static uint64_t global_last_audio_ts_no_correction = 0;
+
+static int global_delay_measure_counter = 0;
+static int global_delay_measure_counter_threshold = 30;
+#define DELAY_MEASURE_NUM 20
+uint32_t global_delay_measure_pos = 0;
+uint64_t global_delay_measure_mean[DELAY_MEASURE_NUM];
+
+
 static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
         uint8_t channels,
         uint32_t sampling_rate,
-        void *user_data)
+        void *user_data,
+        uint64_t pts)
 {
     // struct timeval tm_033;
     // __utimer_start(&tm_033);
@@ -8551,8 +8572,85 @@ static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                 // dbg(0, "ALSA:013 sample_count=%d pcmbuf=%p\n", sample_count, (void *)pcm);
                 //if ((int)avail_frames_in_play_buffer > (int)sample_count)
                 //{
+
+                // ********* play incoming sound here *********
+                // ********* play incoming sound here *********
+                // ********* play incoming sound here *********
+                if (pts != 0)
+                {
+                    uint64_t ts1 = current_time_monotonic_default();
+                    global_last_audio_ts_no_correction = ts1;
+                    int pts_delta = (int)(pts - global_last_audio_pts);
+                    int local_delta = (int)(ts1 - global_last_audio_ts);
+                    int abs1 = abs((int)(ts1 - global_last_audio_ts));
+                    int abs2 = abs((int)(pts - global_last_audio_pts));
+                    int local_delta_correction = pts_delta - local_delta;
+                    int local_delta_correction_abs = abs(local_delta - pts_delta);
+
+                    int audio_pkt_to_video_pkt_delta =
+                            (int)(global_last_audio_ts_no_correction - global_last_video_ts_no_correction);
+                    // audio_to_video_out_of_sync < 0  ... audio is too late
+                    // audio_to_video_out_of_sync == 0 ... audio in sync with video
+                    // audio_to_video_out_of_sync > 0  ... audio is too early
+                    int audio_to_video_out_of_sync =
+                            (int)(pts - global_last_video_pts) - audio_pkt_to_video_pkt_delta;
+
+                    int audio_to_video_out_of_sync_smoothed = (int)((int)(audio_to_video_out_of_sync / 10) * 10);
+
+                    global_delay_measure_counter++;
+
+                    if (global_delay_measure_counter > global_delay_measure_counter_threshold)
+                    {
+                        global_delay_measure_counter = 0;
+
+                        if (abs(global_bw_audio_to_video_delay_ms - audio_to_video_out_of_sync_smoothed) < 300)
+                        {
+                            global_delay_measure_mean[global_delay_measure_pos] = global_bw_audio_to_video_delay_ms - audio_to_video_out_of_sync_smoothed;
+                            uint64_t mean_delay_ms = 0;
+
+                            for (int jj = 0; jj < DELAY_MEASURE_NUM; jj++)
+                            {
+                                mean_delay_ms = mean_delay_ms + global_delay_measure_mean[jj];
+                            }
+                            mean_delay_ms = mean_delay_ms / DELAY_MEASURE_NUM;
+
+                            global_delay_measure_pos++;
+                            if (global_delay_measure_pos >= DELAY_MEASURE_NUM)
+                            {
+                                global_delay_measure_pos = 0;
+                            }
+
+                            global_bw_audio_to_video_delay_ms = mean_delay_ms;
+                            dbg(9, "incoming_audio_frame:D=%d\n", global_bw_audio_to_video_delay_ms);
+                        }
+                    }
+
+                    // global_bw_audio_to_video_delay_ms = 200;
+
+#if 0
+                    dbg(9, "incoming_audio_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d pkg_d=%d d=%d m=%d\n",
+                            (int)pts,
+                            (int)ts1,
+                            pts_delta,
+                            local_delta,
+                            local_delta_correction,
+                            local_delta_correction_abs,
+                            audio_pkt_to_video_pkt_delta,
+                            audio_to_video_out_of_sync,
+                            audio_to_video_out_of_sync_smoothed
+                            );
+#endif
+                    global_last_audio_pts = pts;
+                    global_last_audio_ts = ts1; // + local_delta_correction;
+
+                }
+                //
                 err = snd_pcm_writei(audio_play_handle, (char *)pcm, sample_count);
                 has_error = 0;
+                // ********* play incoming sound here *********
+                // ********* play incoming sound here *********
+                // ********* play incoming sound here *********
+
                 //}
                 //else
                 //{
@@ -8635,16 +8733,17 @@ static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
 
 int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_new, int want_ms_output);
 
-static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
+static void t_toxav_receive_audio_frame_pts_cb(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
         uint8_t channels,
         uint32_t sampling_rate,
-        void *user_data)
+        void *user_data,
+        uint64_t pts)
 {
 
 #ifdef RPIZEROW
-    t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data);
+    t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data, pts);
 #else
 
     int delta = 0;
@@ -8731,7 +8830,7 @@ static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
         else
         {
             // single caller, just call the wrapper with values as they are
-            t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data);
+            t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data, pts);
         }
     }
     else
@@ -8744,6 +8843,17 @@ END_RETURN:
     return;
 #endif
 
+}
+
+
+static void t_toxav_receive_audio_frame_cb(ToxAV *av, uint32_t friend_number,
+        int16_t const *pcm,
+        size_t sample_count,
+        uint8_t channels,
+        uint32_t sampling_rate,
+        void *user_data)
+{
+    t_toxav_receive_audio_frame_pts_cb(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data, 0);
 }
 
 void *thread_play_mixed_audio(void *data)
@@ -8811,7 +8921,7 @@ int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_n
 
         pthread_mutex_unlock(&group_audio___mutex);
         t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, audio_buffer_pcm_2,
-                        want_sample_count_40ms, 1, 48000, NULL);
+                        want_sample_count_40ms, 1, 48000, NULL, 0);
         pthread_mutex_lock(&group_audio___mutex);
     }
     // TODO: play empty (silence) buffer when we dont have mixed audio available
@@ -9359,9 +9469,6 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
 }
 
-static uint64_t global_last_video_ts = 0;
-static uint64_t global_last_video_pts = 0;
-
 static void *video_play(void *dummy)
 {
     sta();
@@ -9681,21 +9788,24 @@ static void *video_play(void *dummy)
     if (pts != 0)
     {
         uint64_t ts1 = current_time_monotonic_default();
+        global_last_video_ts_no_correction = ts1;
         int pts_delta = (int)(pts - global_last_video_pts);
         int local_delta = (int)(ts1 - global_last_video_ts);
-        int abs1 = abs(ts1 - global_last_video_ts);
-        int abs2 = abs(pts - global_last_video_pts);
+        int abs1 = abs((int)(ts1 - global_last_video_ts));
+        int abs2 = abs((int)(pts - global_last_video_pts));
         int local_delta_correction = pts_delta - local_delta;
         int local_delta_correction_abs = abs(local_delta - pts_delta);
 
-        // dbg(9, "incoming_video_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d\n",
-        //         (int)pts,
-        //         (int)ts1,
-        //         pts_delta,
-        //         local_delta,
-        //         local_delta_correction,
-        //         local_delta_correction_abs
-        //         );
+#if 0
+        dbg(9, "incoming_video_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d\n",
+                (int)pts,
+                (int)ts1,
+                pts_delta,
+                local_delta,
+                local_delta_correction,
+                local_delta_correction_abs
+                );
+#endif
 
         const int sync_ms_max_range = 7;
         int sync_ms = sync_ms_max_range + local_delta_correction;
@@ -11717,6 +11827,11 @@ void *thread_video_av(void *data)
                                             (int)global_bw_video_play_delay - 0 -
                                             (int)global_bw_audio_to_video_delay_ms,
                                             &error);
+                dbg(9, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:%d %d %d\n",
+                        (int)global_bw_video_play_delay,
+                        (int)global_bw_audio_to_video_delay_ms,
+                        ((int)global_bw_video_play_delay - 0 - (int)global_bw_audio_to_video_delay_ms)
+                        );
 
                 if (global_conference_call_active == 1)
                 {
@@ -15333,6 +15448,7 @@ int main(int argc, char *argv[])
     toxav_callback_video_receive_frame(mytox_av, t_toxav_receive_video_frame_cb, &mytox_CC);
     toxav_callback_video_receive_frame_pts(mytox_av, t_toxav_receive_video_frame_pts_cb, &mytox_CC);
     toxav_callback_audio_receive_frame(mytox_av, t_toxav_receive_audio_frame_cb, &mytox_CC);
+    toxav_callback_audio_receive_frame_pts(mytox_av, t_toxav_receive_audio_frame_pts_cb, &mytox_CC);
 #ifdef TOX_HAVE_TOXAV_CALLBACKS_002
     toxav_callback_call_comm(mytox_av, t_toxav_call_comm_cb, &mytox_CC);
 #endif
