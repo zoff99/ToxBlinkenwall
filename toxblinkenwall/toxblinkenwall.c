@@ -1220,6 +1220,23 @@ uint32_t global_playback_volume_in_percent = 50;
 uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 
+// -------- de-jitter ---------------------------
+static uint64_t global_last_video_ts = 0;
+static uint64_t global_last_video_ts_omx = 0;
+static uint64_t global_last_video_pts = 0;
+static uint64_t global_last_video_ts_no_correction = 0;
+
+static uint64_t global_last_audio_ts = 0;
+static uint64_t global_last_audio_pts = 0;
+static uint64_t global_last_audio_ts_no_correction = 0;
+
+static int global_delay_measure_counter = 0;
+static int global_delay_measure_counter_threshold = 30;
+#define DELAY_MEASURE_NUM 20
+uint32_t global_delay_measure_pos = 0;
+uint64_t global_delay_measure_mean[DELAY_MEASURE_NUM];
+// -------- de-jitter ---------------------------
+
 // ------- zoxcore debug settings !! ------------
 extern int global_h264_enc_profile_high_enabled;
 extern int global_h264_enc_profile_high_enabled_switch;
@@ -2581,6 +2598,7 @@ void on_end_call()
 
     if (system(cmd_str)) {}
 
+    global_last_video_ts_omx = 0;
     first_incoming_video_frame = 1;
     write_caller_name_to_file("");
     fb_fill_black();
@@ -8470,22 +8488,6 @@ int get_video_trec_counter()
     return ret;
 }
 
-static uint64_t global_last_video_ts = 0;
-static uint64_t global_last_video_ts_omx = 0;
-static uint64_t global_last_video_pts = 0;
-static uint64_t global_last_video_ts_no_correction = 0;
-
-static uint64_t global_last_audio_ts = 0;
-static uint64_t global_last_audio_pts = 0;
-static uint64_t global_last_audio_ts_no_correction = 0;
-
-static int global_delay_measure_counter = 0;
-static int global_delay_measure_counter_threshold = 30;
-#define DELAY_MEASURE_NUM 20
-uint32_t global_delay_measure_pos = 0;
-uint64_t global_delay_measure_mean[DELAY_MEASURE_NUM];
-
-
 static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
@@ -9793,7 +9795,7 @@ static void *video_play(void *dummy)
     // -- de-jitter video frame a bit -----------------------------
     if (pts != 0)
     {
-        const int sync_ms_max_range = 20; // 7;
+        const int sync_ms_max_range = 14; // 7;
 
         uint64_t ts1 = current_time_monotonic_default();
         global_last_video_ts_no_correction = ts1;
@@ -9801,10 +9803,10 @@ static void *video_play(void *dummy)
         int local_delta = (int)(ts1 - global_last_video_ts);
         int abs1 = abs((int)(ts1 - global_last_video_ts));
         int abs2 = abs((int)(pts - global_last_video_pts));
-        int local_delta_correction = (pts_delta - local_delta) - sync_ms_max_range;
-        int local_delta_correction_abs = abs((local_delta + sync_ms_max_range) - pts_delta);
+        int local_delta_correction = (pts_delta - local_delta);
+        int local_delta_correction_abs = abs(local_delta - pts_delta);
 
-#if 1
+#if 0
         dbg(9, "incoming_video_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d\n",
                 (int)pts,
                 (int)ts1,
@@ -9814,7 +9816,6 @@ static void *video_play(void *dummy)
                 local_delta_correction_abs
                 );
 #endif
-
         int sync_ms = sync_ms_max_range + local_delta_correction;
 
         if (sync_ms > (sync_ms_max_range * 2))
@@ -9830,7 +9831,7 @@ static void *video_play(void *dummy)
         }
 
         global_last_video_pts = pts;
-        global_last_video_ts = ts1 + sync_ms;
+        global_last_video_ts = ts1 + local_delta_correction;
 
         need_dev_v_counter = 0;
         dec_video_t_counter();
@@ -9838,11 +9839,12 @@ static void *video_play(void *dummy)
         yieldcpu(sync_ms);
 
         // --> push frame to actual display via OMX --------------
+        uint64_t ll = global_last_video_ts_omx;
         global_last_video_ts_omx = current_time_monotonic_default();
         omx_display_flush_buffer(&omx, yuf_data_buf_len, sync_ms);
         // --> push frame to actual display via OMX --------------
 
-        dbg(9, "incoming_video_frame:sync_ms=%d local_delta_correction=%d\n", sync_ms, local_delta_correction);
+        // dbg(9, "incoming_video_frame:sync_ms=%d ll=%d\n", sync_ms, (int)(global_last_video_ts_omx - ll));
     }
     else
     {
