@@ -38,7 +38,7 @@ int omx_init(struct omx_state *st);
 void omx_deinit(struct omx_state *st);
 int omx_get_display_input_buffer(struct omx_state *st,
                                  void **pbuf, uint32_t *plen);
-int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len);
+int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t ms_offset);
 int omx_change_video_out_rotation(struct omx_state *st, int angle);
 int omx_display_enable(struct omx_state *st,
                        int width, int height, int stride);

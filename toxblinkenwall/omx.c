@@ -587,7 +587,7 @@ int omx_display_enable(struct omx_state *st,
         portdef.format.video.nSliceHeight);
     //
 
-    int want_buffers = 3;
+    int want_buffers = 4;
 
     portdef.nBufferCountActual = want_buffers;
     if ((int)portdef.nBufferCountActual < (int)portdef.nBufferCountMin)
@@ -712,7 +712,15 @@ int omx_get_display_input_buffer(struct omx_state *st,
     return 0;
 }
 
-int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
+static OMX_TICKS to_omx_ticks(int64_t value)
+{
+    OMX_TICKS s;
+    s.nLowPart  = value & 0xffffffff;
+    s.nHighPart = value >> 32;
+    return s;
+}
+
+int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t ms_offset)
 {
     if (!st)
     {
@@ -725,10 +733,10 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len)
     }
 
     int buf_idx = st->current_buffer;
-    st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME;
+    st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME; // OMX_BUFFERFLAG_ENDOFFRAME; // OMX_BUFFERFLAG_STARTTIME;
     st->buffers[buf_idx]->nOffset = 0;
     st->buffers[buf_idx]->nFilledLen = data_len;
-    st->buffers[buf_idx]->nTimeStamp = omx_ticks_from_s64(0);
+    st->buffers[buf_idx]->nTimeStamp = omx_ticks_from_s64(0); // to_omx_ticks(ms_offset * 1000); // omx_ticks_from_s64(ms_offset);
 
     if (OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx]) != OMX_ErrorNone)
     {
