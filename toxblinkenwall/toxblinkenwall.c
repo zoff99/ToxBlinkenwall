@@ -8625,7 +8625,7 @@ static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                             }
 
                             global_bw_audio_to_video_delay_ms = mean_delay_ms;
-                            dbg(9, "incoming_audio_frame:D=%d\n", global_bw_audio_to_video_delay_ms);
+                            // dbg(9, "incoming_audio_frame:D=%d\n", global_bw_audio_to_video_delay_ms);
                         }
                     }
 
