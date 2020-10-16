@@ -362,6 +362,7 @@ int using_h264_encoder_in_toxcore = 0;
 int hw_encoder_wanted = 1;
 int hw_encoder_wanted_prev = 1;
 int show_own_cam = 1;
+int global_osd_level = 2;
 
 #define PI_NORMAL_CAM_W 1280 // 896 // 1280;
 #define PI_NORMAL_CAM_H 720 // 512 // 720;
@@ -2380,6 +2381,14 @@ bool is_h264_sps(const uint8_t *data, const uint32_t data_len)
     }
 
     return false;
+}
+
+void toggle_osd(int osd_level)
+{
+    if ((osd_level >= 0) && (osd_level <= 2))
+    {
+        global_osd_level = osd_level;
+    }
 }
 
 void toggle_own_cam(int on_off)
@@ -4991,6 +5000,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .showfps       --> show fps on video");
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
     send_text_message_to_friend(tox, friend_number, " .owncam <0|1>  --> show own video on/off");
+    send_text_message_to_friend(tox, friend_number, " .osd <0|1|2>   --> toggle OSD off/audio/on");
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .atvd <num>    --> a2v delay in ms (+100)");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
@@ -5410,6 +5420,19 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         dbg(0, "owmcam=%d\n", value_new);
                         toggle_own_cam(value_new);
+                    }
+                }
+            }
+            else if (strncmp((char *)message, ".osd ", strlen((char *)".osd ")) == 0) // toggle OSD
+            {
+                if (strlen(message) > 5) // require 1 digits
+                {
+                    int value_new = get_number_in_string(message, (int)1);
+
+                    if ((value_new == 0) || (value_new == 1) || (value_new == 2))
+                    {
+                        dbg(0, "osd=%d\n", value_new);
+                        toggle_osd(value_new);
                     }
                 }
             }
@@ -9285,22 +9308,25 @@ void prepare_omx_osd_audio_level_yuv(uint8_t *dis_buf, int dw, int dh, int dstri
     //
     //
     // --- playback mixer volume ---
-    dis_buf_save = dis_buf + ((2 * lines_down) * dstride);
-
-    for (int lines = 0; lines < (lines_height + 1); lines++)
+    if (global_osd_level > 1)
     {
-        if ((lines == 0) || (lines == lines_height))
-        {
-            memset(dis_buf_save, 0, (int)(global_playback_volume_in_percent * factor));
-            memset(dis_buf_save + (100 * factor), 0, volume_right_bar_width);
-        }
-        else
-        {
-            memset(dis_buf_save, 255, (int)(global_playback_volume_in_percent * factor));
-            memset(dis_buf_save + (100 * factor), 255, volume_right_bar_width);
-        }
+        dis_buf_save = dis_buf + ((2 * lines_down) * dstride);
 
-        dis_buf_save = dis_buf_save + dstride;
+        for (int lines = 0; lines < (lines_height + 1); lines++)
+        {
+            if ((lines == 0) || (lines == lines_height))
+            {
+                memset(dis_buf_save, 0, (int)(global_playback_volume_in_percent * factor));
+                memset(dis_buf_save + (100 * factor), 0, volume_right_bar_width);
+            }
+            else
+            {
+                memset(dis_buf_save, 255, (int)(global_playback_volume_in_percent * factor));
+                memset(dis_buf_save + (100 * factor), 255, volume_right_bar_width);
+            }
+
+            dis_buf_save = dis_buf_save + dstride;
+        }
     }
 }
 
@@ -9738,8 +9764,11 @@ static void *video_play(void *dummy)
         struct timeval tm_01_003;
         __utimer_start(&tm_01_003);
 #endif
-        prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
-                            global_video_in_fps);
+        if (global_osd_level > 1)
+        {
+            prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                                global_video_in_fps);
+        }
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
         timspan_in_ms;
         timspan_in_ms = __utimer_stop(&tm_01_003, "video_frame_play:tm_01_003:", 1);
@@ -9758,7 +9787,10 @@ static void *video_play(void *dummy)
     struct timeval tm_01_004;
     __utimer_start(&tm_01_004);
 #endif
-    draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+    if (global_osd_level > 1)
+    {
+        draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, buf, frame_width_px1, frame_height_px1, ystride);
+    }
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_004, "video_frame_play:tm_01_004:", 1);
@@ -9773,7 +9805,10 @@ static void *video_play(void *dummy)
     struct timeval tm_01_005;
     __utimer_start(&tm_01_005);
 #endif
-    prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+    if (global_osd_level > 0)
+    {
+        prepare_omx_osd_audio_level_yuv(buf, frame_width_px1, frame_height_px1, ystride);
+    }
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_005, "video_frame_play:tm_01_005:", 1);
@@ -9873,14 +9908,24 @@ static void *video_play(void *dummy)
 
     if (update_omx_osd_counter > 20)
     {
-        prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
-                            global_video_in_fps);
+        if (global_osd_level > 1)
+        {
+            prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                                global_video_in_fps);
+        }
         update_omx_osd_counter = 0;
     }
 
     update_omx_osd_counter++;
-    draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, y, frame_width_px1, frame_height_px1, ystride);
-    prepare_omx_osd_audio_level_yuv(y, frame_width_px1, frame_height_px1, ystride);
+    if (global_osd_level > 1)
+    {
+        draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, y, frame_width_px1, frame_height_px1, ystride);
+    }
+
+    if (global_osd_level > 0)
+    {
+        prepare_omx_osd_audio_level_yuv(y, frame_width_px1, frame_height_px1, ystride);
+    }
 
     if (networktraffic_thread_stop == 0)
     {
