@@ -139,7 +139,7 @@ keymap = {
     ecodes.KEY_L: "play-vol:up\n",
     # M
     # N
-    # O
+    ecodes.KEY_P: "toggle_osd:\n",
     ecodes.KEY_P: "pickup:\n",
     ecodes.KEY_Q: "toggle_quality:\n",
     ecodes.KEY_R: "play-vol:down\n",

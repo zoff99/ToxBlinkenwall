@@ -2383,7 +2383,7 @@ bool is_h264_sps(const uint8_t *data, const uint32_t data_len)
     return false;
 }
 
-void toggle_osd(int osd_level)
+void toggle_osd_level(int osd_level)
 {
     if ((osd_level >= 0) && (osd_level <= 2))
     {
@@ -4290,7 +4290,6 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
         if (conf_calls_is_active_friend(num))
         {
             dbg(9, "went offline:got hangup on conf call\n");
-            // zzzzzzzzzz
             end_conf_call(mytox_av, num, 1);
         }
 
@@ -5432,7 +5431,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     if ((value_new == 0) || (value_new == 1) || (value_new == 2))
                     {
                         dbg(0, "osd=%d\n", value_new);
-                        toggle_osd(value_new);
+                        toggle_osd_level(value_new);
                     }
                 }
             }
@@ -7806,7 +7805,6 @@ int conf_calls_count_active()
 
 void end_conf_call(ToxAV *av, uint32_t friend_number, int disconnect)
 {
-    // zzzzzzzzzzzzzz
     sta();
     dbg(9, "end_conf_call:enter:fn=%d\n", friend_number);
 
@@ -8199,7 +8197,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         if (conf_calls_is_active_friend(friend_number))
         {
-            // zzzzzzzz            
             if (state & TOXAV_FRIEND_CALL_STATE_FINISHED)
             {
                 dbg(9, "t_toxav_call_state_cb:got hangup on conf call [TOXAV_FRIEND_CALL_STATE_FINISHED]\n");
@@ -8243,7 +8240,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     {
         dbg(9, "t_toxav_call_state_cb:TOXAV_FRIEND_CALL_STATE_FINISHED:Call with friend %d finished, global_video_active=%d\n", friend_number, global_video_active);
 
-        // zzzzzzzzzzzz
         // global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
         conf_calls_end_all(av);
         reset_toxav_call_waiting();
@@ -8277,7 +8273,6 @@ static void t_toxav_call_state_cb(ToxAV *av, uint32_t friend_number, uint32_t st
     else if (state & TOXAV_FRIEND_CALL_STATE_ERROR)
     {
         // global_disconnect_conf_friend_num = friend_to_send_conf_video_to;
-        // zzzzzzzzzzzzz
         conf_calls_end_all(av);
         reset_toxav_call_waiting();
         global_video_active = 0;
@@ -13086,7 +13081,6 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 
             if (!conf_calls_is_active_friend(new_friend_id))
             {
-                // zzzzzzzzzzzzzzzzz
                 TOXAV_ERR_CALL error444 = 0;
                 toxav_call_wrapper(mytox_av, new_friend_id, global_audio_bit_rate, global_video_bit_rate, &error444, 0);
                 dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error444, new_friend_id);
@@ -13118,7 +13112,6 @@ void call_conf_pubkey(Tox *tox, uint8_t *bin_toxpubkey)
 
                 if (!conf_calls_is_active_friend(entry_num_friendnum))
                 {
-                    // zzzzzzzzzzzzzzzzzzz
                     TOXAV_ERR_CALL error555 = 0;
                     toxav_call_wrapper(mytox_av, entry_num_friendnum, global_audio_bit_rate, global_video_bit_rate, &error555, 0);
                     dbg(9, "call_conf_pubkey:.confcall:toxav_call=%d fnum=%d\n", error555, (int)entry_num_friendnum);
@@ -13209,6 +13202,22 @@ void toggle_speaker()
     update_status_line_2_text();
     update_status_line_on_fb();
 #endif
+}
+
+void toggle_osd()
+{
+    if (global_osd_level > 1)
+    {
+        global_osd_level = 0;
+    }
+    else if (global_osd_level < 0)
+    {
+        global_osd_level = 0;
+    }
+    else
+    {
+        global_osd_level++;
+    }
 }
 
 void toggle_quality()
@@ -13557,6 +13566,11 @@ void *thread_ext_keys(void *data)
             {
                 dbg(2, "ExtKeys: TOGGLE QUALITY:\n");
                 toggle_quality();
+            }
+            else if (strncmp((char *)buf, "toggle_osd:", strlen((char *)"toggle_osd:")) == 0)
+            {
+                dbg(2, "ExtKeys: TOGGLE OSD:\n");
+                toggle_osd();
             }
             else if (strncmp((char *)buf, "toggle_speaker:", strlen((char *)"toggle_speaker:")) == 0)
             {
