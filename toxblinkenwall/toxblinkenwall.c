@@ -15270,6 +15270,28 @@ int main(int argc, char *argv[])
     // clear conf calls state
     conf_calls_reset_state_all();
 
+
+    // -- set some options from OPTION_* files --
+    global_osd_level = 2;
+    if (file_exists("./OPTION_OSD_2"))
+    {
+        global_osd_level = 2;
+        dbg(9, "OPTION_OSD_2\n");
+    }
+
+    if (file_exists("./OPTION_OSD_1"))
+    {
+        global_osd_level = 1;
+        dbg(9, "OPTION_OSD_1\n");
+    }
+
+    if (file_exists("./OPTION_OSD_0"))
+    {
+        global_osd_level = 0;
+        dbg(9, "OPTION_OSD_0\n");
+    }
+    // -- set some options from OPTION_* files --
+
     // -- set priority of process with sudo command --
 #if 0
     pid_t my_pid = getpid();
