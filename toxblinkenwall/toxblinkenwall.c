@@ -1569,6 +1569,7 @@ int16_t *global___audio_group_temp_buf = NULL;
 int16_t *global_group_audio_peerbuffers_buffer = NULL;
 size_t *global_group_audio_peerbuffers_buffer_start_pos = NULL; // byte position inside the buffer where valid data starts
 size_t *global_group_audio_peerbuffers_buffer_end_pos = NULL; // byte position inside the buffer where valid can be added at
+int *global_group_audio_peerbuffers_buffer_high_mark = NULL; // reached high mark
 int audio_play_volume_percent_c = 100;
 float volumeMultiplier = -20.0f;
 int16_t *audio_buffer_pcm_2 = NULL;
@@ -1709,6 +1710,7 @@ void mixing_audio_alloc_peer_buffer()
 
     global_group_audio_peerbuffers_buffer_start_pos = (size_t *)calloc(1, (size_t)(num_peers * sizeof(size_t)));
     global_group_audio_peerbuffers_buffer_end_pos = (size_t *)calloc(1, (size_t)(num_peers * sizeof(size_t)));
+    global_group_audio_peerbuffers_buffer_high_mark = (int *)calloc(1, (size_t)(num_peers * sizeof(int)));
     global_group_audio_peerbuffers = num_peers;
 }
 
@@ -1729,6 +1731,9 @@ void mixing_audio_free_peer_buffer()
     free(global_group_audio_peerbuffers_buffer_start_pos);
     global_group_audio_peerbuffers_buffer_start_pos = NULL;
 
+    free(global_group_audio_peerbuffers_buffer_high_mark);
+    global_group_audio_peerbuffers_buffer_high_mark = NULL;
+
     free(global_group_audio_peerbuffers_buffer_end_pos);
     global_group_audio_peerbuffers_buffer_end_pos = NULL;
 }
@@ -1738,6 +1743,19 @@ uint32_t mixing_audio_get_samples_in_buffer(uint32_t peernumber)
     return (uint32_t)(Pipe_getUsed(
                 &global_group_audio_peerbuffers_buffer_start_pos[peernumber],
                 &global_group_audio_peerbuffers_buffer_end_pos[peernumber]) * 2);
+}
+
+int mixing_audio_get_high_mark(uint32_t peernumber)
+{
+    return global_group_audio_peerbuffers_buffer_high_mark[peernumber];
+}
+
+void mixing_audio_set_high_mark(uint32_t peernumber, int new_mark)
+{
+    if ((new_mark == 0) || (new_mark == 1))
+    {
+        global_group_audio_peerbuffers_buffer_high_mark[peernumber] = new_mark;
+    }
 }
 
 // return how many buffers have more or equal to `sample_count` samples available to read
@@ -1763,10 +1781,13 @@ uint32_t mixing_audio_any_have_sample_count_in_buffer_count(uint32_t sample_coun
 //         NULL -> some error
 int16_t *mixing_audio_get_mixed_output_buffer(uint32_t num_samples)
 {
+    // dbg(9, "MIXAUDIO:==mixing_audio_get_mixed_output_buffer==\n");
+
     uint32_t num_bufs_ready = mixing_audio_any_have_sample_count_in_buffer_count(num_samples);
 
     if (num_bufs_ready < 1)
     {
+        // dbg(9, "MIXAUDIO:==RET:001==\n");
         return NULL;
     }
 
@@ -1784,6 +1805,7 @@ int16_t *mixing_audio_get_mixed_output_buffer(uint32_t num_samples)
     {
         if(audio_play_volume_percent_c == 0)
         {
+            // dbg(9, "MIXAUDIO:==RET:002==\n");
             return NULL;
         }
         else
@@ -1828,6 +1850,56 @@ int16_t *mixing_audio_get_mixed_output_buffer(uint32_t num_samples)
     for(i=0;i<global_group_audio_peerbuffers;i++)
     {
         has_samples = mixing_audio_get_samples_in_buffer(i);
+        // dbg(9, "MIXAUDIO:[%d]:##has_samples=%d\n", (int)i, (int)has_samples);
+
+        if (mixing_audio_get_high_mark(i) == 0)
+        {
+            if (has_samples >= (3 * num_samples))
+            {
+                // reached high mark, let's start using this buffer
+                mixing_audio_set_high_mark(i, 1);
+                // dbg(9, "MIXAUDIO:[%d]:++reached high mark %d %d\n", (int)i, (int)has_samples, (int)(3 * num_samples));
+            }
+            else
+            {
+                // we still did not reach the high mark. let the buffer fill a bit
+                // dbg(9, "MIXAUDIO:[%d]:??still did not reach the high mark %d %d\n", (int)i, (int)has_samples, (int)(3 * num_samples));
+                continue;
+            }
+        }
+        else
+        {
+            if (has_samples <= (num_samples))
+            {
+                // fallen below low mark. let the buffer fill a bit
+                mixing_audio_set_high_mark(i, 0);
+                // dbg(9, "MIXAUDIO:[%d]:--fallen below low mark %d %d\n", (int)i ,(int)has_samples, (int)(num_samples));
+                continue;
+            }
+            else if (has_samples >= (8 * num_samples))
+            {
+                // dbg(9, "MIXAUDIO:[%d]:**too much samples %d %d\n", (int)i ,(int)has_samples, (int)(3 * num_samples));
+#if 0
+                int16_t *dummy_buf = (int16_t *)calloc(1, (size_t)buf_size);
+                if (dummy_buf)
+                {
+                    for (int jj=0;jj<1;jj++)
+                    {
+                        mixing_audio_read_buffer((uint32_t)(i), num_samples, dummy_buf);
+                        uint32_t has_samples2 = mixing_audio_get_samples_in_buffer(i);
+                        dbg(9, "MIXAUDIO:[%d]:*_too much samples %d %d\n", (int)i ,(int)has_samples2, (int)(3 * num_samples));
+                    }
+                    free(dummy_buf);
+                }
+#endif
+            }
+            else
+            {
+                // ok, we can use this buffer
+            }
+        }
+
+
         if (has_samples >= num_samples)
         {
             // read and mix from this buffer
@@ -1863,6 +1935,7 @@ int16_t *mixing_audio_get_mixed_output_buffer(uint32_t num_samples)
     // free(temp_buf);
     // dbg(9, "group_audio_get_mixed_output_buffer:099");
 
+    // dbg(9, "MIXAUDIO:==RET:099==\n");
     return ret_buf;
 }
 
@@ -1876,15 +1949,19 @@ void mixing_audio_add_buffer(uint32_t peernumber, int16_t *pcm, uint32_t num_sam
     size_t bytes_free = Pipe_getFree(global_group_audio_peerbuffers_buffer_start_pos + peernumber,
                                      global_group_audio_peerbuffers_buffer_end_pos + peernumber);
 
+    int did_reset = 0;
     if ((size_t)(num_samples * 2) > bytes_free)
     {
         // not enough space in the ringbuffer
         // dbg(9, "group_audio_add_buffer:not enough space in the ringbuffer");
         Pipe_reset(global_group_audio_peerbuffers_buffer_start_pos + peernumber,
                    global_group_audio_peerbuffers_buffer_end_pos + peernumber);
+        did_reset = 1;
     }
 
     // dbg(9, "bbb:002:global_group_audio_peerbuffers_buffer=%p", global_group_audio_peerbuffers_buffer);
+
+    // dbg(9, "MIXAUDIO:[%d]:_add_:bytes_free=%d num_samples=%d did_reset=%d\n", (int)peernumber, (int)bytes_free ,(int)num_samples, (int)did_reset);
 
     Pipe_write((const char*)pcm, (size_t)(num_samples * 2),
             global_group_audio_peerbuffers_buffer + (MIXINGAUDIO_PCM_BUFFER_SIZE_SAMPLES * peernumber),
@@ -8891,8 +8968,8 @@ void *thread_play_mixed_audio(void *data)
     // ------ thread priority ------
 
 
-    int audio_frame_in_ms = 60;
-    int need_sleep_ms = 60;
+    int audio_frame_in_ms = PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS;
+    int need_sleep_ms = audio_frame_in_ms;
     int64_t ts1;
     int64_t ts2;
 
@@ -8906,7 +8983,11 @@ void *thread_play_mixed_audio(void *data)
                 process_incoming_mixing_audio(av, friend_to_send_video_to, 0, audio_frame_in_ms);
                 ts2 = current_time_monotonic_default();
                 need_sleep_ms = audio_frame_in_ms - (int)(ts2 - ts1);
-                // dbg(9, "need_sleep_ms=%d\n", need_sleep_ms);
+                if (need_sleep_ms < 0)
+                {
+                    need_sleep_ms = 0;
+                }
+                // dbg(9, "thread_play_mixed_audio:need_sleep_ms=%d\n", need_sleep_ms);
                 yieldcpu(need_sleep_ms);
             }
             else
@@ -8946,7 +9027,16 @@ int process_incoming_mixing_audio(ToxAV *av, uint32_t friend_number, int delta_n
                         want_sample_count_40ms, 1, 48000, NULL, 0);
         pthread_mutex_lock(&group_audio___mutex);
     }
-    // TODO: play empty (silence) buffer when we dont have mixed audio available
+    else
+    {
+        // play empty (silence) buffer when we dont have mixed audio available
+        memset((void *)audio_buffer_pcm_2, 0, (size_t)(want_sample_count_40ms * 1 * 2));
+        //
+        pthread_mutex_unlock(&group_audio___mutex);
+        t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, audio_buffer_pcm_2,
+                        want_sample_count_40ms, 1, 48000, NULL, 0);
+        pthread_mutex_lock(&group_audio___mutex);
+    }
 
     pthread_mutex_unlock(&group_audio___mutex);
 
