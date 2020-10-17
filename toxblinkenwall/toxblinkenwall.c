@@ -11890,11 +11890,11 @@ void *thread_video_av(void *data)
                                             (int)global_bw_video_play_delay - 0 -
                                             (int)global_bw_audio_to_video_delay_ms,
                                             &error);
-                dbg(9, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:%d %d %d\n",
-                        (int)global_bw_video_play_delay,
-                        (int)global_bw_audio_to_video_delay_ms,
-                        ((int)global_bw_video_play_delay - 0 - (int)global_bw_audio_to_video_delay_ms)
-                        );
+                //dbg(9, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:%d %d %d\n",
+                //        (int)global_bw_video_play_delay,
+                //        (int)global_bw_audio_to_video_delay_ms,
+                //        ((int)global_bw_video_play_delay - 0 - (int)global_bw_audio_to_video_delay_ms)
+                //        );
 
                 if (global_conference_call_active == 1)
                 {
