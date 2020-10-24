@@ -12489,8 +12489,17 @@ void rbg_to_yuv(uint8_t r, uint8_t g, uint8_t b, uint8_t *y, uint8_t *u, uint8_t
 void set_color_in_bgra_frame_xy(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *fb_buf, int px_x, int px_y,
                                 uint8_t r, uint8_t g, uint8_t b)
 {
+    int pos = (px_x * 4) + (px_y * fb_line_bytes);
+    int fb_buf_bytes = fb_yres * fb_line_bytes;
+
+    // check of any part is outside of the buffer
+    if (pos >= (fb_buf_bytes + 4))
+    {
+        return;
+    }
+
     uint8_t *plane = fb_buf;
-    plane = plane + (px_x * 4) + (px_y * fb_line_bytes);
+    plane = plane + pos;
     *plane = b; // b
     plane++;
     *plane = g; // g
@@ -12534,29 +12543,43 @@ void print_font_char_rgba(int fb_xres, int fb_yres, int fb_line_bytes, uint8_t *
     int offset = 0;
     int set = 0;
 
+    int fb_buf_bytes = fb_yres * fb_line_bytes;
+    int pos = 0;
+
     for (k = 0; k < font_h; k++)
     {
         plane = fb_buf + ((start_y_pix + k) * fb_line_bytes);
         plane = plane + start_x_pix * 4; // 4 bytes per pixel
+        pos = ((start_y_pix + k) * fb_line_bytes);
+        pos = pos + (start_x_pix * 4);
 
         for (j = 0; j < font_w; j++)
         {
             set = bitmap[k] & 1 << j;
 
-            if (set)
+            // check if any part is outside of buffer
+            if (pos >= (fb_buf_bytes + 5))
             {
-                *plane = b; // b
-                plane++;
-                *plane = g; // g
-                plane++;
-                *plane = r; // r
-                plane++;
-                *plane = 0; // a
-                plane++;
+                // outside of buffer
             }
             else
             {
-                plane = plane + 4;
+                if (set)
+                {
+                    *plane = b; // b
+                    plane++;
+                    *plane = g; // g
+                    plane++;
+                    *plane = r; // r
+                    plane++;
+                    *plane = 0; // a
+                    plane++;
+                }
+                else
+                {
+                    plane = plane + 4;
+                }
+                pos = pos + 4;
             }
         }
     }
