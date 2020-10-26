@@ -2265,7 +2265,7 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 
 void write_ownname_to_file(Tox *tox)
 {
-    char ownname[500];
+    static char ownname[500];
     CLEAR(ownname);
 
     if (!tox)
@@ -2281,7 +2281,7 @@ void write_ownname_to_file(Tox *tox)
         tox_self_get_name(tox, (uint8_t *)ownname);
     }
 
-    char this_filename[300];
+    static char this_filename[300];
     snprintf(this_filename, 299, "./db/ownname.txt");
     FILE *fp = fopen(this_filename, "wb");
 
@@ -2300,7 +2300,7 @@ void write_ownname_to_file(Tox *tox)
 static void write_audio_in_vu_to_file(float vu)
 {
     float vu2 = vu - AUDIO_VU_MIN_VALUE;
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/audio_in_vu.txt");
     FILE *fp = fopen(filename, "wb");
@@ -2319,7 +2319,7 @@ static void write_audio_in_vu_to_file(float vu)
 static void write_audio_out_vu_to_file(float vu)
 {
     float vu2 = vu - AUDIO_VU_MIN_VALUE;
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/audio_out_vu.txt");
     FILE *fp = fopen(filename, "wb");
@@ -2336,7 +2336,7 @@ static void write_audio_out_vu_to_file(float vu)
 
 static void write_rtt_to_file(uint32_t value)
 {
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/rtt.txt");
     FILE *fp = fopen(filename, "wb");
@@ -2353,7 +2353,7 @@ static void write_rtt_to_file(uint32_t value)
 
 static void write_delay_to_file(int64_t value)
 {
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/delay.txt");
     FILE *fp = fopen(filename, "wb");
@@ -2374,7 +2374,7 @@ static void write_caller_name_to_file(char *caller_name)
         return;
     }
 
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/callername.txt");
     FILE *fp = fopen(filename, "wb");
@@ -2390,7 +2390,7 @@ static void write_caller_name_to_file(char *caller_name)
 
 static void write_ring_status_to_file(uint8_t ringstatus)
 {
-    char filename[300];
+    static char filename[300];
     CLEAR(filename);
     snprintf(filename, 299, "/home/pi/ToxBlinkenwall/toxblinkenwall/share/ringstatus.txt");
     FILE *fp = fopen(filename, "wb");
@@ -4570,7 +4570,7 @@ struct FileTransfer *get_file_transfer_struct(uint32_t friendnum, uint32_t filen
 //
 void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *fmt, ...)
 {
-    char msg2[1000];
+    static char msg2[1000];
     size_t length = 0;
 
     if (fmt == NULL)
@@ -4714,12 +4714,12 @@ void cmd_stats(Tox *tox, uint32_t friend_number)
     }
 
     // ----- uptime -----
-    char time_str[200];
+    static char time_str[200];
     uint64_t cur_time = time(NULL);
     get_elapsed_time_str(time_str, sizeof(time_str), cur_time - global_start_time);
     send_text_message_to_friend(tox, friend_number, "Uptime: %s", time_str);
     // ----- uptime -----
-    char output_str[1000];
+    static char output_str[1000];
     run_cmd_return_output(shell_cmd__get_my_number_of_open_files, output_str, 1);
 
     if (strlen(output_str) > 0)
@@ -4891,7 +4891,7 @@ void reload_name_from_file(Tox *tox)
                 {
                     // set our name to read string
                     uint32_t self_name_max_len = tox_max_name_length();
-                    char self_name[1000];
+                    static char self_name[1000];
                     CLEAR(self_name);
                     snprintf(self_name, (self_name_max_len - 1), "%s", line);
 
@@ -4948,7 +4948,7 @@ void cmd_osupdatefull(Tox *tox, uint32_t friend_number)
 {
     // HINT: this should be protected by password or ToxID or something
     dbg(9, "OS FULL UPDATE (1)-----\n");
-    char output_str[1000];
+    static char output_str[1000];
     run_cmd_return_output(shell_cmd__osupdatefull, output_str, 1);
     dbg(9, "OS FULL UPDATE (2)-----\n");
 }
@@ -7956,7 +7956,7 @@ void answer_incoming_conf_av_call(ToxAV *av, uint32_t friend_number)
     global_conference_call_active = 1;
 
     // now send .confcall message to all active callers -------------------
-    char message_str[1000];
+    static char message_str[1000];
     int j;
     // ---
 
@@ -11660,7 +11660,7 @@ void *thread_av(void *data)
                             //        update_out_fps_counter, global_timespan_video_out);
                             if (global_video_out_fps > 0)
                             {
-                                char fps_str[1000];
+                                static char fps_str[1000];
                                 CLEAR(fps_str);
                                 snprintf(fps_str, sizeof(fps_str), "fps: %d", (int)(global_video_out_fps));
                                 text_on_yuf_frame_xy(50, 30, fps_str);
@@ -13301,7 +13301,7 @@ void toggle_speaker()
     sem_wait(&audio_play_lock);
     close_sound_play_device();
     // -- toggle alsa config with sudo command --
-    char cmd_001[1000];
+    static char cmd_001[1000];
     CLEAR(cmd_001);
     snprintf(cmd_001, sizeof(cmd_001), "sudo ./toggle_alsa.sh %d", (int)speaker_out_num);
     dbg(9, "toggle_speaker:cmd=%s\n", cmd_001);
@@ -13581,7 +13581,7 @@ void *thread_phonebook_invite(void *data)
 #ifdef HAVE_EXTERNAL_KEYS
 void *thread_ext_keys(void *data)
 {
-    char buf[MAX_READ_FIFO_BUF];
+    static char buf[MAX_READ_FIFO_BUF];
     CLEAR(buf);
     do_read_ext_keys = 1;
     int res = 0;
@@ -15408,7 +15408,7 @@ int main(int argc, char *argv[])
     // -- set priority of process with sudo command --
 #if 0
     pid_t my_pid = getpid();
-    char cmd_001[1000];
+    static char cmd_001[1000];
     CLEAR(cmd_001);
     snprintf(cmd_001, sizeof(cmd_001), "sudo chrt -f -p 1 %d", (int)my_pid);
 
@@ -15539,9 +15539,9 @@ int main(int argc, char *argv[])
     if (tox_self_get_name_size(tox) == 0)
     {
         uint32_t self_name_max_len = tox_max_name_length();
-        char self_name[1000];
+        static char self_name[1000];
         CLEAR(self_name);
-        char self_name_random_part[8];
+        static char self_name_random_part[8];
         CLEAR(self_name_random_part);
         randomish_string(self_name_random_part, 7);
         dbg(9, "randomish_string=%s\n", self_name_random_part);
@@ -15555,7 +15555,7 @@ int main(int argc, char *argv[])
     if (tox_self_get_status_message_size(tox) == 0)
     {
         uint32_t self_status_max_len = tox_max_status_message_length();
-        char self_status[1000];
+        static char self_status[1000];
         CLEAR(self_status);
         snprintf(self_status, (self_status_max_len - 1), "%s", default_tox_status);
         tox_self_set_status_message(tox, (uint8_t *)self_status, strlen(self_status), NULL);
@@ -15600,7 +15600,7 @@ int main(int argc, char *argv[])
     update_savedata_file(tox);
     load_friendlist(tox);
     write_phonebook_names_to_files(tox);
-    char path[300];
+    static char path[300];
     snprintf(path, sizeof(path), "%s", my_avatar_filename);
     int len = strlen(path) - 1;
     avatar_set(tox, path, len);
