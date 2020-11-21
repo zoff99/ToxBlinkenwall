@@ -1439,8 +1439,8 @@ int read_cpu_temp()
 {
     char *cpu_temp_file = "/sys/class/thermal/thermal_zone0/temp";
     FILE *fileptr;
-    static char path[1035];
-    static char output[1035];
+    char path[1035];
+    char output[1035];
     int cpu_temp_int = -1;
     CLEAR(path);
     CLEAR(output);
@@ -2471,7 +2471,7 @@ void toggle_osd_level(int osd_level)
 void toggle_own_cam(int on_off)
 {
     // TODO: make this better, and also select the correct camera device, if more than 1 camera
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     show_own_cam = on_off;
 
@@ -2489,7 +2489,7 @@ void toggle_own_cam(int on_off)
 
 void on_start()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onstart);
 
@@ -2498,7 +2498,7 @@ void on_start()
 
 void on_online()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__ononline);
 
@@ -2507,7 +2507,7 @@ void on_online()
 
 void on_offline()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__onoffline);
 
@@ -2528,10 +2528,10 @@ void on_offline()
 
 void playback_volume_get_current()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_get_current);
-    static char output_str[1000];
+    char output_str[1000];
     CLEAR(output_str);
     run_cmd_return_output(cmd_str, output_str, 1);
 
@@ -2555,10 +2555,10 @@ void playback_volume_get_current()
 
 void playback_volume_up()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_up);
-    static char output_str[1000];
+    char output_str[1000];
     CLEAR(output_str);
     run_cmd_return_output(cmd_str, output_str, 1);
 
@@ -2582,10 +2582,10 @@ void playback_volume_up()
 
 void playback_volume_down()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__playback_volume_down);
-    static char output_str[1000];
+    char output_str[1000];
     CLEAR(output_str);
     run_cmd_return_output(cmd_str, output_str, 1);
 
@@ -2609,11 +2609,11 @@ void playback_volume_down()
 
 void set_thread_realtime()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     pid_t cur_thread_id = gettid();
     snprintf(cmd_str, sizeof(cmd_str), "%s \"%d\"", shell_cmd__thread_realtime, (int)cur_thread_id);
-    static char output_str[1000];
+    char output_str[1000];
     CLEAR(output_str);
     run_cmd_return_output(cmd_str, output_str, 1);
 }
@@ -2678,7 +2678,7 @@ void on_end_call()
 #endif
     global_video_incoming_orientation_angle_prev = 0;
     global_video_incoming_orientation_angle = 0;
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallend);
 
@@ -2701,7 +2701,7 @@ void on_end_call()
 void on_start_call()
 {
     global_is_qrcode_showing_on_screen = 0;
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__oncallstart);
 
@@ -3371,7 +3371,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 void bootstrap(Tox *tox)
 {
     // use these nodes as tcp-relays
-    static DHT_node nodes_tcp_relays[] =
+    DHT_node nodes_tcp_relays[] =
     {
         {"tox.abilinski.com", 33445, "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E", {0}},
         {"78.46.73.141",      33445, "02807CF4F8BB8FB390CC3794BDF1E8449E9A8392C5D3F2200019DA9F1E812E46", {0}},
@@ -3381,7 +3381,7 @@ void bootstrap(Tox *tox)
         {"185.14.30.213",      3389, "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B", {0}}
     };
     // use these nodes as bootstrap nodes
-    static DHT_node nodes_bootstrap_nodes[] =
+    DHT_node nodes_bootstrap_nodes[] =
     {
         {"178.62.250.138",    33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B", {0}},
         {"136.243.141.187",   443,   "6EE1FADE9F55CC7938234CC07C864081FC606D8FE7B751EDA217F268F1078A39", {0}},
@@ -3552,7 +3552,7 @@ void print_tox_id(Tox *tox)
 void show_video_calling(uint32_t fnum, bool with_delay)
 {
 #ifndef HAVE_X11_AS_FB
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_video_calling);
 
@@ -3616,10 +3616,10 @@ void show_video_calling(uint32_t fnum, bool with_delay)
 void show_text_as_image(const char *display_text)
 {
     global_is_qrcode_showing_on_screen = 0;
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
-#define MAX_TEXT_ON_IMAGE_LEN   300
-    static char display_text2[MAX_TEXT_ON_IMAGE_LEN + 10];
+    int MAX_TEXT_ON_IMAGE_LEN = 300;
+    char display_text2[MAX_TEXT_ON_IMAGE_LEN + 10];
     CLEAR(display_text2);
     const char safe_char = ' ';
     const char *s = display_text;
@@ -3707,7 +3707,7 @@ void show_text_as_image(const char *display_text)
 
 void show_text_as_image_stop()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_text_as_image_stop);
 
@@ -3718,7 +3718,7 @@ void show_endless_image()
 {
     global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s \"%s\"", shell_cmd__start_endless_image_anim, cmd__image_filename_full_path);
 
@@ -3727,7 +3727,7 @@ void show_endless_image()
 
 void stop_endless_image()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_image_anim);
 
@@ -3738,7 +3738,7 @@ void show_endless_loading()
 {
     global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__start_endless_loading_anim);
 
@@ -3747,7 +3747,7 @@ void show_endless_loading()
 
 void stop_endless_loading()
 {
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__stop_endless_loading_anim);
 
@@ -3759,7 +3759,7 @@ void create_tox_id_qrcode(Tox *tox)
     char tox_id_hex[TOX_ADDRESS_SIZE * 2 + 1];
     get_my_toxid(tox, tox_id_hex);
     dbg(2, "ToxID:%s\n", tox_id_hex);
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s \"tox:%s\"", shell_cmd__create_qrcode, tox_id_hex);
 
@@ -3801,7 +3801,7 @@ int is_qrcode_generated()
 void show_tox_id_qrcode_real(Tox *tox)
 {
     show_text_as_image_stop();
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_qrcode);
 
@@ -4168,7 +4168,7 @@ void show_tox_client_application_download_links()
 {
     global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_clients);
 
@@ -4179,7 +4179,7 @@ void show_help_image()
 {
     global_is_qrcode_showing_on_screen = 0;
     show_text_as_image_stop();
-    static char cmd_str[1000];
+    char cmd_str[1000];
     CLEAR(cmd_str);
     snprintf(cmd_str, sizeof(cmd_str), "%s", shell_cmd__show_help);
 
@@ -4633,7 +4633,7 @@ static void get_elapsed_time_str(char *buf, int bufsize, uint64_t secs)
 void run_cmd_return_output(const char *command, char *output, int lastline)
 {
     FILE *fp = NULL;
-    static char path[1035];
+    char path[1035];
     char *pos = NULL;
 
     if (!output)
