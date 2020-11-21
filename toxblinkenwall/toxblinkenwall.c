@@ -3330,7 +3330,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 {
     bool res = 0;
     size_t i = 0;
-    int random_order_nodenums[number_of_nodes];
+    int *random_order_nodenums = calloc(1, sizeof(int) * number_of_nodes);
 
     for (size_t j = 0; (int)j < (int)number_of_nodes; j++)
     {
@@ -3366,6 +3366,8 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 #endif
         }
     }
+
+    free(random_order_nodenums);
 }
 
 void bootstrap(Tox *tox)
@@ -3619,8 +3621,7 @@ void show_text_as_image(const char *display_text)
     char cmd_str[1000];
     CLEAR(cmd_str);
     int MAX_TEXT_ON_IMAGE_LEN = 300;
-    char display_text2[MAX_TEXT_ON_IMAGE_LEN + 10];
-    CLEAR(display_text2);
+    char *display_text2 = calloc(1, (MAX_TEXT_ON_IMAGE_LEN + 10));
     const char safe_char = ' ';
     const char *s = display_text;
     s = s + 6; // remove leading ".text " from input string
@@ -3703,6 +3704,8 @@ void show_text_as_image(const char *display_text)
 
         // unlink(cmd__image_text_full_path);
     }
+
+    free(display_text2);
 }
 
 void show_text_as_image_stop()
@@ -5302,7 +5305,7 @@ void disconnect_all_calls(Tox *tox)
         return;
     }
 
-    uint32_t list[size];
+    uint32_t *list = calloc(1, sizeof(uint32_t) * size);
     tox_self_get_friend_list(tox, list);
     char friend_key[TOX_PUBLIC_KEY_SIZE];
     CLEAR(friend_key);
@@ -5311,6 +5314,8 @@ void disconnect_all_calls(Tox *tox)
     {
         av_local_disconnect(mytox_av, list[i]);
     }
+
+    free(list);
 }
 
 void update_status_line_1_text()
@@ -6160,13 +6165,14 @@ void on_file_chunk_request(Tox *tox, uint32_t friendnumber, uint32_t filenumber,
         ft->position = position;
     }
 
-    uint8_t send_data[length];
+    uint8_t *send_data = calloc(1, sizeof(uint8_t) * length);
     size_t send_length = fread(send_data, 1, sizeof(send_data), ft->file);
 
     if (send_length != length)
     {
         dbg(0, "File transfer for '%s' failed: Read fail\n", ft->file_name);
         close_file_transfer(tox, ft, TOX_FILE_CONTROL_CANCEL);
+        free(send_data);
         return;
     }
 
@@ -6181,6 +6187,8 @@ void on_file_chunk_request(Tox *tox, uint32_t friendnumber, uint32_t filenumber,
     ft->position += send_length;
     ft->bps += send_length;
     ft->last_keep_alive = get_unix_time();
+
+    free(send_data);
 }
 
 
@@ -6331,12 +6339,13 @@ void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position,
         ft->position = position;
     }
 
-    uint8_t send_data[length];
+    uint8_t *send_data = calloc(1, sizeof(uint8_t) * length);
     size_t send_length = fread(send_data, 1, sizeof(send_data), ft->file);
 
     if (send_length != length)
     {
         close_file_transfer(m, ft, TOX_FILE_CONTROL_CANCEL);
+        free(send_data);
         return;
     }
 
@@ -6350,6 +6359,8 @@ void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position,
 
     ft->position += send_length;
     ft->last_keep_alive = get_unix_time();
+
+    free(send_data);
 }
 
 
@@ -6507,10 +6518,11 @@ int avatar_send(Tox *m, uint32_t friendnum)
 
 int check_file_signature(const char *signature, size_t size, FILE *fp)
 {
-    char buf[size];
+    char *buf = calloc(1, size);
 
     if (fread(buf, size, 1, fp) != 1)
     {
+        free(buf);
         return -1;
     }
 
@@ -6518,9 +6530,11 @@ int check_file_signature(const char *signature, size_t size, FILE *fp)
 
     if (fseek(fp, 0L, SEEK_SET) == -1)
     {
+        free(buf);
         return -1;
     }
 
+    free(buf);
     return ret == 0 ? 0 : 1;
 }
 
@@ -6617,7 +6631,7 @@ int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
         return ret_friendnum;
     }
 
-    uint32_t list[size];
+    uint32_t *list = calloc(1, sizeof(uint32_t) * size);
     tox_self_get_friend_list(tox, list);
     char friend_key[TOX_PUBLIC_KEY_SIZE];
     CLEAR(friend_key);
@@ -6632,11 +6646,13 @@ int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
             if (memcmp(tox_id_bin, friend_key, TOX_PUBLIC_KEY_SIZE) == 0)
             {
                 ret_friendnum = list[i];
+                free(list);
                 return ret_friendnum;
             }
         }
     }
 
+    free(list);
     return ret_friendnum;
 }
 
