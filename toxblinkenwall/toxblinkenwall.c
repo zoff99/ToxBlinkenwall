@@ -2055,7 +2055,7 @@ int16_t *upsample_to_48khz(int16_t *pcm, size_t sample_count, uint8_t channels, 
 
     int32_t new_buffer_byte_size = (*sample_count_new) * 2;
     int16_t *new_pcm_buffer = calloc(1, (size_t)new_buffer_byte_size); // 48kHz , mono, PCM Int16 signed
-    memset(new_pcm_buffer, 0, new_buffer_byte_size);
+    // memset(new_pcm_buffer, 0, new_buffer_byte_size);
     int16_t *new_pcm_buffer_pos = new_pcm_buffer;
 
     int32_t i;
@@ -10244,7 +10244,7 @@ static void *video_play(void *dummy)
         }
 
         uint8_t *bf_out_data_upscaled = (uint8_t *)calloc(1, framebuffer_screensize);
-        memset(bf_out_data_upscaled, 0, framebuffer_screensize);
+        // memset(bf_out_data_upscaled, 0, framebuffer_screensize);
         // resize ---------------
         stbir_resize_uint8(bf_out_data, frame_width_px1, frame_height_px1, 0,
                            bf_out_data_upscaled, scale_to_width_upscale, scale_to_height_upscale, (int)var_framebuffer_fix_info.line_length, 4);
