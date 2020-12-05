@@ -1083,6 +1083,7 @@ int count_video_play_threads_int;
 uint8_t *yuv_frame_for_play = NULL;
 size_t yuv_frame_for_play_size = 0;
 sem_t video_play_lock;
+sem_t omx_lock;
 uint64_t incoming_vframe_delta_in_ms = 0;
 uint64_t incoming_vframe_delta_in_ms_002 = 0;
 
@@ -2667,9 +2668,11 @@ void on_end_call()
     if (omx_initialized == 1)
     {
         usleep_usec(2000);
+        sem_wait(&omx_lock);
         omx_display_disable(&omx);
         usleep_usec(10000);
         omx_deinit(&omx);
+        sem_post(&omx_lock);
         usleep_usec(2000);
         omx_initialized = 0;
     }
@@ -9685,7 +9688,6 @@ static void *video_play(void *dummy)
     memcpy(v, video__v, v_layer_size);
     // -------------
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
-    timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_007, "video_frame_play:tm_01_007:", 1);
 
     if (timspan_in_ms > 0)
@@ -9714,18 +9716,22 @@ static void *video_play(void *dummy)
         if ((omx_w != 0) && (omx_h != 0))
         {
             usleep_usec(10000);
+            sem_wait(&omx_lock);
             omx_display_disable(&omx);
             usleep_usec(10000);
             omx_deinit(&omx);
             usleep_usec(10000);
             omx_init(&omx);
+            sem_post(&omx_lock);
             usleep_usec(10000);
             omx_initialized = 1;
             // force to check rotation
             global_display_orientation_angle_prev = 99;
         }
 
+        sem_wait(&omx_lock);
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
+        sem_post(&omx_lock);
 
         if (err)
         {
@@ -9768,7 +9774,18 @@ static void *video_play(void *dummy)
     struct timeval tm_01_001;
     __utimer_start(&tm_01_001);
 #endif
-    omx_get_display_input_buffer(&omx, &buf, &len);
+    sem_wait(&omx_lock);
+    int omx_buf_idx = omx_get_display_input_buffer(&omx, &buf, &len);
+    sem_post(&omx_lock);
+
+    if (omx_buf_idx == -1)
+    {
+        dbg(9, "omx_get_display_input_buffer:ERROR\n");
+        dec_video_t_counter();
+        pthread_exit(0);
+    }
+
+
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_01_001, "video_frame_play:tm_01_001:", 1);
@@ -9785,6 +9802,7 @@ static void *video_play(void *dummy)
     __utimer_start(&tm_01_002);
 #endif
 
+
     if (yuf_data_buf_len > len)
     {
         dbg(9, "OMX: Error buffer too small !!!!!!\n");
@@ -9792,6 +9810,11 @@ static void *video_play(void *dummy)
         omx_w = frame_width_px + 3;
         omx_h = frame_height_px + 3;
         // to force omx reinit on next iteration ----------------
+
+        sem_wait(&omx_lock);
+        omx_get_done_input_buffer(&omx, omx_buf_idx);
+        sem_post(&omx_lock);
+
         dec_video_t_counter();
         pthread_exit(0);
     }
@@ -9824,6 +9847,7 @@ static void *video_play(void *dummy)
     }
 
 #endif
+
 
     memcpy(buf, y, y_layer_size);
     memcpy(buf + y_layer_size, u, u_layer_size);
@@ -9883,6 +9907,7 @@ static void *video_play(void *dummy)
         update_omx_osd_counter = 0;
     }
 
+
     update_omx_osd_counter++;
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     struct timeval tm_01_004;
@@ -9931,7 +9956,28 @@ static void *video_play(void *dummy)
     // -- de-jitter video frame a bit -----------------------------
     if (pts != 0)
     {
-        const int sync_ms_max_range = 14; // 7;
+
+#if 1
+        // ------ thread priority ------
+        struct sched_param param;
+        int policy;
+        int s;
+        // display_thread_sched_attr("Scheduler attributes of [1]: utox_video_thread");
+        get_policy('f', &policy);
+        param.sched_priority = strtol("99", NULL, 0);
+        s = pthread_setschedparam(pthread_self(), policy, &param);
+
+        if (s != 0)
+        {
+            // dbg(9, "Scheduler attributes of [2]: error setting scheduling attributes of utox_video_thread");
+        }
+
+        // display_thread_sched_attr("Scheduler attributes of [3]: utox_video_thread");
+        // ------ thread priority ------
+#endif
+
+
+        const int sync_ms_max_range = 20; // 14; // 7;
 
         uint64_t ts1 = current_time_monotonic_default();
         global_last_video_ts_no_correction = ts1;
@@ -9942,7 +9988,7 @@ static void *video_play(void *dummy)
         int local_delta_correction = (pts_delta - local_delta);
         int local_delta_correction_abs = abs(local_delta - pts_delta);
 
-#if 0
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
         dbg(9, "incoming_video_frame:pts=%d ts=%d pts_d=%d local_d=%d corr=%d corr_abs=%d\n",
                 (int)pts,
                 (int)ts1,
@@ -9962,7 +10008,7 @@ static void *video_play(void *dummy)
 
         if (sync_ms < 0)
         {
-            sync_ms = sync_ms_max_range;
+            sync_ms = 0;
             local_delta_correction = 0;
         }
 
@@ -9977,19 +10023,24 @@ static void *video_play(void *dummy)
         // --> push frame to actual display via OMX --------------
         uint64_t ll = global_last_video_ts_omx;
         global_last_video_ts_omx = current_time_monotonic_default();
-        omx_display_flush_buffer(&omx, yuf_data_buf_len, sync_ms);
+        sem_wait(&omx_lock);
+        omx_display_flush_buffer(&omx, yuf_data_buf_len, sync_ms, omx_buf_idx);
+        sem_post(&omx_lock);
         // --> push frame to actual display via OMX --------------
 
-        // dbg(9, "incoming_video_frame:sync_ms=%d ll=%d\n", sync_ms, (int)(global_last_video_ts_omx - ll));
+#ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
+        dbg(9, "incoming_video_frame:sync_ms=%d ll=%d\n", sync_ms, (int)(global_last_video_ts_omx - ll));
+#endif
     }
     else
     {
         // --> push frame to actual display via OMX --------------
-        omx_display_flush_buffer(&omx, yuf_data_buf_len, 0);
+        sem_wait(&omx_lock);
+        omx_display_flush_buffer(&omx, yuf_data_buf_len, 0, omx_buf_idx);
+        sem_post(&omx_lock);
         // --> push frame to actual display via OMX --------------
     }
     // -- de-jitter video frame a bit -----------------------------
-
 
 
     //
@@ -15507,6 +15558,10 @@ int main(int argc, char *argv[])
     {
     }
 
+    if (sem_init(&omx_lock, 0, 1))
+    {
+        dbg(0, "Error in sem_init for omx_lock\n");
+    }
 
     if (sem_init(&video_play_lock, 0, 1))
     {
@@ -16003,6 +16058,7 @@ int main(int argc, char *argv[])
     sem_destroy(&video_conf_copy_sem);
     sem_destroy(&count_video_play_threads);
     sem_destroy(&video_play_lock);
+    sem_destroy(&omx_lock);
 
     pthread_mutex_destroy(&group_audio___mutex);
 

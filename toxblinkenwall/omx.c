@@ -34,6 +34,8 @@ void usleep_usec2(uint64_t usec)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <semaphore.h>
+
 
 /* Avoids a VideoCore header warning about clock_gettime() */
 #include <time.h>
@@ -47,6 +49,10 @@ void usleep_usec2(uint64_t usec)
  * TODO:
  *  * Proper sync OMX events across threads, instead of busy waiting
  */
+
+#define OMX_DISPLAY_BUFFERS_WANT 5
+static int omx_display_buffers_unused[OMX_DISPLAY_BUFFERS_WANT];
+sem_t omx_internal_lock;
 
 static const int VIDEO_RENDER_PORT = 90;
 static void *global_st_buffers = 0;
@@ -140,7 +146,24 @@ static OMX_ERRORTYPE EmptyBufferDone(OMX_HANDLETYPE hComponent,
     /* TODO: Wrap every call that can generate an event,
      * and panic if an unexpected event arrives */
 
-    // dbg(9, "omx.EmptyBufferDone:called:ptr=%p pnum=%d\n", (void *)pBuffer, (int)((void *)pBuffer - (void *)global_st_buffers));
+    sem_wait(&omx_internal_lock);
+
+    if (global_st_buffers)
+    {
+        // dbg(9, "omx.EmptyBufferDone:called:ptr=%p pnum=%d\n", (void *)pBuffer, (int)((void *)pBuffer - (void *)global_st_buffers));
+        int *st_buffers = (int *)global_st_buffers;
+
+        for (int i=0;i<OMX_DISPLAY_BUFFERS_WANT;i++)
+        {
+            if ((void *)st_buffers[i] == (void *)pBuffer)
+            {
+                omx_display_buffers_unused[i] = 1;
+                // dbg(9, "omx:EmptyBufferDone:num=%d\n", i);
+            }
+        }
+    }
+
+    sem_post(&omx_internal_lock);
 
     return 0;
 }
@@ -152,6 +175,7 @@ static OMX_ERRORTYPE FillBufferDone(OMX_HANDLETYPE hComponent,
     (void) hComponent;
     (void) pAppData;
     (void) pBuffer;
+
     // dbg(9, "FillBufferDone\n");
     return 0;
 }
@@ -199,13 +223,14 @@ static void free_omx_buffers(struct omx_state *st)
 
         usleep_usec2(1000);
         dbg(9, "OMX_FreeBuffer *DONE*\n");
+        global_st_buffers = NULL;
         free(st->buffers);
         st->buffers = NULL;
         st->num_buffers = 0;
         st->current_buffer = 0;
     }
 
-    global_st_buffers = 0;
+    global_st_buffers = NULL;
 }
 
 static void block_until_flushed(void)
@@ -240,6 +265,8 @@ int omx_init(struct omx_state *st)
     }
     else
     {
+        if (sem_init(&omx_internal_lock, 0, 1))
+
         dbg(9, "omx: created video_render component\n");
         return 0;
     }
@@ -290,6 +317,9 @@ void omx_deinit(struct omx_state *st)
     dbg(9, "omx_deinit:005\n");
     OMX_FreeHandle(st->video_render);
     usleep_usec2(20000);
+
+    sem_destroy(&omx_internal_lock);
+
     dbg(9, "omx_deinit:006\n");
     OMX_Deinit();
     dbg(9, "omx_deinit:099\n");
@@ -587,7 +617,14 @@ int omx_display_enable(struct omx_state *st,
         portdef.format.video.nSliceHeight);
     //
 
-    int want_buffers = 4;
+    int want_buffers = OMX_DISPLAY_BUFFERS_WANT;
+
+    sem_wait(&omx_internal_lock);
+    for (int i=0;i<OMX_DISPLAY_BUFFERS_WANT;i++)
+    {
+        omx_display_buffers_unused[i] = 1;
+    }
+    sem_post(&omx_internal_lock);
 
     portdef.nBufferCountActual = want_buffers;
     if ((int)portdef.nBufferCountActual < (int)portdef.nBufferCountMin)
@@ -685,11 +722,22 @@ exit:
     return err;
 }
 
+int omx_get_done_input_buffer(struct omx_state *st, int buf_idx)
+{
+    if (!st)
+    {
+        return 1;
+    }
+
+    sem_wait(&omx_internal_lock);
+    omx_display_buffers_unused[buf_idx] = 1;
+    sem_post(&omx_internal_lock);
+    // dbg(9, "omx_get_done_input_buffer:num=%d\n", buf_idx);
+}
+
 int omx_get_display_input_buffer(struct omx_state *st,
                                  void **pbuf, uint32_t *plen)
 {
-    int buf_idx;
-
     if (!st)
     {
         return EINVAL;
@@ -700,16 +748,31 @@ int omx_get_display_input_buffer(struct omx_state *st,
         return EINVAL;
     }
 
-    st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
-    buf_idx = st->current_buffer;
-    *pbuf = st->buffers[buf_idx]->pBuffer;
-    *plen = st->buffers[buf_idx]->nAllocLen;
-    st->buffers[buf_idx]->nFilledLen = *plen;
-    st->buffers[buf_idx]->nOffset = 0;
+    sem_wait(&omx_internal_lock);
 
-    // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
+    for (int i=0;i<OMX_DISPLAY_BUFFERS_WANT;i++)
+    {
+        if (omx_display_buffers_unused[i] == 1)
+        {
+            omx_display_buffers_unused[i] = 0;
 
-    return 0;
+            // st->current_buffer = (st->current_buffer + 1) % st->num_buffers;
+            *pbuf = st->buffers[i]->pBuffer;
+            *plen = st->buffers[i]->nAllocLen;
+            st->buffers[i]->nFilledLen = *plen;
+            st->buffers[i]->nOffset = 0;
+
+            // dbg(9, "omx_get_display_input_buffer:num=%d\n", i);
+
+            // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
+            sem_post(&omx_internal_lock);
+
+            return i;
+        }
+    }
+
+    sem_post(&omx_internal_lock);
+    return -1;
 }
 
 static OMX_TICKS to_omx_ticks(int64_t value)
@@ -720,7 +783,7 @@ static OMX_TICKS to_omx_ticks(int64_t value)
     return s;
 }
 
-int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t ms_offset)
+int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t ms_offset, int buf_idx)
 {
     if (!st)
     {
@@ -732,7 +795,8 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t m
         return 1;
     }
 
-    int buf_idx = st->current_buffer;
+    // dbg(9, "omx_display_flush_buffer:num=%d\n", buf_idx);
+
     st->buffers[buf_idx]->nFlags = OMX_BUFFERFLAG_STARTTIME; // OMX_BUFFERFLAG_ENDOFFRAME; // OMX_BUFFERFLAG_STARTTIME;
     st->buffers[buf_idx]->nOffset = 0;
     st->buffers[buf_idx]->nFilledLen = data_len;
@@ -740,7 +804,10 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t m
 
     if (OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx]) != OMX_ErrorNone)
     {
-        dbg(9, "OMX_EmptyThisBuffer error\n");
+        dbg(9, "OMX_EmptyThisBuffer error:num=%d\n", buf_idx);
+        sem_wait(&omx_internal_lock);
+        omx_display_buffers_unused[buf_idx] = 1;
+        sem_post(&omx_internal_lock);
     }
     else
     {
