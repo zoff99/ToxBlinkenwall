@@ -256,9 +256,6 @@ static const char global_version_string[] = "0.99.86";
 
 #include "rb.h"
 
-
-
-
 // --------- video recording: choose only 1 of those! ---------
 #define USE_V4L2_H264 1         // use HW encoding with H264 directly if available
 // #define USE_TC_ENCODING 1    // [* DEFAULT]
@@ -1318,14 +1315,16 @@ void dbg(int level, const char *fmt, ...)
 
     level_and_format[(strlen(fmt) + 2)] = '\0'; // '\0' or '\n'
     level_and_format[(strlen(fmt) + 3)] = '\0';
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
     time_t t3 = time(NULL);
     struct tm tm3 = *localtime(&t3);
-    char *level_and_format_2 = calloc(1, strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 1);
+    char *level_and_format_2 = calloc(1, strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 7 + 1);
     level_and_format_2[0] = '\0';
-    snprintf(level_and_format_2, (strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 1),
-             "%04d-%02d-%02d %02d:%02d:%02d:%s",
+    snprintf(level_and_format_2, (strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 7 + 1),
+             "%04d-%02d-%02d %02d:%02d:%02d.%06ld:%s",
              tm3.tm_year + 1900, tm3.tm_mon + 1, tm3.tm_mday,
-             tm3.tm_hour, tm3.tm_min, tm3.tm_sec, level_and_format);
+             tm3.tm_hour, tm3.tm_min, tm3.tm_sec, tv.tv_usec, level_and_format);
 
     if (level <= CURRENT_LOG_LEVEL)
     {
@@ -3094,6 +3093,13 @@ void stop_play_ringtone()
 #endif
 }
 
+bool tox_file_control_wrapper(Tox *tox, uint32_t friend_number, uint32_t file_number, Tox_File_Control control,
+                      Tox_Err_File_Control *error)
+{
+    // dbg(9, "tox_file_control_wrapper:fn=%d file_number=%d, control=%d\n", friend_number, file_number, (int)control);
+    return tox_file_control(tox, friend_number, file_number, control, error);
+}
+
 Tox *create_tox()
 {
     Tox *tox;
@@ -4539,7 +4545,9 @@ void close_file_transfer(Tox *m, struct FileTransfer *ft, int CTRL)
 
     if (CTRL >= 0)
     {
-        tox_file_control(m, ft->friendnum, ft->filenum, (TOX_FILE_CONTROL) CTRL, NULL);
+        dbg(9, "close_file_transfer:002a\n");
+        tox_file_control_wrapper(m, ft->friendnum, ft->filenum, (TOX_FILE_CONTROL) CTRL, NULL);
+        dbg(9, "close_file_transfer:002b\n");
     }
 
     memset(ft, 0, sizeof(struct FileTransfer));
@@ -6046,7 +6054,7 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
     /* We don't care about receiving avatars */
     if (kind != TOX_FILE_KIND_DATA)
     {
-        tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+        tox_file_control_wrapper(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
         dbg(9, "on_file_recv:002:cancel incoming avatar\n");
         return;
     }
@@ -6055,7 +6063,7 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
         if (incoming_filetransfers > 0)
         {
             // only ever 1 incoming filetransfer!
-            tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+            tox_file_control_wrapper(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
             dbg(9, "on_file_recv:003:active incoming_filetransfers=%d\n", (int)incoming_filetransfers);
         }
         else
@@ -6067,11 +6075,11 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
                 unlink(cmd__image_filename_full_path); // just in case there are some old leftover bytes there
                 incoming_filetransfers_friendnumber = friendnumber;
                 incoming_filetransfers_filenumber = filenumber;
-                tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_RESUME, NULL);
+                tox_file_control_wrapper(m, friendnumber, filenumber, TOX_FILE_CONTROL_RESUME, NULL);
             }
             else
             {
-                tox_file_control(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
+                tox_file_control_wrapper(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
                 incoming_filetransfers--;
 
                 if (incoming_filetransfers < 0)
@@ -6197,6 +6205,7 @@ void on_file_chunk_request(Tox *tox, uint32_t friendnumber, uint32_t filenumber,
 
 void on_avatar_file_control(Tox *m, struct FileTransfer *ft, TOX_FILE_CONTROL control)
 {
+    dbg(9, "on_avatar_file_control:control=%d type=%d filenum=%d fn=%d\n", (int)control, ft->file_type, ft->filenum, ft->friendnum);
     switch (control)
     {
         case TOX_FILE_CONTROL_RESUME:
@@ -6216,6 +6225,7 @@ void on_avatar_file_control(Tox *m, struct FileTransfer *ft, TOX_FILE_CONTROL co
             break;
 
         case TOX_FILE_CONTROL_CANCEL:
+            dbg(9, "on_avatar_file_control:close_file_transfer:control=%d type=%d filenum=%d fn=%d\n", (int)control, ft->file_type, ft->filenum, ft->friendnum);
             close_file_transfer(m, ft, -1);
             break;
     }
@@ -6321,20 +6331,24 @@ void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position,
 
     if (length == 0)
     {
+        // dbg(0, "on_avatar_chunk_request:length == 0\n");
         close_file_transfer(m, ft, -1);
         return;
     }
 
     if (ft->file == NULL)
     {
+        // dbg(0, "on_avatar_chunk_request:ft->file == NULL\n");
         close_file_transfer(m, ft, TOX_FILE_CONTROL_CANCEL);
         return;
     }
 
     if (ft->position != position)
     {
+        // dbg(0, "on_avatar_chunk_request:ft->position != position\n");
         if (fseek(ft->file, position, SEEK_SET) == -1)
         {
+            dbg(0, "on_avatar_chunk_request:fseek == -1\n");
             close_file_transfer(m, ft, TOX_FILE_CONTROL_CANCEL);
             return;
         }
@@ -6343,21 +6357,23 @@ void on_avatar_chunk_request(Tox *m, struct FileTransfer *ft, uint64_t position,
     }
 
     uint8_t *send_data = calloc(1, sizeof(uint8_t) * length);
-    size_t send_length = fread(send_data, 1, sizeof(send_data), ft->file);
+    size_t send_length = fread(send_data, 1, sizeof(uint8_t) * length, ft->file);
 
     if (send_length != length)
     {
+        dbg(0, "on_avatar_chunk_request:send_length != length %d : %d\n", (int)send_length, (int)length);
         close_file_transfer(m, ft, TOX_FILE_CONTROL_CANCEL);
         free(send_data);
         return;
     }
 
     TOX_ERR_FILE_SEND_CHUNK err;
+    // dbg(0, "on_avatar_chunk_request:tox_file_send_chunk()\n");
     tox_file_send_chunk(m, ft->friendnum, ft->filenum, position, send_data, send_length, &err);
 
     if (err != TOX_ERR_FILE_SEND_CHUNK_OK)
     {
-        // dbg(0, "tox_file_send_chunk failed in avatar callback (error %d)\n", err);
+        dbg(0, "tox_file_send_chunk failed in avatar callback (error %d)\n", err);
     }
 
     ft->position += send_length;
