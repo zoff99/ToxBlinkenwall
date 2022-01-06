@@ -150,6 +150,8 @@ network={
         rm -f "$mount_dir""/""wlan_pass.txt"
         rm -f "$mount_dir""/""wlan_public.txt"
 
+        iw reg set "$wpa_net_country"
+
         rfkill unblock wifi
         for filename in /var/lib/systemd/rfkill/*:wlan ; do
             echo 0 > $filename
