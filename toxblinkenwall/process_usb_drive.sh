@@ -150,6 +150,11 @@ network={
         rm -f "$mount_dir""/""wlan_pass.txt"
         rm -f "$mount_dir""/""wlan_public.txt"
 
+        rfkill unblock wifi
+        for filename in /var/lib/systemd/rfkill/*:wlan ; do
+            echo 0 > $filename
+        done
+
         wpa_action wlan0 reload
         systemctl restart ifup@wlan0.service
 
