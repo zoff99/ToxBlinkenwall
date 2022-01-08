@@ -6657,10 +6657,7 @@ int64_t friend_number_for_entry(Tox *tox, uint8_t *tox_id_bin)
 
     for (i = 0; i < size; ++i)
     {
-        if (tox_friend_get_public_key(tox, list[i], (uint8_t *) friend_key, NULL) == 0)
-        {
-        }
-        else
+        if (tox_friend_get_public_key(tox, list[i], (uint8_t *) friend_key, NULL) == 1)
         {
             if (memcmp(tox_id_bin, friend_key, TOX_PUBLIC_KEY_SIZE) == 0)
             {
