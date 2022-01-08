@@ -212,8 +212,8 @@ echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 87
-static const char global_version_string[] = "0.99.87";
+#define VERSION_PATCH 90
+static const char global_version_string[] = "0.99.90";
 
 #define TBW_GIT_COMMIT_HASH "00000006"
 // ----------- version -----------
