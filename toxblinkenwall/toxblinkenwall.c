@@ -887,6 +887,7 @@ float audio_vu(const int16_t *pcm_data, uint32_t sample_count);
 void set_restart_flag();
 void reload_name_from_file(Tox *tox);
 void read_pubkey_from_file(uint8_t **toxid_str, int entry_num);
+void read_toxid_from_file(uint8_t **toxid_str, int entry_num);
 bool file_exists(const char *path);
 bool toxav_call_wrapper(ToxAV *av, uint32_t friend_number, uint32_t audio_bit_rate, uint32_t video_bit_rate,
                         TOXAV_ERR_CALL *error, int with_locking);
@@ -1219,6 +1220,8 @@ uint32_t global_playback_volume_in_percent = 50;
 uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 
+sem_t add_friendlist_lock;
+
 // -------- de-jitter ---------------------------
 static uint64_t global_last_video_ts = 0;
 static uint64_t global_last_video_ts_omx = 0;
@@ -1518,6 +1521,23 @@ uint8_t *hex_string_to_bin(const char *hex_string)
 uint8_t *hex_string_to_bin_pubkey(const char *hex_string)
 {
     size_t len = TOX_PUBLIC_KEY_SIZE;
+    uint8_t *val = calloc(1, len);
+
+    // dbg(9, "hex_string_to_bin:len=%d\n", (int)len);
+
+    for (size_t i = 0; i != len; ++i)
+    {
+        // dbg(9, "hex_string_to_bin:%d %d\n", hex_string[2*i], hex_string[2*i+1]);
+        val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
+        // dbg(9, "hex_string_to_bin:i=%d val[i]=%d\n", i, (int)val[i]);
+    }
+
+    return val;
+}
+
+uint8_t *hex_string_to_bin_toxid(const char *hex_string)
+{
+    size_t len = TOX_ADDRESS_SIZE;
     uint8_t *val = calloc(1, len);
 
     // dbg(9, "hex_string_to_bin:len=%d\n", (int)len);
@@ -3978,6 +3998,7 @@ void show_tox_id_qrcode(Tox *tox)
                 if (entry_bin_toxid != NULL)
                 {
                     int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+                    free(entry_bin_toxid);
 
                     if (is_already_friendnum > -1)
                     {
@@ -4405,82 +4426,95 @@ void friendlist_onConnectionChange(Tox *m, uint32_t num, TOX_CONNECTION connecti
 
 void friendlist_onFriendAdded(Tox *m, uint32_t num, bool sort)
 {
-    // dbg(9, "friendlist_onFriendAdded:001\n");
-    if (Friends.max_idx == 0)
+    uint8_t *friend_pubkey_bin = calloc(1, TOX_PUBLIC_KEY_SIZE);
+    if (!friend_pubkey_bin)
     {
-        // dbg(9, "friendlist_onFriendAdded:001.a malloc 1 friend struct, max_id=%d, num=%d\n", (int)Friends.max_idx, (int)num);
-        Friends.list = calloc(1, sizeof(ToxicFriend));
-    }
-    else
-    {
-        // TODO: zzzzz: protect this ----------------
-        // dbg(9, "friendlist_onFriendAdded:001.b realloc %d friend struct, max_id=%d, num=%d\n", (int)(Friends.max_idx + 1), (int)Friends.max_idx, (int)num);
-        Friends.list = realloc(Friends.list, ((Friends.max_idx + 1) * sizeof(ToxicFriend)));
-        // TODO: zzzzz: protect this ----------------
+        dbg(1, "friendlist_onFriendAdded: could not allocate memory\n");
+        return;
     }
 
-    // dbg(9, "friendlist_onFriendAdded:001.c set friend to all 0 values\n");
-    memset(&Friends.list[Friends.max_idx], 0, sizeof(ToxicFriend)); // fill friend with "0" bytes
-    // dbg(2, "friendlist_onFriendAdded:003:%d\n", (int)Friends.max_idx);
-    Friends.list[Friends.max_idx].connection_status = TOX_CONNECTION_NONE;
-    Friends.list[Friends.max_idx].status = TOX_USER_STATUS_NONE;
-    Friends.list[Friends.max_idx].waiting_for_answer = 0;
-    Friends.list[Friends.max_idx].auto_resend_start_time = 0;
-    Friends.list[Friends.max_idx].have_resumed_fts = 0;
+    // -- tox api calls --
     TOX_ERR_FRIEND_GET_PUBLIC_KEY pkerr;
-    tox_friend_get_public_key(m, num, (uint8_t *) Friends.list[Friends.max_idx].pub_key, &pkerr);
+    tox_friend_get_public_key(m, num, friend_pubkey_bin, &pkerr);
 
-    if (pkerr != TOX_ERR_FRIEND_GET_PUBLIC_KEY_OK)
-    {
-        dbg(0, "tox_friend_get_public_key failed (error %d)\n", pkerr);
-    }
-
-    Friends.list[Friends.max_idx].num = num;
-    Friends.list[Friends.max_idx].active = true;
-
-    bin_id_to_string(Friends.list[Friends.max_idx].pub_key, (size_t) TOX_ADDRESS_SIZE,
-                     Friends.list[Friends.max_idx].pubkey_string, (size_t)(TOX_ADDRESS_SIZE * 2 + 1));
-    // dbg(2, "friend pubkey=%s\n", Friends.list[Friends.max_idx].pubkey_string);
     TOX_ERR_FRIEND_GET_LAST_ONLINE loerr;
     time_t t = tox_friend_get_last_online(m, num, &loerr);
-
     if (loerr != TOX_ERR_FRIEND_GET_LAST_ONLINE_OK)
     {
         t = 0;
     }
 
     TOX_ERR_FRIEND_QUERY error3;
-    Friends.list[Friends.max_idx].namelength =
-        tox_friend_get_name_size(m, num, &error3);
-
+    TOX_ERR_FRIEND_QUERY error4;
+    bool res_get_name = false;
+    uint8_t *f_name = NULL;
+    size_t name_len = tox_friend_get_name_size(m, num, &error3);
     if (error3 == 0)
     {
-        uint8_t *f_name = calloc(1, Friends.list[Friends.max_idx].namelength);
-
+        f_name = calloc(1, name_len);
         if (f_name)
         {
-            bool res = tox_friend_get_name(m, num, f_name, &error3);
-
-            if (res == true)
-            {
-                CLEAR(Friends.list[Friends.max_idx].name);
-                memcpy(Friends.list[Friends.max_idx].name,
-                       f_name,
-                       Friends.list[Friends.max_idx].namelength);
-            }
-            else
-            {
-                CLEAR(Friends.list[Friends.max_idx].name);
-            }
-
-            free(f_name);
+            res_get_name = tox_friend_get_name(m, num, f_name, &error4);
         }
+    }
+    // -- tox api calls --
 
-        friend_names_were_updated = 1;
+    // --------- LOCK ---------
+
+    sem_wait(&add_friendlist_lock);
+
+    if (Friends.max_idx == 0)
+    {
+        Friends.list = calloc(1, sizeof(ToxicFriend));
+    }
+    else
+    {
+        Friends.list = realloc(Friends.list, ((Friends.max_idx + 1) * sizeof(ToxicFriend)));
     }
 
+    memset(&Friends.list[Friends.max_idx], 0, sizeof(ToxicFriend)); // fill friend with "0" bytes
+    Friends.list[Friends.max_idx].connection_status = TOX_CONNECTION_NONE;
+    Friends.list[Friends.max_idx].status = TOX_USER_STATUS_NONE;
+    Friends.list[Friends.max_idx].waiting_for_answer = 0;
+    Friends.list[Friends.max_idx].auto_resend_start_time = 0;
+    Friends.list[Friends.max_idx].have_resumed_fts = 0;
+
+    memcpy(Friends.list[Friends.max_idx].pub_key, friend_pubkey_bin, TOX_PUBLIC_KEY_SIZE);
+    free(friend_pubkey_bin);
+
+    Friends.list[Friends.max_idx].num = num;
+    Friends.list[Friends.max_idx].active = true;
+
+    bin_id_to_string(Friends.list[Friends.max_idx].pub_key, (size_t) TOX_ADDRESS_SIZE,
+                     Friends.list[Friends.max_idx].pubkey_string, (size_t)(TOX_ADDRESS_SIZE * 2 + 1));
+
+    if (f_name)
+    {
+        if ((res_get_name == true) && (name_len > 0))
+        {
+            Friends.list[Friends.max_idx].namelength = name_len;
+            CLEAR(Friends.list[Friends.max_idx].name);
+            memcpy(Friends.list[Friends.max_idx].name,
+                   f_name,
+                   Friends.list[Friends.max_idx].namelength);
+        }
+        else
+        {
+            Friends.list[Friends.max_idx].namelength = 0;
+            CLEAR(Friends.list[Friends.max_idx].name);
+        }
+
+        free(f_name);
+    }
+
+    friend_names_were_updated = 1;
     update_friend_last_online(num, t);
     Friends.max_idx++;
+
+    sem_post(&add_friendlist_lock);
+
+    // --------- LOCK ---------
+
     update_savedata_file(m);
 
     if (global_is_qrcode_showing_on_screen == 1)
@@ -5132,45 +5166,60 @@ void invite_toxid_as_friend(Tox *tox, uint8_t *tox_id_bin)
         return;
     }
 
-    int64_t fnum = friend_number_for_entry(tox, tox_id_bin);
+    dbg(9, "ToxID not on friendlist, inviting ...\n");
+    const char *message_str = "invite ...";
+    TOX_ERR_FRIEND_ADD error;
+    uint32_t friendnum = tox_friend_add(tox, (uint8_t *) tox_id_bin,
+                                        (uint8_t *) message_str,
+                                        (size_t) strlen(message_str),
+                                        &error);
 
-    if (fnum == -1)
+    if (error != 0)
     {
-        dbg(9, "ToxID not on friendlist, inviting ...\n");
-        const char *message_str = "invite ...";
-        TOX_ERR_FRIEND_ADD error;
-        uint32_t friendnum = tox_friend_add(tox, (uint8_t *) tox_id_bin,
-                                            (uint8_t *) message_str,
-                                            (size_t) strlen(message_str),
-                                            &error);
-
-        // -------- we can activate this if we run into problems --------
-        // -------- we can activate this if we run into problems --------
-        // just in case, add the friend no matter what
-        // TOX_ERR_FRIEND_ADD dummy_error;
-        // uint32_t dummy = tox_friend_add_norequest(tox, (uint8_t *) tox_id_bin, &dummy_error);
-        // -------- we can activate this if we run into problems --------
-        // -------- we can activate this if we run into problems --------
-
-        if (error != 0)
+        if (error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
         {
-            if (error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
-            {
-                dbg(9, "add friend:ERROR:TOX_ERR_FRIEND_ADD_ALREADY_SENT\n");
-            }
-            else
-            {
-                dbg(9, "add friend:ERROR:%d\n", (int) error);
-            }
+            dbg(9, "add friend:ERROR:TOX_ERR_FRIEND_ADD_ALREADY_SENT\n");
+        }
+        else if (error == TOX_ERR_FRIEND_ADD_BAD_CHECKSUM)
+        {
+            dbg(9, "add friend:ERROR:TOX_ERR_FRIEND_ADD_BAD_CHECKSUM\n");
         }
         else
         {
-            dbg(9, "friend request sent.\n");
+            dbg(9, "add friend:ERROR:%d\n", (int) error);
         }
     }
     else
     {
-        dbg(9, "ToxID already a friend\n");
+        dbg(9, "friend request sent.\n");
+        friendlist_onFriendAdded(tox, friendnum, 0);
+    }
+
+    if (error != 0)
+    {
+        TOX_ERR_FRIEND_ADD dummy_error;
+        uint32_t dummy = tox_friend_add_norequest(tox, (uint8_t *) tox_id_bin, &dummy_error);
+
+        if (dummy_error != 0)
+        {
+            if (dummy_error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
+            {
+                dbg(9, "friend_add_norequest:ERROR:TOX_ERR_FRIEND_ADD_ALREADY_SENT\n");
+            }
+            else if (dummy_error == TOX_ERR_FRIEND_ADD_BAD_CHECKSUM)
+            {
+                dbg(9, "friend_add_norequest:ERROR:TOX_ERR_FRIEND_ADD_BAD_CHECKSUM\n");
+            }
+            else
+            {
+                dbg(9, "friend_add_norequest:ERROR:%d\n", (int) dummy_error);
+            }
+        }
+        else
+        {
+            dbg(9, "friend_add_norequest: OK.\n");
+            friendlist_onFriendAdded(tox, dummy, 0);
+        }
     }
 
     update_savedata_file(tox);
@@ -5220,7 +5269,41 @@ void create_entry_file_if_not_exists(int entry_num)
     }
 }
 
-void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
+void read_pubkey_from_file(uint8_t **toxpubkey_str, int entry_num)
+{
+    create_entry_file_if_not_exists(entry_num);
+    *toxpubkey_str = NULL;
+    char entry_toxid_filename[300];
+    CLEAR(entry_toxid_filename);
+    snprintf(entry_toxid_filename, 299, "book_entry_%d.txt", entry_num);
+    FILE *fp = fopen(entry_toxid_filename, "r");
+
+    if (fp == NULL)
+    {
+        dbg(1, "Warning: failed to read %s file\n", entry_toxid_filename);
+        return;
+    }
+
+    char id[256];
+    int len;
+
+    while (fgets(id, sizeof(id), fp))
+    {
+        len = strlen(id);
+
+        if ((size_t)len < (size_t)(TOX_PUBLIC_KEY_SIZE * 2))
+        {
+            continue;
+        }
+
+        *toxpubkey_str = hex_string_to_bin_pubkey(id);
+        break;
+    }
+
+    fclose(fp);
+}
+
+void read_toxid_from_file(uint8_t **toxid_str, int entry_num)
 {
     create_entry_file_if_not_exists(entry_num);
     *toxid_str = NULL;
@@ -5247,7 +5330,7 @@ void read_pubkey_from_file(uint8_t **toxid_str, int entry_num)
             continue;
         }
 
-        *toxid_str = hex_string_to_bin_pubkey(id);
+        *toxid_str = hex_string_to_bin_toxid(id);
         break;
     }
 
@@ -5264,7 +5347,7 @@ void delete_entry_file(int entry_num)
     }
 }
 
-void write_pubkey_to_entry_file(uint8_t *toxid_bin, int entry_num)
+void write_toxid_to_entry_file(uint8_t *toxid_bin, int entry_num)
 {
     if (toxid_bin == NULL)
     {
@@ -5631,7 +5714,7 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
 
                         if (entry_bin_toxid)
                         {
-                            write_pubkey_to_entry_file(entry_bin_toxid, entry_num);
+                            write_toxid_to_entry_file(entry_bin_toxid, entry_num);
                             int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
 
                             if (is_already_friendnum == -1)
@@ -13479,6 +13562,7 @@ void write_phonebook_names_to_files(Tox *tox)
         if (entry_bin_toxid != NULL)
         {
             int64_t is_already_friendnum = friend_number_for_entry(tox, entry_bin_toxid);
+            free(entry_bin_toxid);
 
             if (is_already_friendnum > -1)
             {
@@ -13625,7 +13709,7 @@ void *thread_phonebook_invite(void *data)
         for (j = 1; j < 10; j++)
         {
             uint8_t *entry_bin_toxid = NULL;
-            read_pubkey_from_file(&entry_bin_toxid, j);
+            read_toxid_from_file(&entry_bin_toxid, j);
 
             if (entry_bin_toxid != NULL)
             {
@@ -13635,6 +13719,7 @@ void *thread_phonebook_invite(void *data)
                 {
                     invite_toxid_as_friend(tox, entry_bin_toxid);
                 }
+                free(entry_bin_toxid);
             }
 
             yieldcpu(30);
@@ -15447,6 +15532,11 @@ int main(int argc, char *argv[])
 
 #endif
 
+    if (sem_init(&add_friendlist_lock, 0, 1))
+    {
+        dbg(0, "Error in sem_init for add_friendlist_lock\n");
+    }
+
     CLEAR(status_line_1_str);
     CLEAR(status_line_2_str);
     global_video_in_fps = 0;
@@ -16091,6 +16181,8 @@ int main(int argc, char *argv[])
     do_read_ext_keys = 0;
     yieldcpu(10);
 #endif
+
+    sem_destroy(&add_friendlist_lock);
 
 #ifdef HAVE_X11_AS_FB
     /*restore the old settings*/
