@@ -1,7 +1,7 @@
 /**
  *
  * ToxBlinkenwall
- * (C)Zoff <zoff@zoff.cc> in 2017 - 2020
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2022
  *
  * https://github.com/zoff99/ToxBlinkenwall
  *
@@ -9,7 +9,7 @@
  *
  */
 /*
- * Copyright © 2017 - 2021 Zoff <zoff@zoff.cc>
+ * Copyright © 2017 - 2022 Zoff <zoff@zoff.cc>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
