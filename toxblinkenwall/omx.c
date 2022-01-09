@@ -223,11 +223,11 @@ static void free_omx_buffers(struct omx_state *st)
 
         usleep_usec2(1000);
         dbg(9, "OMX_FreeBuffer *DONE*\n");
+        st->num_buffers = 0;
+        st->current_buffer = 0;
         global_st_buffers = NULL;
         free(st->buffers);
         st->buffers = NULL;
-        st->num_buffers = 0;
-        st->current_buffer = 0;
     }
 
     global_st_buffers = NULL;
@@ -786,6 +786,21 @@ static OMX_TICKS to_omx_ticks(int64_t value)
 int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t ms_offset, int buf_idx)
 {
     if (!st)
+    {
+        return 1;
+    }
+
+    if (!st->buffers)
+    {
+        return 1;
+    }
+
+    if (st->num_buffers == 0)
+    {
+        return 1;
+    }
+
+    if (buf_idx > (st->num_buffers + 1))
     {
         return 1;
     }
