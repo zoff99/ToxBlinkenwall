@@ -897,6 +897,9 @@ bool conf_calls_is_active_friend(uint32_t friend_number);
 void conf_calls_clear_video_buffer();
 int conf_calls_count_active();
 int64_t conf_calls_get_active_friend_from_count_num(int count_num);
+void toggle_quality(int toggle);
+int need_toggle_quality();
+void toggle_quality();
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -911,6 +914,7 @@ const char *my_toxid_filename_txt = "toxid.txt";
 const char *image_createqr_touchfile = "./toxid_ready.txt";
 const char *tox_name_filename = "toxname.txt";
 const char *bootstrap_custom_filename = "./custom_bootstrap_nodes.dat";
+const char *low_quality_flag_filename = "./low_quality_flag.txt";
 
 struct tbw_bootstrap_nodes
 {
@@ -12110,6 +12114,9 @@ void *thread_video_av(void *data)
     uint32_t update_video_delay_every_ms_counter = 0;
     const uint32_t update_video_delay_every_counter = 800;
 
+    uint32_t set_video_quality_from_save_flag_counter = 0;
+    const uint32_t set_video_quality_from_save_flag_after_counter = 500;
+
     while (toxav_video_thread_stop != 1)
     {
         // dbg(9, "START :ToxAV iterate()\n");
@@ -12130,6 +12137,18 @@ void *thread_video_av(void *data)
                 usleep_usec((global_av_iterate_ms * 1000));
             }
 #ifdef HAVE_TOXAV_OPTION_SET
+
+            if (set_video_quality_from_save_flag_counter == set_video_quality_from_save_flag_after_counter)
+            {
+                set_video_quality_from_save_flag_counter++;
+                dbg(2, "toxav_iterate:need_toggle_quality\n");
+                toggle_quality(need_toggle_quality());
+            }
+            else if (set_video_quality_from_save_flag_counter < set_video_quality_from_save_flag_after_counter)
+            {
+                set_video_quality_from_save_flag_counter++;
+            }
+
             update_video_delay_every_ms_counter++;
 
             if (update_video_delay_every_ms_counter > update_video_delay_every_counter)
@@ -12175,6 +12194,7 @@ void *thread_video_av(void *data)
         }
         else
         {
+            set_video_quality_from_save_flag_counter = 0;
             usleep_usec((toxav_iteration_interval(av) * 1000));
         }
     }
@@ -13496,24 +13516,53 @@ void toggle_osd()
     }
 }
 
-void toggle_quality()
+void save_low_quality_flag_file(int flag)
 {
-    dbg(2, "toggle_quality: 1:global_video_quality=%d\n", (int)global_video_quality);
-    int32_t max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
+    dbg(9, "save_low_quality_flag_file:enter\n");
 
-    if (global_video_quality == 1)
+    if (flag == 0)
     {
-        dbg(2, "toggle_quality: LOW\n");
-        global_video_quality = 0;
-        max_video_bitrate_new = 180;
+        FILE *fp = fopen(low_quality_flag_filename, "wb");
+        if (fp)
+        {
+            dbg(9, "save_low_quality_flag_file:filename=%s\n", low_quality_flag_filename);
+            fprintf(fp, "1");
+            fclose(fp);
+        }
     }
     else
     {
-        dbg(2, "toggle_quality: normal\n");
-        global_video_quality = 1;
-        max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
+        if (file_exists(low_quality_flag_filename))
+        {
+            unlink(low_quality_flag_filename);
+        }
+    }
+}
+
+int load_low_quality_flag_file()
+{
+    if (file_exists(low_quality_flag_filename))
+    {
+        return 0;
     }
 
+    return 1;
+}
+
+int need_toggle_quality()
+{
+    int ret = 0;
+
+    if (load_low_quality_flag_file() != global_video_quality)
+    {
+        return 1;
+    }
+
+    return ret;
+}
+
+void activate_toggle_quality(int32_t max_video_bitrate_new)
+{
     if (mytox_av != NULL)
     {
         if (friend_to_send_video_to > -1)
@@ -13526,6 +13575,40 @@ void toggle_quality()
 #endif
         }
     }
+}
+
+void toggle_quality(int toggle)
+{
+    dbg(2, "toggle_quality: 1:global_video_quality=%d\n", (int)global_video_quality);
+    int32_t max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
+
+    if (toggle == 1)
+    {
+        if (global_video_quality == 1)
+        {
+            dbg(2, "toggle_quality: LOW\n");
+            global_video_quality = 0;
+        }
+        else
+        {
+            dbg(2, "toggle_quality: normal\n");
+            global_video_quality = 1;
+        }
+    }
+
+    if (global_video_quality == 1)
+    {
+        dbg(2, "toggle_quality:after:  normal\n");
+        max_video_bitrate_new = MAX_VIDEO_BITRATE_FOR_720P;
+    }
+    else
+    {
+        dbg(2, "toggle_quality:after: LOW\n");
+        max_video_bitrate_new = 180;
+    }
+
+    save_low_quality_flag_file(global_video_quality);
+    activate_toggle_quality(max_video_bitrate_new);
 }
 
 
@@ -13843,7 +13926,7 @@ void *thread_ext_keys(void *data)
             else if (strncmp((char *)buf, "toggle_quality:", strlen((char *)"toggle_quality:")) == 0)
             {
                 dbg(2, "ExtKeys: TOGGLE QUALITY:\n");
-                toggle_quality();
+                toggle_quality(1);
             }
             else if (strncmp((char *)buf, "toggle_osd:", strlen((char *)"toggle_osd:")) == 0)
             {
