@@ -13553,7 +13553,7 @@ int need_toggle_quality()
 {
     int ret = 0;
 
-    if (load_low_quality_flag_file() != global_video_quality)
+    if (load_low_quality_flag_file() != (int32_t)global_video_quality)
     {
         return 1;
     }
