@@ -619,7 +619,7 @@ struct alsa_audio_play_data_block
 #define seconds_since_last_mod 1 // how long to wait before we process image files in seconds
 #define MAX_FILES 6 // how many filetransfers to/from 1 friend at the same time?
 #define MAX_RESEND_FILE_BEFORE_ASK 6
-#define AUTO_RESEND_SECONDS 60*5 // resend for this much seconds before asking again [5 min]
+#define AUTO_RESEND_SECONDS (60*5) // resend for this much seconds before asking again [5 min]
 
 #define VIDEO_BUFFER_COUNT 3 // 3 is ok --> HINT: more buffer will cause more video delay!
 
@@ -663,7 +663,7 @@ int default_fps_sleep_corrected;
 #define SWAP_R_AND_B_COLOR 1 // use BGRA instead of RGBA for raw framebuffer output
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
-#define c_sleep(x) usleep_usec(1000*x)
+#define c_sleep(x) usleep_usec(1000*(x))
 
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -676,7 +676,7 @@ int default_fps_sleep_corrected;
      _a < _b ? _a : _b; })
 
 
-#define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : X)
+#define CLIP(X) ( (X) > 255 ? 255 : (X) < 0 ? 0 : (X))
 
 // RGB -> YUV
 #define RGB2Y(R, G, B) CLIP(( (  66 * (R) + 129 * (G) +  25 * (B) + 128) >> 8) +  16)
@@ -899,7 +899,6 @@ int conf_calls_count_active();
 int64_t conf_calls_get_active_friend_from_count_num(int count_num);
 void toggle_quality(int toggle);
 int need_toggle_quality();
-void toggle_quality();
 
 const char *default_tox_name = "ToxBlinkenwall";
 const char *default_tox_status = "Metalab Blinkenwall";
@@ -1065,7 +1064,7 @@ uint32_t debug_network_outgoing_vbitrate_bar_values[DEBUG_NETWORK_GRAPH_BARS_ON_
 int stdin_thread_stop = 1;
 int thread_play_mixed_audio_stop = 1;
 
-#define AUDIO_VU_MIN_VALUE -20
+#define AUDIO_VU_MIN_VALUE (-20)
 #define AUDIO_VU_MED_VALUE 110
 #define AUDIO_VU_RED_VALUE 120
 float global_audio_in_vu = AUDIO_VU_MIN_VALUE;
@@ -3143,7 +3142,7 @@ Tox *create_tox()
     // ----------------------------------------------
 
     // ----------------------------------------------
-    if (switch_tcponly == 0)
+    if ((switch_tcponly == 0) && ( use_tor == 0))
     {
         options.udp_enabled = true; // UDP mode
         dbg(0, "setting UDP mode\n");
@@ -3234,10 +3233,12 @@ void replace_bad_char_from_string(char *str, const char replace_with)
         for (i = 0; (int)i < (int)strlen(str) ; i++)
         {
             for (j = 0; (int)j < (int)strlen(bad_chars); j++)
+            {
                 if (str[i] == bad_chars[j])
                 {
                     str[i] = replace_with;
                 }
+            }
         }
     }
 }
@@ -3953,7 +3954,7 @@ void show_tox_id_qrcode(Tox *tox)
             // ------------------------------------
             // Display commit hash
             CLEAR(text_line);
-            snprintf(text_line, sizeof(text_line), "ct git hash: v%s", TOX_GIT_COMMIT_HASH);
+            snprintf(text_line, sizeof(text_line), "ct git hash : v%s", TOX_GIT_COMMIT_HASH);
             text_on_bgra_frame_xy(var_framebuffer_info_xres, var_framebuffer_info_yres,
                                   var_framebuffer_fix_info_line_length, bf_out_real_fb,
                                   line_position_x_header, line_position_y, text_line);
@@ -6113,7 +6114,7 @@ void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint
         }
         else
         {
-            int fd_ = open(cmd__image_filename_full_path, O_WRONLY | O_CREAT, S_IRWXU);
+            int fd_ = open(cmd__image_filename_full_path, O_WRONLY | O_CREAT | O_CLOEXEC, S_IRWXU);
 
             // dbg(9, "fd=%d\n", fd_);
 
@@ -7244,7 +7245,7 @@ int init_cam(int sleep_flag, bool h264_codec)
     int video_dev_open_error = 0;
     int fd;
 
-    if ((fd = open(v4l2_device, O_RDWR)) < 0)
+    if ((fd = open(v4l2_device, O_RDWR | O_CLOEXEC)) < 0)
     {
         dbg(0, "error opening video device[1]\n");
         video_dev_open_error = 1;
@@ -7257,7 +7258,7 @@ int init_cam(int sleep_flag, bool h264_codec)
             sleep(6); // sleep 6 seconds
         }
 
-        if ((fd = open(v4l2_device, O_RDWR)) < 0)
+        if ((fd = open(v4l2_device, O_RDWR | O_CLOEXEC)) < 0)
         {
             dbg(0, "error opening video device[2]\n");
             video_dev_open_error = 1;
@@ -11542,7 +11543,7 @@ void *thread_av(void *data)
     {
         global_framebuffer_device_fd = 0;
 
-        if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR)) < 0)
+        if ((global_framebuffer_device_fd = open(framebuffer_device, O_RDWR | O_CLOEXEC)) < 0)
         {
             dbg(0, "error opening Framebuffer device: %s\n", framebuffer_device);
         }
@@ -12997,7 +12998,8 @@ static void display_sched_attr(char *msg, int policy, struct sched_param *param)
 
 static void display_thread_sched_attr(char *msg)
 {
-    int policy, s;
+    int policy;
+    int s;
     struct sched_param param;
     s = pthread_getschedparam(pthread_self(), &policy, &param);
 
@@ -13835,7 +13837,7 @@ void *thread_ext_keys(void *data)
     int res = 0;
     Tox *tox = (Tox *)data;
     mkfifo(ext_keys_fifo, 0666);
-    ext_keys_fd = open(ext_keys_fifo, O_RDONLY);
+    ext_keys_fd = open(ext_keys_fifo, O_RDONLY | O_CLOEXEC);
 
     while (do_read_ext_keys == 1)
     {
@@ -13848,7 +13850,7 @@ void *thread_ext_keys(void *data)
             close(ext_keys_fd);
             mkfifo(ext_keys_fifo, 0666);
             yieldcpu(50);
-            ext_keys_fd = open(ext_keys_fifo, O_RDONLY);
+            ext_keys_fd = open(ext_keys_fifo, O_RDONLY | O_CLOEXEC);
         }
         else
         {
@@ -14250,7 +14252,10 @@ void init_sound_play_device(int channels, int sample_rate)
 
     snd_pcm_hw_params_free(hw_params);
     snd_pcm_sw_params_t *swparams;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Walloca"
     snd_pcm_sw_params_alloca(&swparams);
+#pragma GCC diagnostic pop
     /* get the current swparams */
     err = snd_pcm_sw_params_current(audio_play_handle, swparams);
 
