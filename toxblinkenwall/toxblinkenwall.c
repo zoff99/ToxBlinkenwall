@@ -15945,11 +15945,11 @@ int main(int argc, char *argv[])
             bootstrap_wrapper(tox);
 
             if (try >= max_tries)
-                {
-                    // break the loop and start anyway
-                    // we will bootstrap again later if we are not online every few seconds
-                    break;
-                }
+            {
+                // break the loop and start anyway
+                // we will bootstrap again later if we are not online every few seconds
+                break;
+            }
         }
     }
 
