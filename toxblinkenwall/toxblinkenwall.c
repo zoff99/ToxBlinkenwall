@@ -2491,6 +2491,61 @@ void toggle_osd_level(int osd_level)
     }
 }
 
+void toggle_hdmi_freq(int display_freq)
+{
+    char cmd_str[1000];
+    CLEAR(cmd_str);
+
+/*
+
+from a raspi 4
+--------------
+
+Group CEA has 15 modes:
+           mode 1: 640x480 @ 60Hz 4:3, clock:25MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 2: 720x480 @ 60Hz 4:3, clock:27MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 3: 720x480 @ 60Hz 16:9, clock:27MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 4: 1280x720 @ 60Hz 16:9, clock:74MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 5: 1920x1080 @ 60Hz 16:9, clock:74MHz interlaced 3D:FP|TopBot|SbS-HH
+  (native) mode 16: 1920x1080 @ 60Hz 16:9, clock:148MHz progressive 3D:TopBot|SbS-HH
+           mode 17: 720x576 @ 50Hz 4:3, clock:27MHz progressive
+           mode 18: 720x576 @ 50Hz 16:9, clock:27MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 19: 1280x720 @ 50Hz 16:9, clock:74MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 20: 1920x1080 @ 50Hz 16:9, clock:74MHz interlaced 3D:FP|TopBot|SbS-HH
+           mode 21: 720x576 @ 50Hz 4:3, clock:27MHz x2 interlaced 3D:FP|TopBot|SbS-HH
+  (prefer) mode 31: 1920x1080 @ 50Hz 16:9, clock:148MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 32: 1920x1080 @ 24Hz 16:9, clock:74MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 33: 1920x1080 @ 25Hz 16:9, clock:74MHz progressive 3D:FP|TopBot|SbS-HH
+           mode 34: 1920x1080 @ 30Hz 16:9, clock:74MHz progressive 3D:FP|TopBot|SbS-HH
+*/
+
+    if (display_freq == 24)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "tvservice -e 'CEA %d'", 32);
+        if (system(cmd_str)) {}
+    }
+    else if (display_freq == 25)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "tvservice -e 'CEA %d'", 33);
+        if (system(cmd_str)) {}
+    }
+    else if (display_freq == 30)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "tvservice -e 'CEA %d'", 34);
+        if (system(cmd_str)) {}
+    }
+    else if (display_freq == 50)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "tvservice -e 'CEA %d'", 31);
+        if (system(cmd_str)) {}
+    }
+    else if (display_freq == 60)
+    {
+        snprintf(cmd_str, sizeof(cmd_str), "tvservice -e 'CEA %d'", 16);
+        if (system(cmd_str)) {}
+    }
+}
+
 void toggle_own_cam(int on_off)
 {
     // TODO: make this better, and also select the correct camera device, if more than 1 camera
@@ -5176,6 +5231,7 @@ void send_help_to_friend(Tox *tox, uint32_t friend_number)
     send_text_message_to_friend(tox, friend_number, " .hidefps       --> hide fps on video");
     send_text_message_to_friend(tox, friend_number, " .owncam <0|1>  --> show own video on/off");
     send_text_message_to_friend(tox, friend_number, " .osd <0|1|2>   --> toggle OSD off/audio/on");
+    send_text_message_to_friend(tox, friend_number, " .hdmi <24|25|50|60> --> toggle HMDI full HD frequency");
     send_text_message_to_friend(tox, friend_number, " .iter <num>    --> iterate interval in ms");
     send_text_message_to_friend(tox, friend_number, " .atvd <num>    --> a2v delay in ms (+100)");
     send_text_message_to_friend(tox, friend_number, " .aviter <num>  --> av iterate interval in ms");
@@ -5659,6 +5715,18 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
                     {
                         dbg(0, "osd=%d\n", value_new);
                         toggle_osd_level(value_new);
+                    }
+                }
+            }
+            else if (strncmp((char *)message, ".hdmi ", strlen((char *)".hdmi ")) == 0) // toggle HDMI freq
+            {
+                if (strlen(message) > 7) // require 2 digits
+                {
+                    int value_new = get_number_in_string(message, (int)60);
+                    if ((value_new == 24) || (value_new == 25) || (value_new == 30) || (value_new == 50) || (value_new == 60))
+                    {
+                        dbg(0, "hdmi_freq=%d\n", value_new);
+                        toggle_hdmi_freq(value_new);
                     }
                 }
             }
