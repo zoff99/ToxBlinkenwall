@@ -68,7 +68,8 @@ git clone https://github.com/FFmpeg/FFmpeg libav
 cd libav
 # git checkout v12.3
 # git checkout n3.3.9
-git checkout n4.1
+# git checkout n4.1
+git checkout n6.0
 ./configure --prefix=$_INST_ --disable-devices --disable-programs \
 --disable-doc --disable-avdevice --disable-avformat \
 --disable-swscale \
