@@ -26,7 +26,7 @@ jobs:
 
       - checkout
       - restore_cache:
-          key: tbw-build-dependencies-v3-{{ .Branch }}
+          key: tbw-build-dependencies-v4-{{ .Branch }}
 
       - run: python3 --version
       - run: ls -al; pwd
@@ -49,7 +49,7 @@ jobs:
 
       - save_cache:
           paths: [ "~/work/build_dir" ]
-          key: tbw-build-dependencies-v3-{{ .Branch }}
+          key: tbw-build-dependencies-v4-{{ .Branch }}
 
       - store_artifacts:
           path: ~/work/deploy
