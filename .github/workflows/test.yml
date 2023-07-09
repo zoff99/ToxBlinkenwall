@@ -83,7 +83,6 @@ jobs:
           ls -al
           sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
-          sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           sed -i -e 'sx^// #define HAVE_X11_AS_FB 1x#define HAVE_X11_AS_FB 1x' toxblinkenwall.c
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OPENGL'||echo _
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OMX'||echo _
@@ -113,5 +112,48 @@ jobs:
           ldd toxblinkenwall
           ls -hal toxblinkenwall
           file toxblinkenwall
+          cp -av toxblinkenwall toxblinkenwall_linux_x11
+
+      - name: compile binary for Linux Framebuffer
+        run: |
+          mkdir -p build_dir/
+          cd build_dir/
+          pwd
+          cp -av ../toxblinkenwall/toxblinkenwall.c ./
+          cp -av ../toxblinkenwall/rb.c ./
+          cp -av ../toxblinkenwall/rb.h ./
+          cp -av ../toxblinkenwall/stb_image_resize.h ./
+          ls -al
+          sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OPENGL'||echo _
+          cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OMX'||echo _
+          cat toxblinkenwall.c|grep 'define HAVE_FRAMEBUFFER'||echo _
+          cat toxblinkenwall.c|grep 'define HAVE_X11_AS_FB'||echo _
+          # make certain warnings into errors!
+          WARNS=' -Werror=implicit-function-declaration -Werror=div-by-zero -Werror=sign-compare -Werror=format=2 -Werror=int-conversion -Werror=implicit-function-declaration '
+          IGNRS=' -Wno-error=format-truncation= '
+          gcc \
+          -O3 -g \
+          $WARNS $IGNRS \
+          -fstack-protector-all \
+          -Wno-unused-variable \
+          -fPIC -export-dynamic -I./ \
+          -o toxblinkenwall \
+          -lm \
+          toxblinkenwall.c rb.c \
+          -std=gnu99 \
+          ./libtoxcore.a \
+          $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
+          -pthread \
+          -lrt \
+          -lasound \
+          -lm \
+          -lv4lconvert || exit 1
+          res2=$?
+          ldd toxblinkenwall
+          ls -hal toxblinkenwall
+          file toxblinkenwall
+          cp -av toxblinkenwall toxblinkenwall_linux_fb
 
 
