@@ -80,7 +80,10 @@ jobs:
           set -x
           sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
-          cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
-          cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OMX'
-          cat toxblinkenwall.c|grep '^#define HAVE_FRAMEBUFFER'
+          sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          sed -i -e 'sx^// #define HAVE_X11_AS_FB 1x#define HAVE_X11_AS_FB 1x' toxblinkenwall.c
+          cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OPENGL'
+          cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OMX'
+          cat toxblinkenwall.c|grep 'define HAVE_FRAMEBUFFER'
+          cat toxblinkenwall.c|grep 'define HAVE_X11_AS_FB'
 
