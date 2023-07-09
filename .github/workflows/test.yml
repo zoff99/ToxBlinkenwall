@@ -1,0 +1,64 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: install dependencies
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          zip grep file ca-certificates autotools-dev autoconf automake \
+          git bc wget rsync cmake make pkg-config yasm libtool \
+          libasound2-dev libv4l-dev ssh gzip tar \
+          python3-pip python3-distutils \
+          ca-certificates \
+          libconfig-dev \
+          libopus-dev \
+          libsodium-dev \
+          libvpx-dev \
+          pkg-config \
+          libavutil-dev \
+          libavcodec-dev \
+          libavformat-dev \
+          libavdevice-dev \
+          libavfilter-dev \
+          libswresample-dev \
+          libswscale-dev \
+          libx264-dev \
+          libx11-dev
+
+      - name: check for python3
+        run: |
+          python3 --version
+
+      - name: pwd
+        run: |
+          ls -al
+          pwd
+
+      - name: install python deps
+        run: |
+          python3 -m pip install evdev
+
+      - name: test-python-script
+        run: |
+          mkdir -p _test_python_/
+          cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 5;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt &
+
+      - name: test-python-script-reader
+        run: |
+          cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
+
+      - name: compile binary
+        run: |
+          gcc -v
+          pwd
+
