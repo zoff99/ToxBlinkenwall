@@ -57,13 +57,28 @@ jobs:
         run: |
           cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
 
-      - name: compile deps
+      - name: install deps
         run: |
           pwd
-          mkdir -p build_dir ; cd build_dir ; bash ../circle_scripts/deps.sh
+          mkdir -p build_dir/
+          cd build_dir/
+          wget -O toxcore_amalgamation.c 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/toxcore_amalgamation.c'
+          wget -O Makefile 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/Makefile'
+          make
+          ls -al
 
-      - name: compile binary
+      - name: compile binary for Linux with X11
         run: |
           pwd
-          cd build_dir ; bash ../circle_scripts/tbw.sh '../'
+          mkdir -p build_dir/
+          cd build_dir/
+          cp -av ../toxblinkenwall/toxblinkenwall.c ./
+          cp -av ../toxblinkenwall/rb.c ./
+          cp -av ../toxblinkenwall/rb.h ./
+          cp -av ../toxblinkenwall/stb_image_resize.h ./
+          sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
+          cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OMX'
+          cat toxblinkenwall.c|grep '^#define HAVE_FRAMEBUFFER'
 
