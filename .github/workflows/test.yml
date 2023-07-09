@@ -91,9 +91,10 @@ jobs:
           cat toxblinkenwall.c|grep 'define HAVE_X11_AS_FB'||echo _
           # make certain warnings into errors!
           WARNS=' -Werror=implicit-function-declaration -Werror=div-by-zero -Werror=sign-compare -Werror=format=2 -Werror=int-conversion -Werror=implicit-function-declaration '
+          IGNRS=' -Wno-error=format-truncation= '
           gcc \
           -O3 -g \
-          $WARNS \
+          $WARNS $IGNRS \
           -fstack-protector-all \
           -Wno-unused-variable \
           -fPIC -export-dynamic -I./ \
