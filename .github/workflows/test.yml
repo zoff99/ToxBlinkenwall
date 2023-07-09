@@ -103,16 +103,12 @@ jobs:
           toxblinkenwall.c rb.c \
           -std=gnu99 \
           ./libtoxcore.a \
+          $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
+          -pthread \
           -lrt \
-          -lopus \
-          -lvpx \
-          -lx264 \
-          -lavcodec \
-          -lavutil \
-          -lsodium \
           -lasound \
           -lm \
-          -lpthread -lv4lconvert || exit 1
+          -lv4lconvert || exit 1
           res2=$?
           ldd toxblinkenwall
           ls -hal toxblinkenwall
