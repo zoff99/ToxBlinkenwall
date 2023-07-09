@@ -69,13 +69,15 @@ jobs:
 
       - name: compile binary for Linux with X11
         run: |
-          pwd
           mkdir -p build_dir/
           cd build_dir/
+          pwd
           cp -av ../toxblinkenwall/toxblinkenwall.c ./
           cp -av ../toxblinkenwall/rb.c ./
           cp -av ../toxblinkenwall/rb.h ./
           cp -av ../toxblinkenwall/stb_image_resize.h ./
+          ls -al
+          set -x
           sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
