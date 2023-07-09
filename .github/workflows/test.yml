@@ -88,7 +88,7 @@ jobs:
           # make certain warnings into errors!
           WARNS=' -Werror=implicit-function-declaration -Werror=div-by-zero -Werror=sign-compare -Werror=format=2 -Werror=int-conversion -Werror=implicit-function-declaration '
           gcc \
-          -O3 -g
+          -O3 -g \
           $WARNS \
           -fstack-protector-all \
           -Wno-unused-variable \
