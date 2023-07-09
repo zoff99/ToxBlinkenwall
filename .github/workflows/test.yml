@@ -57,8 +57,13 @@ jobs:
         run: |
           cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
 
+      - name: compile deps
+        run: |
+          pwd
+          mkdir -p build_dir ; cd build_dir ; bash ../circle_scripts/deps.sh
+
       - name: compile binary
         run: |
-          gcc -v
           pwd
+          cd build_dir ; bash ../circle_scripts/tbw.sh '../'
 
