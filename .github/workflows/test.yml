@@ -51,7 +51,7 @@ jobs:
       - name: test-python-script
         run: |
           mkdir -p _test_python_/
-          cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 5;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt &
+          cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 15;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt &
 
       - name: test-python-script-reader
         run: |
