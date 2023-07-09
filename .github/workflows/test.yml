@@ -64,9 +64,10 @@ jobs:
           cd build_dir/
           wget -O toxcore_amalgamation.c 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/toxcore_amalgamation.c'
           wget -O Makefile 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/Makefile'
-          wget -O tox.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxcore/tox.h'
-          wget -O toxutil.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxutil/toxutil.h'
-          wget -O toxav.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxav/toxav.h'
+          mkdir -p tox/
+          wget -O tox/tox.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxcore/tox.h'
+          wget -O tox/toxutil.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxutil/toxutil.h'
+          wget -O tox/toxav.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxav/toxav.h'
           make
           ls -al
 
