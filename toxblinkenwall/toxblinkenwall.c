@@ -1036,11 +1036,11 @@ int conf_call_show_frame_toggle_count = 0;
     long debug_alsa_play_001 = 0;
     #define MAX_ALSA_AUDIO_PLAY_THREADS 1
     sem_t audio_play_lock;
-    #define ALSA_AUDIO_PLAY_START_THRESHOLD (200)
-    #define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
-    #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
+    // #define ALSA_AUDIO_PLAY_START_THRESHOLD (200)
+    // #define ALSA_AUDIO_PLAY_STOP_THRESHOLD (99)
+    // #define ALSA_AUDIO_PLAY_SILENCE_THRESHOLD (100)
     // #define ALSA_AUDIO_PLAY_BUFFER_IN_FRAMES (10000)
-    #define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (180000 * 1.1)
+    #define ALSA_AUDIO_PLAY_BUF_IN_FRAMES (100000 * 1.0)
     #define ALSA_AUDIO_PLAY_DISPLAY_DELAY_AFTER_FRAMES (2000)
 #endif
 
@@ -14315,8 +14315,8 @@ void init_sound_play_device(int channels, int sample_rate)
 #endif
     // unsigned int buffer_time = (100000) * 2;     // 200ms    /* ring buffer length in us */
     // unsigned int period_time = (100000 / 5) * 2; //  40ms    /* period time in us */
-    unsigned int buffer_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES) * 2;     // xx ms    /* ring buffer length in us */
-    unsigned int period_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES / 5) * 2; // xx ms    /* period time in us */
+    unsigned int buffer_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES) * 2;     // 200 ms    /* ring buffer length in us */
+    unsigned int period_time = (ALSA_AUDIO_PLAY_BUF_IN_FRAMES / 5) * 2; // 40 ms    /* period time in us */
     snd_pcm_sframes_t buffer_size;
     snd_pcm_sframes_t period_size;
     snd_pcm_uframes_t size;
