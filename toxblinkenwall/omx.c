@@ -50,7 +50,7 @@ void usleep_usec2(uint64_t usec)
  *  * Proper sync OMX events across threads, instead of busy waiting
  */
 
-#define OMX_DISPLAY_BUFFERS_WANT 5
+#define OMX_DISPLAY_BUFFERS_WANT 6
 static int omx_display_buffers_unused[OMX_DISPLAY_BUFFERS_WANT];
 sem_t omx_internal_lock;
 
@@ -740,11 +740,13 @@ int omx_get_display_input_buffer(struct omx_state *st,
 {
     if (!st)
     {
+        dbg(9, "omx_get_display_input_buffer:EE:001\n");
         return EINVAL;
     }
 
     if (!st->buffers)
     {
+        dbg(9, "omx_get_display_input_buffer:EE:002\n");
         return EINVAL;
     }
 
@@ -761,9 +763,7 @@ int omx_get_display_input_buffer(struct omx_state *st,
             *plen = st->buffers[i]->nAllocLen;
             st->buffers[i]->nFilledLen = *plen;
             st->buffers[i]->nOffset = 0;
-
             // dbg(9, "omx_get_display_input_buffer:num=%d\n", i);
-
             // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
             sem_post(&omx_internal_lock);
 
@@ -772,6 +772,7 @@ int omx_get_display_input_buffer(struct omx_state *st,
     }
 
     sem_post(&omx_internal_lock);
+    dbg(9, "omx_get_display_input_buffer:EE:003\n");
     return -1;
 }
 

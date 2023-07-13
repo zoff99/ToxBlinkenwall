@@ -1134,7 +1134,7 @@ int count_video_record_threads_int;
 uint32_t global_audio_bit_rate;
 uint32_t global_video_bit_rate;
 uint32_t global_video_quality = 1; // 1 -> normal, 0 -> low
-int32_t global_video_dbuf_ms = 40;
+int32_t global_video_dbuf_ms = 150;
 ToxAV *mytox_av = NULL;
 int tox_loop_running = 1;
 int global_blink_state = 0;
@@ -1150,9 +1150,9 @@ int toxav_audioiterate_thread_stop = 0;
 
 uint32_t global_av_iterate_ms = 2;
 uint32_t global_av_iterate_conference_ms = 4;
-uint32_t global_av_audio_iterate_ms = 2;
-uint32_t global_iterate_ms = 2;
-uint32_t global_iterate_conference_ms = 2;
+uint32_t global_av_audio_iterate_ms = 4;
+uint32_t global_iterate_ms = 4;
+uint32_t global_iterate_conference_ms = 4;
 int global_opengl_iterate_ms = 2;
 
 
@@ -9075,6 +9075,8 @@ static void t_toxav_receive_audio_frame_pts_cb(ToxAV *av, uint32_t friend_number
         uint64_t pts)
 {
 
+    // dbg(9, "t_toxav_receive_audio_frame_pts_cb:%lu\n", (unsigned long)pts);
+
 #ifdef RPIZEROW
     t_toxav_receive_audio_frame_cb_wrapper(av, friend_number, pcm, sample_count, channels, sampling_rate, user_data, pts);
 #else
@@ -9869,7 +9871,7 @@ static void *video_play(void *dummy)
         yuv_frame_for_play_size = y_layer_size + u_layer_size + v_layer_size;
     }
 
-    if (! yuv_frame_for_play)
+    if (!yuv_frame_for_play)
     {
         // release lock --------------
         sem_post(&video_in_frame_copy_sem);
@@ -10172,7 +10174,7 @@ static void *video_play(void *dummy)
     if (pts != 0)
     {
 
-#if 1
+#if 0
         // ------ thread priority ------
         struct sched_param param;
         int policy;
@@ -10192,7 +10194,7 @@ static void *video_play(void *dummy)
 #endif
 
 
-        const int sync_ms_max_range = 20; // 14; // 7;
+        const int sync_ms_max_range = 60; // 14; // 7;
 
         uint64_t ts1 = current_time_monotonic_default();
         global_last_video_ts_no_correction = ts1;
@@ -10239,6 +10241,13 @@ static void *video_play(void *dummy)
         uint64_t ll = global_last_video_ts_omx;
         global_last_video_ts_omx = current_time_monotonic_default();
         sem_wait(&omx_lock);
+        // uint64_t xxx = current_time_monotonic_default();
+        // if (((long)(xxx - xxx2) > 48) || ((long)(xxx - xxx2) < 36))
+        //if (((long)(xxx - xxx2) > 39) || ((long)(xxx - xxx2) < 24))
+        //{
+        //    dbg(9, "t_play__:%lu local:%lu delta=%ld fpsd=%ld\n", (unsigned long)pts, (unsigned long)xxx, (long)(pts - xxx), (long)(xxx - xxx2));
+        //}
+        // xxx2 = xxx;
         omx_display_flush_buffer(&omx, yuf_data_buf_len, sync_ms, omx_buf_idx);
         sem_post(&omx_lock);
         // --> push frame to actual display via OMX --------------
@@ -10623,7 +10632,7 @@ static void *video_play(void *dummy)
 #endif
 #endif
 
-    uint64_t video_frame_play_delay_tbw = current_time_monotonic_default() - received_ts;
+    int64_t video_frame_play_delay_tbw = (int64_t)current_time_monotonic_default() - (int64_t)received_ts;
 
     if ((video_frame_play_delay_tbw >= 0) && (video_frame_play_delay_tbw < 400))
     {
@@ -10742,7 +10751,6 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
         if ((int64_t)friend_to_send_video_to == (int64_t)friend_number)
         {
 #ifdef HAVE_FRAMEBUFFER
-
             if (global_framebuffer_device_fd != 0)
 #else
             if (1 == 1)
@@ -10811,7 +10819,7 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
                 }
                 else
                 {
-                    // dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
+                    dbg(1, "more than %d video play threads already\n", (int)MAX_VIDEO_PLAY_THREADS);
                     if (update_fps_counter > 0)
                     {
                         // we could not display this frame
@@ -10832,14 +10840,11 @@ static void t_toxav_receive_video_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
 #ifdef DEBUG_INCOMING_VIDEO_FRAME_TIMING
     long long timspan_in_ms;
     timspan_in_ms = __utimer_stop(&tm_022, "toxav_receive_video_frame:", 1);
-
     if (timspan_in_ms > 0)
     {
         dbg(9, "toxav_receive_video_frame: %llu ms\n", timspan_in_ms);
     }
-
     incoming_vframe_delta_in_ms_002 = current_time_monotonic_default();
-
 #endif
     en();
 }
@@ -11298,6 +11303,7 @@ static void t_toxav_receive_video_frame_cb_with_pts(ToxAV *av, uint32_t friend_n
         void *user_data, uint64_t incoming_pts)
 {
     sta();
+    // dbg(9, "t_toxav_receive_video_frame_cb_with_pts:%lu local:%lu\n", (unsigned long)incoming_pts, (unsigned long)current_time_monotonic_default());
 
     // dbg(9, "XX:000:A:==============================================\n");
     // dbg(9, "XX:000:fn=%d y=%p conf_call_y=%p gva=%d gcca=%d\n", friend_number, y, conf_call_y, global_video_active, global_conference_call_active);
@@ -12227,7 +12233,7 @@ void *thread_video_av(void *data)
     // ------ thread priority ------
 #endif
     uint32_t update_video_delay_every_ms_counter = 0;
-    const uint32_t update_video_delay_every_counter = 800;
+    const uint32_t update_video_delay_every_counter = 800 * 3;
 
     uint32_t set_video_quality_from_save_flag_counter = 0;
     const uint32_t set_video_quality_from_save_flag_after_counter = 500;
@@ -12272,16 +12278,32 @@ void *thread_video_av(void *data)
                 //dbg(9, "toxav_option_set:TOXAV_DECODER_VIDEO_ADD_DELAY_MS=%d:%d\n", (int)global_bw_video_play_delay,
                 //                    (int)global_bw_audio_to_video_delay_ms);
                 // XX ms subtracted because audio playing also has some delay that we guess is about XX ms
+#if 0
                 bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
                                             TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
                                             (int)global_bw_video_play_delay - 0 -
                                             (int)global_bw_audio_to_video_delay_ms,
                                             &error);
-                //dbg(9, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:%d %d %d\n",
+#endif
+
+                int delay_video_play_by = -(int)(((ALSA_AUDIO_PLAY_BUF_IN_FRAMES) * 2) / 1000);
+                bool res = toxav_option_set(av, (uint32_t)friend_to_send_video_to,
+                                            TOXAV_DECODER_VIDEO_ADD_DELAY_MS,
+                                            delay_video_play_by,
+                                            &error);
+
+                //dbg(9, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:%d %d %d %d\n",
+                //        delay_video_play_by,
                 //        (int)global_bw_video_play_delay,
                 //        (int)global_bw_audio_to_video_delay_ms,
                 //        ((int)global_bw_video_play_delay - 0 - (int)global_bw_audio_to_video_delay_ms)
                 //        );
+
+                toxav_option_set(av, (uint32_t)friend_to_send_video_to,
+                                 TOXAV_DECODER_VIDEO_BUFFER_MS,
+                                 global_video_dbuf_ms,
+                                 &error);
+
 
                 if (global_conference_call_active == 1)
                 {
