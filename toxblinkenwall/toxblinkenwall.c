@@ -1080,7 +1080,7 @@ int conf_video_paint_threads = 0;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 2
+#define MAX_VIDEO_PLAY_THREADS 3
 uint8_t *yuv_frame_for_play = NULL;
 size_t yuv_frame_for_play_size = 0;
 sem_t video_play_lock;
