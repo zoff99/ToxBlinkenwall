@@ -50,7 +50,7 @@ void usleep_usec2(uint64_t usec)
  *  * Proper sync OMX events across threads, instead of busy waiting
  */
 
-#define OMX_DISPLAY_BUFFERS_WANT 6
+#define OMX_DISPLAY_BUFFERS_WANT 10
 static int omx_display_buffers_unused[OMX_DISPLAY_BUFFERS_WANT];
 sem_t omx_internal_lock;
 
