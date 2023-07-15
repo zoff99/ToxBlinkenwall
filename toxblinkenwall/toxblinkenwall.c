@@ -1080,7 +1080,7 @@ int conf_video_paint_threads = 0;
 
 sem_t count_video_play_threads;
 int count_video_play_threads_int;
-#define MAX_VIDEO_PLAY_THREADS 1
+#define MAX_VIDEO_PLAY_THREADS 2
 uint8_t *yuv_frame_for_play = NULL;
 size_t yuv_frame_for_play_size = 0;
 sem_t video_play_lock;
@@ -9915,9 +9915,9 @@ static void *video_play(void *dummy)
 #endif
     uint32_t frame_width_px = (uint32_t) max(frame_width_px1, abs(ystride_));
     uint32_t frame_height_px = (uint32_t) frame_height_px1;
-    // release lock --------------
-    sem_post(&video_in_frame_copy_sem);
-    // release lock --------------
+    // release lock ------- OLD -------
+    // ****** // sem_post(&video_in_frame_copy_sem);
+    // release lock ------- OLD -------
 #ifdef HAVE_OUTPUT_OMX
 
     if (!omx_initialized)
@@ -9959,6 +9959,9 @@ static void *video_play(void *dummy)
                 // free((void *)y);
             }
 
+            // release lock --------------
+            sem_post(&video_in_frame_copy_sem);
+            // release lock --------------
             dec_video_t_counter();
             pthread_exit(0);
         }
@@ -9997,6 +10000,10 @@ static void *video_play(void *dummy)
 
     if (omx_buf_idx == -1)
     {
+        // release lock --------------
+        sem_post(&video_in_frame_copy_sem);
+        // release lock --------------
+
         dbg(9, "omx_get_display_input_buffer:ERROR\n");
         dec_video_t_counter();
         pthread_exit(0);
@@ -10032,9 +10039,17 @@ static void *video_play(void *dummy)
         omx_get_done_input_buffer(&omx, omx_buf_idx);
         sem_post(&omx_lock);
 
+        // release lock --------------
+        sem_post(&video_in_frame_copy_sem);
+        // release lock --------------
         dec_video_t_counter();
         pthread_exit(0);
     }
+
+    // release lock ------- path OMX -------
+    sem_post(&video_in_frame_copy_sem);
+    // release lock ------- path OMX -------
+
 
 #ifdef VISUALLY_CHECK_FPS
 
@@ -10269,9 +10284,22 @@ static void *video_play(void *dummy)
 
     //
     //
-#endif
+
+
+
+
+#endif // HAVE_OUTPUT_OMX
+
+
+
+
+
     // -
 #ifdef HAVE_FRAMEBUFFER
+
+    // release lock ------- path FRAMEBUFFER -------
+    sem_post(&video_in_frame_copy_sem);
+    // release lock ------- path FRAMEBUFFER -------
 
 
     // -- draw OSD for framebuffer output --
@@ -10375,7 +10403,7 @@ static void *video_play(void *dummy)
     }
 
 
-#else
+#else // HAVE_X11_AS_FB
 
     full_width = var_framebuffer_info.xres;
     full_height = var_framebuffer_info.yres;
@@ -10629,8 +10657,12 @@ static void *video_play(void *dummy)
         // dbg(9, "VP-DEBUG:017\n");
     }
 
-#endif
-#endif
+#endif // HAVE_X11_AS_FB
+
+
+// ----------------------
+
+#endif // HAVE_FRAMEBUFFER
 
     int64_t video_frame_play_delay_tbw = (int64_t)current_time_monotonic_default() - (int64_t)received_ts;
 
