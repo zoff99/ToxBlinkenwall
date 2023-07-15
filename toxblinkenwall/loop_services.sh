@@ -163,20 +163,8 @@ while [ 1 == 1 ]; do
         tor_option=" -t "
     fi
 
-    ldd toxblinkenwall|grep -i libasan > /dev/null 2>&1
-    use_asan_lib=$?
-    if [ $use_asan_lib -eq 0 ]; then
-        export LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
-        export ASAN_OPTIONS="malloc_context_size=100:check_initialization_order=true" # verbosity=2:
-        # export TSAN_OPTIONS="history_size=7 force_seq_cst_atomics=1"
-    else
-        export LD_PRELOAD=""
-        export ASAN_OPTIONS=""
-        export TSAN_OPTIONS=""
-        unset LD_PRELOAD
-        unset ASAN_OPTIONS
-        # unset TSAN_OPTIONS
-    fi
+    # export ASAN_OPTIONS="malloc_context_size=100:check_initialization_order=true" # verbosity=2:
+    export ASAN_OPTIONS=halt_on_error=0
 
     if [ -f "OPTION_USE_STDLOG" ]; then
         std_log=stdlog.log
