@@ -818,7 +818,8 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t m
     st->buffers[buf_idx]->nFilledLen = data_len;
     st->buffers[buf_idx]->nTimeStamp = omx_ticks_from_s64(0); // to_omx_ticks(ms_offset * 1000); // omx_ticks_from_s64(ms_offset);
 
-    if (OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx]) != OMX_ErrorNone)
+    OMX_ERRORTYPE omx_result = OMX_EmptyThisBuffer(st->video_render, st->buffers[buf_idx]);
+    if (omx_result != OMX_ErrorNone)
     {
         dbg(9, "OMX_EmptyThisBuffer error:num=%d\n", buf_idx);
         sem_wait(&omx_internal_lock);
