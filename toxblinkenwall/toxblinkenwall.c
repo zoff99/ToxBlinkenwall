@@ -604,6 +604,22 @@ struct alsa_audio_play_data_block
     size_t sample_count;
 };
 
+#define DELAYED_FIFO_BUFFER_SIZE 300
+
+typedef struct {
+    float value;
+    uint64_t timestamp;
+} DataPoint;
+
+typedef struct {
+    DataPoint data[DELAYED_FIFO_BUFFER_SIZE];
+    int front;
+    int rear;
+    int count;
+} FIFOBuffer;
+
+FIFOBuffer *delayed_a_fifo = NULL;
+
 
 #define MAX_AVATAR_FILE_SIZE 65536
 #define TOXIC_MAX_NAME_LENGTH 32   /* Must be <= TOX_MAX_NAME_LENGTH */
@@ -8817,6 +8833,100 @@ int get_video_trec_counter()
     return ret;
 }
 
+
+
+float dequeue_prev_value = 0.0f;
+
+void initBuffer(FIFOBuffer* buffer) {
+    buffer->front = 0;
+    buffer->rear = -1;
+    buffer->count = 0;
+}
+
+int isFull(FIFOBuffer* buffer) {
+    return buffer->count == DELAYED_FIFO_BUFFER_SIZE;
+}
+
+int isEmpty(FIFOBuffer* buffer) {
+    return buffer->count == 0;
+}
+
+void enqueue(FIFOBuffer* buffer, float value, uint64_t timestamp) {
+    if (isFull(buffer)) {
+        // printf("Buffer is full. Cannot enqueue new element.\n");
+        return;
+    }
+
+    // printf("enqueue t=%lu\n", timestamp);
+    buffer->rear = (buffer->rear + 1) % DELAYED_FIFO_BUFFER_SIZE;
+    buffer->data[buffer->rear].value = value;
+    buffer->data[buffer->rear].timestamp = timestamp;
+    buffer->count++;
+}
+
+DataPoint dequeue(FIFOBuffer* buffer, const uint32_t delta, const uint64_t mono_time_now) {
+    if (isEmpty(buffer)) {
+        // printf("Buffer is empty. Cannot dequeue element.\n");
+        DataPoint emptyDataPoint = {0.0, 0};
+        return emptyDataPoint;
+    }
+
+    DataPoint dequeuedDataPoint = buffer->data[buffer->front];
+
+    uint64_t t = dequeuedDataPoint.timestamp;
+    uint64_t want = mono_time_now - delta;
+
+    if (want < t)
+    {
+        // printf("delta time not reached yet, have=%lu want=%lu diff=%ld\n", t, want, (want - t));
+        DataPoint emptyDataPoint = {0.0, 0};
+        return emptyDataPoint;
+    }
+    else
+    {
+        // printf("found=%lu want=%lu diff=%ld\n", t, want, (want - t));
+    }
+
+    buffer->front = (buffer->front + 1) % DELAYED_FIFO_BUFFER_SIZE;
+    buffer->count--;
+
+    return dequeuedDataPoint;
+}
+
+
+
+static float delayed_audio_vu(FIFOBuffer *delayed_fifo_buffer, const float in,
+            const uint32_t delta_ms, const uint32_t loop_delta_ms, const uint64_t mono_time_now)
+{
+    enqueue(delayed_fifo_buffer, in, mono_time_now);
+    DataPoint dataPoint = dequeue(delayed_fifo_buffer, delta_ms, mono_time_now);
+    if (dataPoint.timestamp != 0)
+    {
+        const uint64_t want = mono_time_now - delta_ms;
+        const int64_t d = dataPoint.timestamp - want;
+        float used_value = dataPoint.value;
+        const float old_value = used_value;
+        if (d < -(loop_delta_ms))
+        {
+            dataPoint = dequeue(delayed_fifo_buffer, delta_ms, mono_time_now);
+            if (dataPoint.timestamp == 0)
+            {
+                used_value = old_value;
+            }
+            else
+            {
+                used_value = dataPoint.value;
+            }
+        }
+        dequeue_prev_value = used_value;
+        return used_value;
+    }
+    else
+    {
+        return dequeue_prev_value;
+    }
+}
+
 static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_number,
         int16_t const *pcm,
         size_t sample_count,
@@ -8835,6 +8945,9 @@ static void t_toxav_receive_audio_frame_cb_wrapper(ToxAV *av, uint32_t friend_nu
         if (sample_count > 0)
         {
             float vu_value = audio_vu(pcm, sample_count);
+            vu_value = delayed_audio_vu(delayed_a_fifo, vu_value,
+                    (uint32_t)(((ALSA_AUDIO_PLAY_BUF_IN_FRAMES) * 2) / 1000),
+                    PROCESS_AUDIOMIXING_INCOMING_AUDIO_EVERY_MS, current_time_monotonic_default());
 
             if (isfinite(vu_value))
             {
@@ -15788,6 +15901,9 @@ int main(int argc, char *argv[])
 
 #endif
 
+    delayed_a_fifo = calloc(1, sizeof(FIFOBuffer));
+    initBuffer(delayed_a_fifo);
+
     if (sem_init(&add_friendlist_lock, 0, 1))
     {
         dbg(0, "Error in sem_init for add_friendlist_lock\n");
@@ -16444,6 +16560,8 @@ int main(int argc, char *argv[])
     /*restore the old settings*/
     tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 #endif
+
+    free(delayed_a_fifo);
 
     if (logfile)
     {
