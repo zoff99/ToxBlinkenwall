@@ -1259,10 +1259,10 @@ uint64_t global_delay_measure_mean[DELAY_MEASURE_NUM];
 // -------- de-jitter ---------------------------
 
 // ------- zoxcore debug settings !! ------------
-extern int global_h264_enc_profile_high_enabled;
-extern int global_h264_enc_profile_high_enabled_switch;
+// extern int global_h264_enc_profile_high_enabled;
+// extern int global_h264_enc_profile_high_enabled_switch;
 // ------- zoxcore debug settings !! ------------
-int global_tbw_enc_profile_high_enabled = 0;
+// int global_tbw_enc_profile_high_enabled = 0;
 
 // ---- DEBUG ----
 static struct timeval tm_incoming_video_frames;
@@ -5697,9 +5697,9 @@ void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, 
             }
             else if (strncmp((char *)message, ".tpr", strlen((char *)".tpr")) == 0) // toggle H264 profile (base <-> high)
             {
-                global_tbw_enc_profile_high_enabled = 1 - global_tbw_enc_profile_high_enabled;
-                global_h264_enc_profile_high_enabled = global_tbw_enc_profile_high_enabled;
-                global_h264_enc_profile_high_enabled_switch = 1;
+                // global_tbw_enc_profile_high_enabled = 1 - global_tbw_enc_profile_high_enabled;
+                // global_h264_enc_profile_high_enabled = global_tbw_enc_profile_high_enabled;
+                // global_h264_enc_profile_high_enabled_switch = 1;
             }
             else if (strncmp((char *)message, ".thr", strlen((char *)".thr")) == 0) // toggle cam HD resolution
             {
