@@ -729,6 +729,11 @@ int omx_get_done_input_buffer(struct omx_state *st, int buf_idx)
         return 1;
     }
 
+    if ((buf_idx < 0) || (buf_idx >= OMX_DISPLAY_BUFFERS_WANT))
+    {
+        return 1;
+    }
+
     sem_wait(&omx_internal_lock);
     omx_display_buffers_unused[buf_idx] = 1;
     sem_post(&omx_internal_lock);
@@ -741,13 +746,13 @@ int omx_get_display_input_buffer(struct omx_state *st,
     if (!st)
     {
         dbg(9, "omx_get_display_input_buffer:EE:001\n");
-        return EINVAL;
+        return -1;
     }
 
     if (!st->buffers)
     {
         dbg(9, "omx_get_display_input_buffer:EE:002\n");
-        return EINVAL;
+        return -1;
     }
 
     sem_wait(&omx_internal_lock);
@@ -802,6 +807,11 @@ int omx_display_flush_buffer(struct omx_state *st, uint32_t data_len, uint32_t m
     }
 
     if (buf_idx > (st->num_buffers + 1))
+    {
+        return 1;
+    }
+
+    if ((buf_idx < 0) || (buf_idx >= OMX_DISPLAY_BUFFERS_WANT))
     {
         return 1;
     }
