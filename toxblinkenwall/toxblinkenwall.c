@@ -10063,7 +10063,7 @@ static void *video_play(void *dummy)
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
         sem_post(&omx_lock);
 
-        if (err)
+        if (err != 0)
         {
             dbg(9, "omx_display_enable ERR=%d\n", err);
 
@@ -10111,7 +10111,7 @@ static void *video_play(void *dummy)
     int omx_buf_idx = omx_get_display_input_buffer(&omx, &buf, &len);
     sem_post(&omx_lock);
 
-    if (omx_buf_idx == -1)
+    if (omx_buf_idx < 0)
     {
         // release lock --------------
         sem_post(&video_in_frame_copy_sem);
