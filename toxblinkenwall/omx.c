@@ -1,7 +1,7 @@
 /**
  *
  * ToxBlinkenwall
- * (C)Zoff <zoff@zoff.cc> in 2017 - 2019
+ * (C)Zoff <zoff@zoff.cc> in 2017 - 2023
  *
  * https://github.com/zoff99/ToxBlinkenwall
  *
@@ -50,7 +50,7 @@ void usleep_usec2(uint64_t usec)
  *  * Proper sync OMX events across threads, instead of busy waiting
  */
 
-#define OMX_DISPLAY_BUFFERS_WANT 10
+#define OMX_DISPLAY_BUFFERS_WANT 6
 static int omx_display_buffers_unused[OMX_DISPLAY_BUFFERS_WANT];
 sem_t omx_internal_lock;
 
@@ -540,12 +540,12 @@ int omx_display_enable(struct omx_state *st,
 {
     if (!st)
     {
-        1;
+        return OMX_ErrorUndefined;
     }
 
     if (!st->video_render)
     {
-        1;
+        return OMX_ErrorUndefined;
     }
 
     unsigned int i;
@@ -752,7 +752,7 @@ int omx_get_display_input_buffer(struct omx_state *st,
     if (!st->buffers)
     {
         dbg(9, "omx_get_display_input_buffer:EE:002\n");
-        return -1;
+        return -2;
     }
 
     sem_wait(&omx_internal_lock);
@@ -778,7 +778,7 @@ int omx_get_display_input_buffer(struct omx_state *st,
 
     sem_post(&omx_internal_lock);
     dbg(9, "omx_get_display_input_buffer:EE:003\n");
-    return -1;
+    return -3;
 }
 
 static OMX_TICKS to_omx_ticks(int64_t value)
