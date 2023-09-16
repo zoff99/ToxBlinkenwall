@@ -622,6 +622,7 @@ int omx_display_enable(struct omx_state *st,
     sem_wait(&omx_internal_lock);
     for (int i=0;i<OMX_DISPLAY_BUFFERS_WANT;i++)
     {
+        dbg(9, "omx_display_buffers_unused[%d] = 1\n", i);
         omx_display_buffers_unused[i] = 1;
     }
     sem_post(&omx_internal_lock);
@@ -769,7 +770,9 @@ int omx_get_display_input_buffer(struct omx_state *st,
             st->buffers[i]->nFilledLen = *plen;
             st->buffers[i]->nOffset = 0;
             // dbg(9, "omx_get_display_input_buffer:num=%d\n", i);
-            // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", buf_idx, (void *)st->buffers[buf_idx], (int)((void *)st->buffers[buf_idx] - (void *)st->buffers));
+            // dbg(9, "omx_get_display_input_buffer:idx=%d ptr=%p pnum=%d\n", i,
+            //     (void *)st->buffers[i],
+            //    (int)((void *)st->buffers[i] - (void *)st->buffers));
             sem_post(&omx_internal_lock);
 
             return i;
