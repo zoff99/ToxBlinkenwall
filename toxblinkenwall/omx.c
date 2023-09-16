@@ -55,7 +55,7 @@ static int omx_display_buffers_unused[OMX_DISPLAY_BUFFERS_WANT];
 sem_t omx_internal_lock;
 
 static const int VIDEO_RENDER_PORT = 90;
-static void *global_st_buffers = 0;
+static void *global_st_buffers = NULL;
 
 static OMX_ERRORTYPE EventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
                                   OMX_EVENTTYPE eEvent, OMX_U32 nData1, OMX_U32 nData2,
@@ -228,6 +228,7 @@ static void free_omx_buffers(struct omx_state *st)
         global_st_buffers = NULL;
         free(st->buffers);
         st->buffers = NULL;
+        dbg(9, "OMX_FreeBuffer st->buffers=NULL\n");
     }
 
     global_st_buffers = NULL;
@@ -667,6 +668,7 @@ int omx_display_enable(struct omx_state *st,
 
         st->buffers =
             calloc(1, want_buffers * sizeof(void *));
+        dbg(9, "omx_display_enable st->buffers=calloc()\n");
         global_st_buffers = (void *)st->buffers;
         st->num_buffers = want_buffers;
         st->current_buffer = 0;
