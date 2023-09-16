@@ -2763,11 +2763,16 @@ void on_end_call()
         usleep_usec(2000);
         sem_wait(&omx_lock);
         omx_display_disable(&omx);
+        dbg(9, "omx_display_disable:1\n");
         usleep_usec(10000);
         omx_deinit(&omx);
         sem_post(&omx_lock);
         usleep_usec(2000);
         omx_initialized = 0;
+        dbg(9, "omx_initialized:1:set to 0\n");
+        // reset omx width and height to force omx_display_enable on next call
+        omx_w = 0;
+        omx_h = 0;
     }
 
     update_omx_osd_counter = 999;
@@ -10037,6 +10042,7 @@ static void *video_play(void *dummy)
     {
         omx_init(&omx);
         omx_initialized = 1;
+        dbg(9, "omx_initialized:2:set to 1\n");
         // force to check rotation
         global_display_orientation_angle_prev = 99;
     }
@@ -10048,6 +10054,7 @@ static void *video_play(void *dummy)
             usleep_usec(10000);
             sem_wait(&omx_lock);
             omx_display_disable(&omx);
+            dbg(9, "omx_display_disable:2\n");
             usleep_usec(10000);
             omx_deinit(&omx);
             usleep_usec(10000);
@@ -10055,12 +10062,14 @@ static void *video_play(void *dummy)
             sem_post(&omx_lock);
             usleep_usec(10000);
             omx_initialized = 1;
+            dbg(9, "omx_initialized:3:set to 1\n");
             // force to check rotation
             global_display_orientation_angle_prev = 99;
         }
 
         sem_wait(&omx_lock);
         int err = omx_display_enable(&omx, frame_width_px1, frame_height_px1, ystride);
+        dbg(9, "omx_display_enable:1:err=%d\n", err);
         sem_post(&omx_lock);
 
         if (err != 0)
