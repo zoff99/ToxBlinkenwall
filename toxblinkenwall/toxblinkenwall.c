@@ -196,6 +196,11 @@ network={
 # set performance governor
 echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
+
+# play video on framebuffer device
+ffmpeg -re -i big_buck_bunny_720p_2mb.mp4 -pix_fmt rgb565le -f fbdev /dev/fb0
+ffmpeg -re -i big_buck_bunny_720p_2mb.mp4 -pix_fmt rgb565le -vf "scale=1920:-1" -f fbdev /dev/fb0
+
  */
 
 #define _GNU_SOURCE
@@ -263,8 +268,9 @@ static const char global_version_string[] = "0.99.93";
 //
 // --------- video output: choose only 1 of those! ---------
 // #define HAVE_FRAMEBUFFER 1   // fb output           [* DEFAULT]
+#define HAVE_SDLVIDEO_OUT 1  // SDL2 output, accelerated output for pi5
 // #define HAVE_OUTPUT_OPENGL 1 // openGL to framebuffer output
-#define HAVE_OUTPUT_OMX 1    // OMX HW accelerated output for the Pi3
+// #define HAVE_OUTPUT_OMX 1    // OMX HW accelerated output for the Pi3, Pi4
 // --------- video output: choose only 1 of those! ---------
 
 // --------- Framebuffer: choose only if HAVE_FRAMEBUFFER is 1 ! ---------
@@ -400,6 +406,14 @@ int global_osd_level = 2;
     bool x11_pixmap_valid = false;
     bool x11_main_pixmap_valid = false;
     bool x11_open_done = false;
+#endif
+
+#ifdef HAVE_SDLVIDEO_OUT
+    #include <SDL2/SDL.h>
+    void *sdl_st = NULL;
+    int sdlvideo_initialized = 0;
+    int sdlvideo_w = 0;
+    int sdlvideo_h = 0;
 #endif
 
 #ifdef HAVE_OUTPUT_OMX
@@ -542,7 +556,134 @@ void dummy_noop(int line, const char *func)
 
 
 
+#ifdef HAVE_SDLVIDEO_OUT
+static SDL_RendererInfo renderer_info = {0};
 
+static struct gen_display_struct
+{
+    SDL_Renderer* renderer;
+    SDL_Window* window;
+    SDL_Texture* texture;
+    uint8_t *yuvData;
+    int display_width;
+    int display_height;
+    int window_width;
+    int window_height;
+    int yuv_width;
+    int yuv_height;
+    int yuv_size;
+} gen_display_struct;
+
+static void* gen_display_init()
+{
+    struct gen_display_struct *st = calloc(1, sizeof(struct gen_display_struct));
+    st->display_width = 1920;
+    st->display_height = 1080;
+    st->window_width = 1920;
+    st->window_height = 1080;
+
+    // Initialize SDL
+    SDL_Init(SDL_INIT_VIDEO);
+
+    // Create a window
+    int flags = SDL_WINDOW_BORDERLESS|SDL_WINDOW_SHOWN;
+    st->window = SDL_CreateWindow("_",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        st->window_width, st->window_height, flags);
+
+    SDL_ShowWindow(st->window);
+    SDL_RaiseWindow(st->window);
+
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+    // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
+    // Create a renderer
+    st->renderer = SDL_CreateRenderer(st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!st->renderer) {
+        printf("SDL:Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
+        st->renderer = SDL_CreateRenderer(st->window, -1, SDL_RENDERER_PRESENTVSYNC);
+    }
+    if (st->renderer) {
+        if (!SDL_GetRendererInfo(st->renderer, &renderer_info))
+            printf("SDL:Initialized %s renderer.\n", renderer_info.name);
+    }
+
+    SDL_SetRenderDrawColor(st->renderer, 0, 255, 0, 0);
+    SDL_RenderClear(st->renderer);
+    SDL_ShowCursor(SDL_DISABLE);
+
+    return (void *)st;
+}
+
+static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
+{
+    struct gen_display_struct *st = gen_display_st;
+    // Create YUV buffer
+    st->yuv_width = width;
+    st->yuv_height = height;
+    st->yuv_size = (st->yuv_width * st->yuv_height * 3) / 2;
+    st->yuvData = calloc(1, st->yuv_size);
+    // Create a texture
+    st->texture = SDL_CreateTexture(st->renderer, SDL_PIXELFORMAT_IYUV,
+        SDL_TEXTUREACCESS_STREAMING, st->yuv_width, st->yuv_height);
+    if (st->texture == NULL) {
+        printf("SDL:Texture could not be created! SDL_Error: %s\n", SDL_GetError());
+        return 1;
+    }
+    // SDL_SetTextureBlendMode(st->texture, SDL_BLENDMODE_NONE);
+    return 0;
+}
+
+static int gen_display_yuvtex_close(void *gen_display_st)
+{
+    struct gen_display_struct *st = gen_display_st;
+    SDL_DestroyTexture(st->texture);
+    st->texture = NULL;
+    free(st->yuvData);
+    st->yuv_width = 0;
+    st->yuv_height = 0;
+    st->yuv_size = 0;
+    st->yuvData = NULL;
+    printf("SDL:Texture destroyed closed\n");
+    return 0;
+}
+
+static int gen_display_lock(void *gen_display_st, uint8_t **pixel_data, int *stride)
+{
+    struct gen_display_struct *st = gen_display_st;
+    SDL_LockTexture(st->texture, NULL, (void **)pixel_data, stride);
+    return 0;
+}
+
+static int gen_display_unlock(void *gen_display_st)
+{
+    struct gen_display_struct *st = gen_display_st;
+    SDL_UnlockTexture(st->texture);
+    return 0;
+}
+
+static int gen_display_display(void *gen_display_st)
+{
+    struct gen_display_struct *st = gen_display_st;
+    SDL_RenderCopy(st->renderer, st->texture, NULL, NULL);
+    SDL_RenderPresent(st->renderer);
+    return 0;
+}
+
+static int gen_display_close(void **gen_display_st)
+{
+    struct gen_display_struct *st = *gen_display_st;
+    // Clean up resources
+    SDL_DestroyRenderer(st->renderer);
+    SDL_DestroyWindow(st->window);
+    SDL_Quit();
+    free(*gen_display_st);
+    *gen_display_st = NULL;
+    printf("SDL:Display closed%s\n");
+    return 0;
+}
+#endif
 
 
 
@@ -1340,7 +1481,8 @@ void dbg(int level, const char *fmt, ...)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     time_t t3 = time(NULL);
-    struct tm tm3 = *localtime(&t3);
+    struct tm tm3;
+    tm3 = *localtime_r(&t3, &tm3);
     char *level_and_format_2 = calloc(1, strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 7 + 1);
     level_and_format_2[0] = '\0';
     snprintf(level_and_format_2, (strlen(level_and_format) + 5 + 3 + 3 + 1 + 3 + 3 + 3 + 7 + 1),
@@ -2777,6 +2919,17 @@ void on_end_call()
 
     update_omx_osd_counter = 999;
 #endif
+
+#ifdef HAVE_SDLVIDEO_OUT
+    dbg(9, "SDL:closing ...\n");
+    gen_display_yuvtex_close(sdl_st);
+    gen_display_close(&sdl_st);
+    sdlvideo_initialized = 0;
+    sdlvideo_w = 0;
+    sdlvideo_h = 0;
+    dbg(9, "SDL:closed\n");
+#endif
+
     global_video_incoming_orientation_angle_prev = 0;
     global_video_incoming_orientation_angle = 0;
     char cmd_str[1000];
@@ -6847,12 +7000,12 @@ void avatar_unset(Tox *m)
 char *get_current_time_date_formatted()
 {
     time_t t;
-    struct tm *tm = NULL;
     const int max_size_datetime_str = 100;
     char *str_date_time = calloc(1, max_size_datetime_str);
     t = time(NULL);
-    tm = localtime(&t);
-    strftime(str_date_time, max_size_datetime_str, global_overlay_timestamp_format, tm);
+    struct tm tm;
+    tm = *localtime_r(&t, &tm);
+    strftime(str_date_time, max_size_datetime_str, global_overlay_timestamp_format, &tm);
     // dbg(9, "str_date_time=%s\n", str_date_time);
     return str_date_time;
 }
@@ -10036,6 +10189,93 @@ static void *video_play(void *dummy)
     // release lock ------- OLD -------
     // ****** // sem_post(&video_in_frame_copy_sem);
     // release lock ------- OLD -------
+
+#ifdef HAVE_SDLVIDEO_OUT
+    int yuv_size = 0;
+    if (sdlvideo_initialized == 0)
+    {
+        sdlvideo_initialized = 1;
+        sdl_st = gen_display_init();
+        sdlvideo_w = 640;
+        sdlvideo_h = 480;
+        gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
+        yuv_size = (sdlvideo_w * sdlvideo_h * 3) / 2;
+        dbg(9, "SDL:frame_height_px:1:%d %d\n", sdlvideo_w, sdlvideo_h);
+        dbg(9, "SDL:sdlvideo_initialized:2:set to 1\n");
+    }
+
+    if (frame_width_px != sdlvideo_w || frame_height_px != sdlvideo_h)
+    {
+        gen_display_yuvtex_close(sdl_st);
+        sdlvideo_w = frame_width_px;
+        sdlvideo_h = frame_height_px;
+        gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
+        yuv_size = (sdlvideo_w * sdlvideo_h * 3) / 2;
+        dbg(9, "SDL:frame_height_px:2:%d %d\n", sdlvideo_w, sdlvideo_h);
+    }
+
+    int stride = 0;
+    uint8_t *pixel_data;
+    gen_display_lock(sdl_st, &pixel_data, &stride);
+    // printf("SDL:stride=%d\n", stride);
+    memcpy(pixel_data, y, y_layer_size);
+    memcpy(pixel_data + y_layer_size, u, u_layer_size);
+    memcpy(pixel_data + y_layer_size + u_layer_size, v, v_layer_size);
+
+
+    // OSD --------
+    // OSD --------
+    // OSD --------
+    if (omx_osd_y == NULL)
+    {
+        omx_osd_w = OVERLAY_WIDTH_PX;
+        omx_osd_h = OVERLAY_HEIGHT_PX;
+        omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
+    }
+
+    uint32_t omx_osd_update_every = 30;
+
+    if ((global_video_in_fps > 10) && (global_video_in_fps < 60))
+    {
+        omx_osd_update_every = global_video_in_fps * 2;
+    }
+
+    if (update_omx_osd_counter > omx_osd_update_every)
+    {
+        if (global_osd_level > 1)
+        {
+            prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
+                                global_video_in_fps);
+        }
+        update_omx_osd_counter = 0;
+    }
+
+    update_omx_osd_counter++;
+    if (global_osd_level > 1)
+    {
+        draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, pixel_data, frame_width_px1, frame_height_px1, ystride);
+    }
+    if (global_osd_level > 0)
+    {
+        prepare_omx_osd_audio_level_yuv(pixel_data, frame_width_px1, frame_height_px1, ystride);
+    }
+    if (networktraffic_thread_stop == 0)
+    {
+        prepare_omx_osd_network_bars_yuv(pixel_data, frame_width_px1, frame_height_px1, ystride);
+    }
+    // OSD --------
+    // OSD --------
+    // OSD --------
+
+    gen_display_unlock(sdl_st);
+    gen_display_display(sdl_st);
+
+    // release lock --------------
+    sem_post(&video_in_frame_copy_sem);
+    // release lock --------------
+
+#endif
+
 #ifdef HAVE_OUTPUT_OMX
 
     if (!omx_initialized)
@@ -16568,6 +16808,19 @@ int main(int argc, char *argv[])
 #ifdef HAVE_X11_AS_FB
     /*restore the old settings*/
     tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
+#endif
+
+#ifdef HAVE_SDLVIDEO_OUT
+    if (sdlvideo_initialized != 0)
+    {
+        dbg(9, "SDL:closing fully ...\n");
+        gen_display_yuvtex_close(sdl_st);
+        gen_display_close(&sdl_st);
+        sdlvideo_initialized = 0;
+        sdlvideo_w = 0;
+        sdlvideo_h = 0;
+        dbg(9, "SDL:closed fully\n");
+    }
 #endif
 
     free(delayed_a_fifo);
