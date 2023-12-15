@@ -594,9 +594,9 @@ static void* gen_display_init()
     SDL_ShowWindow(st->window);
     SDL_RaiseWindow(st->window);
 
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+    // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
     // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-    // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
     // Create a renderer
     st->renderer = SDL_CreateRenderer(st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -609,7 +609,7 @@ static void* gen_display_init()
             printf("SDL:Initialized %s renderer.\n", renderer_info.name);
     }
 
-    SDL_SetRenderDrawColor(st->renderer, 0, 255, 0, 0);
+    SDL_SetRenderDrawColor(st->renderer, 0, 0, 0, 0);
     SDL_RenderClear(st->renderer);
     SDL_ShowCursor(SDL_DISABLE);
 
@@ -631,6 +631,7 @@ static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
         printf("SDL:Texture could not be created! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
+    SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
     // SDL_SetTextureBlendMode(st->texture, SDL_BLENDMODE_NONE);
     return 0;
 }
