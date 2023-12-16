@@ -414,6 +414,20 @@ int global_osd_level = 2;
     int sdlvideo_initialized = 0;
     int sdlvideo_w = 0;
     int sdlvideo_h = 0;
+    int sdl_status_want = 0;
+    int sdl_status = 0;
+    uint8_t *sdl_t_y = NULL;
+    uint8_t *sdl_t_u = NULL;
+    uint8_t *sdl_t_v = NULL;
+    int sdl_t_y_layer_size;
+    int sdl_t_u_layer_size;
+    int sdl_t_v_layer_size;
+    int sdl_thread_stop = 0;
+    uint32_t sdl_t_frame_width_px = 0;
+    uint32_t sdl_t_frame_height_px = 0;
+    uint32_t sdl_t_frame_width_px1 = 0;
+    uint32_t sdl_t_frame_height_px1 = 0;
+    int32_t sdl_t_ystride = 0;
 #endif
 
 #ifdef HAVE_OUTPUT_OMX
@@ -572,6 +586,8 @@ static struct gen_display_struct
     int yuv_width;
     int yuv_height;
     int yuv_size;
+
+
 } gen_display_struct;
 
 static void* gen_display_init()
@@ -586,10 +602,16 @@ static void* gen_display_init()
     SDL_Init(SDL_INIT_VIDEO);
 
     // Create a window
-    int flags = SDL_WINDOW_BORDERLESS|SDL_WINDOW_SHOWN;
+    // int flags = SDL_WINDOW_BORDERLESS|SDL_WINDOW_SHOWN;
+    int flags = SDL_WINDOW_ALWAYS_ON_TOP|SDL_WINDOW_SHOWN;
     st->window = SDL_CreateWindow("_",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         st->window_width, st->window_height, flags);
+
+    if (st->window == NULL)
+    {
+        dbg(0, "SDL:gen_display_init:can not create window\n");
+    }
 
     SDL_ShowWindow(st->window);
     SDL_RaiseWindow(st->window);
@@ -598,20 +620,64 @@ static void* gen_display_init()
     // SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
+    int number_of_drivers = SDL_GetNumRenderDrivers();
+    dbg(9, "SDL:number of drivers=%d\n", number_of_drivers);
+    if (number_of_drivers > 0)
+    {
+        SDL_RendererInfo ri;
+        for (int i=0;i<number_of_drivers;i++)
+        {
+            if (SDL_GetRenderDriverInfo(i, &ri) == 0)
+            {
+                dbg(9, "SDL:driver #%d %s\n", i, ri.name);
+            }
+            else
+            {
+                dbg(9, "SDL:driver #%d now info available\n", i);
+            }
+        }
+    }
+
+    // SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+
     // Create a renderer
     st->renderer = SDL_CreateRenderer(st->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!st->renderer) {
-        printf("SDL:Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
+        dbg(1, "SDL:Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
         st->renderer = SDL_CreateRenderer(st->window, -1, SDL_RENDERER_PRESENTVSYNC);
     }
     if (st->renderer) {
-        if (!SDL_GetRendererInfo(st->renderer, &renderer_info))
-            printf("SDL:Initialized %s renderer.\n", renderer_info.name);
+        if (SDL_GetRendererInfo(st->renderer, &renderer_info) == 0)
+        {
+            dbg(9, "SDL:Initialized %s renderer.\n", renderer_info.name);
+        }
+        else
+        {
+            dbg(9, "SDL:Initialized renderer.\n");
+        }
+    }
+    else
+    {
+        dbg(0, "SDL:Failed to initialize a any renderer: %s\n", SDL_GetError());
     }
 
-    SDL_SetRenderDrawColor(st->renderer, 0, 0, 0, 0);
-    SDL_RenderClear(st->renderer);
-    SDL_ShowCursor(SDL_DISABLE);
+    if (SDL_SetRenderDrawColor(st->renderer, 0, 0, 0, 0) != 0)
+    {
+        dbg(0, "SDL:SDL_SetRenderDrawColor:ERROR\n");
+    }
+    if (SDL_RenderClear(st->renderer) != 0)
+    {
+        dbg(0, "SDL:SDL_RenderClear:ERROR\n");
+    }
+    if (SDL_RenderClear(st->renderer) != 0)
+    {
+        dbg(0, "SDL:SDL_RenderClear:ERROR\n");
+    }
+
+    if (SDL_ShowCursor(SDL_DISABLE) < 0)
+    {
+        dbg(0, "SDL:SDL_ShowCursor:ERROR\n");
+    }
 
     return (void *)st;
 }
@@ -628,10 +694,14 @@ static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
     st->texture = SDL_CreateTexture(st->renderer, SDL_PIXELFORMAT_IYUV,
         SDL_TEXTUREACCESS_STREAMING, st->yuv_width, st->yuv_height);
     if (st->texture == NULL) {
-        printf("SDL:Texture could not be created! SDL_Error: %s\n", SDL_GetError());
+        dbg(0, "SDL:Texture could not be created! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
+    int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
+    if (res_scale != 0) {
+        dbg(0, "SDL:SDL_SetTextureScaleMode SDL_Error\n");
+        return 1;
+    }
     // SDL_SetTextureBlendMode(st->texture, SDL_BLENDMODE_NONE);
     return 0;
 }
@@ -646,14 +716,17 @@ static int gen_display_yuvtex_close(void *gen_display_st)
     st->yuv_height = 0;
     st->yuv_size = 0;
     st->yuvData = NULL;
-    printf("SDL:Texture destroyed closed\n");
+    dbg(9, "SDL:Texture destroyed closed\n");
     return 0;
 }
 
 static int gen_display_lock(void *gen_display_st, uint8_t **pixel_data, int *stride)
 {
     struct gen_display_struct *st = gen_display_st;
-    SDL_LockTexture(st->texture, NULL, (void **)pixel_data, stride);
+    if (SDL_LockTexture(st->texture, NULL, (void **)pixel_data, stride) != 0)
+    {
+        dbg(0, "SDL:SDL_LockTexture SDL_Error: %s\n", SDL_GetError());
+    }
     return 0;
 }
 
@@ -667,7 +740,10 @@ static int gen_display_unlock(void *gen_display_st)
 static int gen_display_display(void *gen_display_st)
 {
     struct gen_display_struct *st = gen_display_st;
-    SDL_RenderCopy(st->renderer, st->texture, NULL, NULL);
+    if (SDL_RenderCopy(st->renderer, st->texture, NULL, NULL) != 0)
+    {
+        dbg(0, "SDL:SDL_RenderCopy SDL_Error: %s\n", SDL_GetError());
+    }
     SDL_RenderPresent(st->renderer);
     return 0;
 }
@@ -676,6 +752,7 @@ static int gen_display_close(void **gen_display_st)
 {
     struct gen_display_struct *st = *gen_display_st;
     // Clean up resources
+    // SDL_DestroyTexture(st->texture);
     SDL_DestroyRenderer(st->renderer);
     SDL_DestroyWindow(st->window);
     SDL_Quit();
@@ -2923,11 +3000,15 @@ void on_end_call()
 
 #ifdef HAVE_SDLVIDEO_OUT
     dbg(9, "SDL:closing ...\n");
-    gen_display_yuvtex_close(sdl_st);
-    gen_display_close(&sdl_st);
-    sdlvideo_initialized = 0;
-    sdlvideo_w = 0;
-    sdlvideo_h = 0;
+    if (sdlvideo_initialized == 1)
+    {
+        sdl_status_want = 0;
+        while (sdl_status != 0)
+        {
+            usleep(2 * 1000);
+        }
+        sdlvideo_initialized = 0;
+    }
     dbg(9, "SDL:closed\n");
 #endif
 
@@ -10092,6 +10173,126 @@ void prepare_omx_osd_yuv(uint8_t *yuf_buf, int w, int h, int stride, int dw, int
     text_on_yuf_frame_xy_ptr(8, 22, fps_str, yuf_buf, w, h);
 }
 
+#ifdef HAVE_SDLVIDEO_OUT
+static void *sdl_thread(void *dummy)
+{
+    dbg(9, "sdl_thread: start\n");
+    while (sdl_thread_stop != 1)
+    {
+        if (sdl_status_want != sdl_status)
+        {
+            if (sdl_status_want == 0)
+            {
+                // shutdown SDL
+                dbg(9, "sdl_thread: shutdown SDL\n");
+                gen_display_yuvtex_close(sdl_st);
+                gen_display_close(&sdl_st);
+                sdlvideo_w = 0;
+                sdlvideo_h = 0;
+                sdl_status = 0;
+            }
+            else if (sdl_status_want == 1)
+            {
+                // init SDL
+                dbg(9, "sdl_thread: init SDL\n");
+                sdl_st = gen_display_init();
+                sdlvideo_w = 640;
+                sdlvideo_h = 480;
+                gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
+                dbg(9, "SDL:frame_height_px:1:%d %d\n", sdlvideo_w, sdlvideo_h);
+                dbg(9, "SDL:sdlvideo_initialized:set to 1\n");
+                sdl_status = 1;
+            }
+            else if (sdl_status_want == 70)
+            {
+                sdl_status = 70;
+            }
+        }
+
+        if (sdl_status == 70)
+        {
+            int sdl_t_frame_width_px_pin = sdl_t_frame_width_px;
+            int sdl_t_frame_height_px_pin = sdl_t_frame_height_px;
+            if (sdl_t_frame_width_px_pin != sdlvideo_w || sdl_t_frame_height_px_pin != sdlvideo_h)
+            {
+                gen_display_yuvtex_close(sdl_st);
+                sdlvideo_w = sdl_t_frame_width_px_pin;
+                sdlvideo_h = sdl_t_frame_height_px_pin;
+                gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
+                dbg(9, "SDL:frame_height_px:2:%d %d\n", sdlvideo_w, sdlvideo_h);
+            }
+
+            int stride;
+            uint8_t *pixel_data;
+            gen_display_lock(sdl_st, &pixel_data, &stride);
+            memcpy(pixel_data, sdl_t_y, sdl_t_y_layer_size);
+            memcpy(pixel_data + sdl_t_y_layer_size, sdl_t_u, sdl_t_u_layer_size);
+            memcpy(pixel_data + sdl_t_y_layer_size + sdl_t_u_layer_size, sdl_t_v, sdl_t_v_layer_size);
+
+            // OSD --------
+            // OSD --------
+            // OSD --------
+            if (omx_osd_y == NULL)
+            {
+                omx_osd_w = OVERLAY_WIDTH_PX;
+                omx_osd_h = OVERLAY_HEIGHT_PX;
+                omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
+            }
+
+            uint32_t omx_osd_update_every = 30;
+
+            if ((global_video_in_fps > 10) && (global_video_in_fps < 60))
+            {
+                omx_osd_update_every = global_video_in_fps * 2;
+            }
+
+            if (update_omx_osd_counter > omx_osd_update_every)
+            {
+                if (global_osd_level > 1)
+                {
+                    prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, sdl_t_frame_width_px1, sdl_t_frame_height_px1, sdl_t_ystride,
+                                        global_video_in_fps);
+                }
+                update_omx_osd_counter = 0;
+            }
+
+            update_omx_osd_counter++;
+            if (global_osd_level > 1)
+            {
+                draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, pixel_data, sdl_t_frame_width_px1, sdl_t_frame_height_px1, sdl_t_ystride);
+            }
+            if (global_osd_level > 0)
+            {
+                prepare_omx_osd_audio_level_yuv(pixel_data, sdl_t_frame_width_px1, sdl_t_frame_height_px1, sdl_t_ystride);
+            }
+            if (networktraffic_thread_stop == 0)
+            {
+                prepare_omx_osd_network_bars_yuv(pixel_data, sdl_t_frame_width_px1, sdl_t_frame_height_px1, sdl_t_ystride);
+            }
+            // OSD --------
+            // OSD --------
+            // OSD --------
+
+
+            gen_display_unlock(sdl_st);
+            gen_display_display(sdl_st);
+            sdl_status = 70;
+        }
+
+        if (sdlvideo_initialized == 1)
+        {
+            usleep(1 * 1000);
+        }
+        else
+        {
+            usleep(20 * 1000);
+        }
+    }
+    dbg(9, "sdl_thread: finished\n");
+    pthread_exit(0);
+}
+#endif
+
 static void *video_play(void *dummy)
 {
     sta();
@@ -10195,86 +10396,37 @@ static void *video_play(void *dummy)
     int yuv_size = 0;
     if (sdlvideo_initialized == 0)
     {
-        sdlvideo_initialized = 1;
-        sdl_st = gen_display_init();
-        sdlvideo_w = 640;
-        sdlvideo_h = 480;
-        gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
-        yuv_size = (sdlvideo_w * sdlvideo_h * 3) / 2;
-        dbg(9, "SDL:frame_height_px:1:%d %d\n", sdlvideo_w, sdlvideo_h);
-        dbg(9, "SDL:sdlvideo_initialized:2:set to 1\n");
-    }
-
-    if (frame_width_px != sdlvideo_w || frame_height_px != sdlvideo_h)
-    {
-        gen_display_yuvtex_close(sdl_st);
-        sdlvideo_w = frame_width_px;
-        sdlvideo_h = frame_height_px;
-        gen_display_yuvtex_init(sdl_st, sdlvideo_w, sdlvideo_h);
-        yuv_size = (sdlvideo_w * sdlvideo_h * 3) / 2;
-        dbg(9, "SDL:frame_height_px:2:%d %d\n", sdlvideo_w, sdlvideo_h);
-    }
-
-    int stride = 0;
-    uint8_t *pixel_data;
-    gen_display_lock(sdl_st, &pixel_data, &stride);
-    // printf("SDL:stride=%d\n", stride);
-    memcpy(pixel_data, y, y_layer_size);
-    memcpy(pixel_data + y_layer_size, u, u_layer_size);
-    memcpy(pixel_data + y_layer_size + u_layer_size, v, v_layer_size);
-
-
-    // OSD --------
-    // OSD --------
-    // OSD --------
-    if (omx_osd_y == NULL)
-    {
-        omx_osd_w = OVERLAY_WIDTH_PX;
-        omx_osd_h = OVERLAY_HEIGHT_PX;
-        omx_osd_y = calloc(1, ((omx_osd_w * omx_osd_h) * 3) / 2);
-    }
-
-    uint32_t omx_osd_update_every = 30;
-
-    if ((global_video_in_fps > 10) && (global_video_in_fps < 60))
-    {
-        omx_osd_update_every = global_video_in_fps * 2;
-    }
-
-    if (update_omx_osd_counter > omx_osd_update_every)
-    {
-        if (global_osd_level > 1)
+        dbg(9, "sdl: want=1 ...\n");
+        sdl_status_want = 1;
+        while (sdl_status != 1)
         {
-            prepare_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, frame_width_px1, frame_height_px1, ystride,
-                                global_video_in_fps);
+            usleep(2 * 1000);
         }
-        update_omx_osd_counter = 0;
+        dbg(9, "sdl: got=1 ...\n");
+        sdlvideo_initialized = 1;
     }
 
-    update_omx_osd_counter++;
-    if (global_osd_level > 1)
-    {
-        draw_omx_osd_yuv(omx_osd_y, omx_osd_w, omx_osd_h, omx_osd_w, pixel_data, frame_width_px1, frame_height_px1, ystride);
-    }
-    if (global_osd_level > 0)
-    {
-        prepare_omx_osd_audio_level_yuv(pixel_data, frame_width_px1, frame_height_px1, ystride);
-    }
-    if (networktraffic_thread_stop == 0)
-    {
-        prepare_omx_osd_network_bars_yuv(pixel_data, frame_width_px1, frame_height_px1, ystride);
-    }
-    // OSD --------
-    // OSD --------
-    // OSD --------
+    sdl_t_y = y;
+    sdl_t_u = u;
+    sdl_t_v = v;
+    sdl_t_y_layer_size = y_layer_size;
+    sdl_t_u_layer_size = u_layer_size;
+    sdl_t_v_layer_size = v_layer_size;
+    sdl_t_frame_width_px = frame_width_px;
+    sdl_t_frame_height_px = frame_height_px;
+    sdl_t_frame_width_px1 = frame_width_px1;
+    sdl_t_frame_height_px1 = frame_height_px1;
+    sdl_t_ystride = ystride;
 
-    gen_display_unlock(sdl_st);
-    gen_display_display(sdl_st);
+    sdl_status_want = 70;
+    while (sdl_status != 70)
+    {
+        usleep(2 * 1000);
+    }
 
     // release lock --------------
     sem_post(&video_in_frame_copy_sem);
     // release lock --------------
-
 #endif
 
 #ifdef HAVE_OUTPUT_OMX
@@ -16467,14 +16619,30 @@ int main(int argc, char *argv[])
 #endif
     // init AV callbacks -------------------------------
     // start toxav thread ------------------------------
-    pthread_t tid[9];
+    pthread_t tid[10];
     // 0 -> toxav_iterate thread, 1 -> video send thread
     // 2 -> audio recording thread, 3 -> read keys from pipe
     // 4 -> invite phonebook entries, 5 -> openGL thread
     // 6 -> toxav_audio_iterate thread
     // 7 -> stdin input reader (only for X11 mode)
     // 8 -> audio play thread (for multi calls)
+    // 9 -> sdl thread
     // start toxav thread ------------------------------
+
+#ifdef HAVE_SDLVIDEO_OUT
+    sdl_thread_stop = 0;
+
+    if (pthread_create(&(tid[9]), NULL, sdl_thread, NULL) != 0)
+    {
+        dbg(0, "SDL Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(tid[9], "t_sdl");
+        dbg(2, "SDL Thread successfully created\n");
+    }
+#endif
+
     toxav_iterate_thread_stop = 0;
 
     if (pthread_create(&(tid[0]), NULL, thread_av, (void *)mytox_av) != 0)
@@ -16761,6 +16929,10 @@ int main(int argc, char *argv[])
     networktraffic_thread_stop = 1;
     stdin_thread_stop = 1;
 
+#ifdef HAVE_SDLVIDEO_OUT
+    sdl_thread_stop = 1;
+#endif
+
 #ifdef HAVE_OUTPUT_OPENGL
     opengl_shutdown = 1;
     yieldcpu(100);
@@ -16815,8 +16987,11 @@ int main(int argc, char *argv[])
     if (sdlvideo_initialized != 0)
     {
         dbg(9, "SDL:closing fully ...\n");
-        gen_display_yuvtex_close(sdl_st);
-        gen_display_close(&sdl_st);
+        sdl_status_want = 0;
+        while (sdl_status != 0)
+        {
+            usleep(2 * 1000);
+        }
         sdlvideo_initialized = 0;
         sdlvideo_w = 0;
         sdlvideo_h = 0;
