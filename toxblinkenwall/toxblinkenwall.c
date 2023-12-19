@@ -758,7 +758,7 @@ static int gen_display_close(void **gen_display_st)
     SDL_Quit();
     free(*gen_display_st);
     *gen_display_st = NULL;
-    printf("SDL:Display closed%s\n");
+    printf("SDL:Display closed\n");
     return 0;
 }
 #endif
