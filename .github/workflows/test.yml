@@ -104,11 +104,11 @@ jobs:
           -std=gnu99 \
           ./libtoxcore.a \
           $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
+          $(pkg-config --cflags --libs sdl2) \
           -pthread \
           -lrt \
           -lasound \
           -lm \
-          -lSDL2 \
           -lv4lconvert || exit 1
           res2=$?
           ldd toxblinkenwall
