@@ -108,7 +108,7 @@ jobs:
           -lrt \
           -lasound \
           -lm \
-          -SDL2 \
+          -lSDL2 \
           -lv4lconvert || exit 1
           res2=$?
           ldd toxblinkenwall
