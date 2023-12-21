@@ -33,7 +33,8 @@ jobs:
           libswresample-dev \
           libswscale-dev \
           libx264-dev \
-          libx11-dev
+          libx11-dev \
+          libsdl2-dev
 
       - name: check for python3
         run: |
@@ -71,7 +72,7 @@ jobs:
           make
           ls -al
 
-      - name: compile binary for Linux with X11
+      - name: compile binary for Linux with SDL
         run: |
           mkdir -p build_dir/
           cd build_dir/
@@ -81,9 +82,9 @@ jobs:
           cp -av ../toxblinkenwall/rb.h ./
           cp -av ../toxblinkenwall/stb_image_resize.h ./
           ls -al
-          sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
-          sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
-          sed -i -e 'sx^// #define HAVE_X11_AS_FB 1x#define HAVE_X11_AS_FB 1x' toxblinkenwall.c
+          # sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          # sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          # sed -i -e 'sx^// #define HAVE_X11_AS_FB 1x#define HAVE_X11_AS_FB 1x' toxblinkenwall.c
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OPENGL'||echo _
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OMX'||echo _
           cat toxblinkenwall.c|grep 'define HAVE_FRAMEBUFFER'||echo _
@@ -107,6 +108,7 @@ jobs:
           -lrt \
           -lasound \
           -lm \
+          -SDL2 \
           -lv4lconvert || exit 1
           res2=$?
           ldd toxblinkenwall

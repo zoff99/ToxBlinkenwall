@@ -55,8 +55,8 @@ cp -av tbw_formatted.tgz ~/work/deploy/
 cd ../../
 cd toxblinkenwall/
 
-sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
-sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+# sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+# sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
 
 cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OPENGL'
 cat toxblinkenwall.c|grep '^#define HAVE_OUTPUT_OMX'
@@ -85,6 +85,7 @@ $_INST_/lib/libavutil.a \
 $_INST_/lib/libsodium.a \
 -lasound \
 -lm \
+-lSDL2 \
 -lpthread -lv4lconvert || exit 1
 
 res2=$?
