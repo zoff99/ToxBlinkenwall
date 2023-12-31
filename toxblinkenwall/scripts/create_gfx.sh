@@ -6,14 +6,23 @@ gfx_dir=$(dirname "$0")/../gfx/
 
 function convert_img
 {
-    fb_bit_depth=$(fbset|grep geometry|awk '{ print $6}')
-    img="$1"
-    convert "$gfx_dir""/""$img"".png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir""/""$img""_x_"".png"
-    # swap from RGBA to BGRA
-    convert "$gfx_dir""/""$img""_x_"".png" -channel rgba -alpha on -set colorspace RGB -separate -combine -define png:color-type=6 "$gfx_dir""/""$img""_y_"".png"
-    convert "$gfx_dir""/""$img""_y_"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba2"
-    ffmpeg -y -i "$gfx_dir""/""$img"".rgba2" -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba" >/dev/null 2>/dev/null
-    rm -f "$gfx_dir""/""$img""_x_"".png" "$gfx_dir""/""$img""_y_"".png" "$gfx_dir""/""$img"".rgba2"
+    if [ "$RASPI5_FB""x" == "0x" ]; then
+        img="$1"
+        convert "$gfx_dir""/""$img"".png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir""/""$img""_x_"".png"
+        # swap from RGBA to BGRA
+        convert "$gfx_dir""/""$img""_x_"".png" -channel rgba -alpha on -set colorspace RGB -separate -swap 0,2 -combine -define png:color-type=6 "$gfx_dir""/""$img""_y_"".png"
+        convert "$gfx_dir""/""$img""_y_"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba"
+        rm -f "$gfx_dir""/""$img""_x_"".png" "$gfx_dir""/""$img""_y_"".png"
+    else
+        fb_bit_depth=$(fbset|grep geometry|awk '{ print $6}')
+        img="$1"
+        convert "$gfx_dir""/""$img"".png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir""/""$img""_x_"".png"
+        # swap from RGBA to BGRA
+        convert "$gfx_dir""/""$img""_x_"".png" -channel rgba -alpha on -set colorspace RGB -separate -combine -define png:color-type=6 "$gfx_dir""/""$img""_y_"".png"
+        convert "$gfx_dir""/""$img""_y_"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba2"
+        ffmpeg -y -i "$gfx_dir""/""$img"".rgba2" -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba" >/dev/null 2>/dev/null
+        rm -f "$gfx_dir""/""$img""_x_"".png" "$gfx_dir""/""$img""_y_"".png" "$gfx_dir""/""$img"".rgba2"
+    fi
 }
 
 convert_img "loading_bar_0"

@@ -31,6 +31,20 @@ bits_per_pixel_=$(cat /sys/class/graphics/fb0/bits_per_pixel)
 virtual_size=$(cat /sys/class/graphics/fb0/virtual_size)
 # TODO: dont hardcode "fb0" here!!
 
+# TODO: make this better and more solid -----------------
+# we try to detect raspi5 framebuffer weiredness
+RASPI5_FB=0
+fb_rgba=$(fbset -s|grep rgba|tr -d ' ')
+fb_geo=$(fbset -s|grep geometry|tr -d ' ')
+if [ "$fb_rgba""x" == 'rgba5/11,6/5,5/0,0/0x' ] ; then
+  if [ "$fb_geo""x" == 'geometry192010801920108016x' ] ; then
+    RASPI5_FB=1
+  fi
+fi
+export RASPI5_FB
+# TODO: make this better and more solid -----------------
+
+
 # change values to actual framebuffer resolution --------
 if [ "$IS_ON""x" == "RASPI""x" ]; then
   export BKWALL_WIDTH=$(echo $virtual_size |cut -d"," -f1)

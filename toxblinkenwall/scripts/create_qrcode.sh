@@ -16,10 +16,22 @@ cp $(dirname "$0")/../toxid.txt $(dirname "$0")/../db/toxid.txt
 rm -f "$qrcode_file_png"
 rm -f "aa""$$"".png"
 qrencode -t PNG -o "$qrcode_file_png" "$toxidstr"
-convert "$qrcode_file_png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "aa""$$"".png"
-rm -f "$qrcode_file_rgba"
-convert "aa""$$"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$qrcode_file_rgba"
-rm -f "aa""$$"".png"
+
+if [ "$RASPI5_FB""x" == "0x" ]; then
+    convert "$qrcode_file_png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "aa""$$"".png"
+    rm -f "$qrcode_file_rgba"
+    convert "aa""$$"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$qrcode_file_rgba"
+    rm -f "aa""$$"".png"
+else
+    fb_bit_depth=$(fbset|grep geometry|awk '{ print $6}')
+    convert "$qrcode_file_png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "aa""$$"".png"
+    rm -f "$qrcode_file_rgba"
+    rm -f "$qrcode_file_rgba""2"
+    convert "aa""$$"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$qrcode_file_rgba""2"
+    rm -f "aa""$$"".png"
+    ffmpeg -y -i "$qrcode_file_rgba""2" -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s "${real_width}x${FB_HEIGHT}" "$qrcode_file_rgba" >/dev/null 2>/dev/null
+    rm -f "$qrcode_file_rgba""2"
+fi
 
 touch "$qrcode_touchfile_ready"
 
