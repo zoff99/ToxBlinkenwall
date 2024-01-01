@@ -669,10 +669,6 @@ static void* gen_display_init()
     {
         dbg(0, "SDL:SDL_RenderClear:ERROR\n");
     }
-    if (SDL_RenderClear(st->renderer) != 0)
-    {
-        dbg(0, "SDL:SDL_RenderClear:ERROR\n");
-    }
 
     if (SDL_ShowCursor(SDL_DISABLE) < 0)
     {
@@ -740,10 +736,40 @@ static int gen_display_unlock(void *gen_display_st)
 static int gen_display_display(void *gen_display_st)
 {
     struct gen_display_struct *st = gen_display_st;
-    if (SDL_RenderCopy(st->renderer, st->texture, NULL, NULL) != 0)
+
+    if (SDL_SetRenderDrawColor(st->renderer, 0, 0, 0, 0) != 0)
     {
-        dbg(0, "SDL:SDL_RenderCopy SDL_Error: %s\n", SDL_GetError());
+        dbg(0, "SDL:SDL_SetRenderDrawColor:ERROR\n");
     }
+    if (SDL_RenderClear(st->renderer) != 0)
+    {
+        dbg(0, "SDL:SDL_RenderClear:ERROR\n");
+    }
+
+    // form new destination rect
+    if ((st->yuv_width != st->window_width) || (st->yuv_height != st->window_height))
+    {
+        float scale = ((float)st->window_width / (float)st->yuv_width);
+        if (((float)st->yuv_height * scale) > (float)st->window_height)
+        {
+            scale = (float)st->window_height / (float)st->yuv_height;
+        }
+
+        SDL_Rect dest_rect = { 0, 0, (float)st->yuv_width * scale, (float)st->yuv_height * scale };
+        if (SDL_RenderCopy(st->renderer, st->texture, NULL, &dest_rect) != 0)
+        {
+            dbg(0, "SDL:SDL_RenderCopy SDL_Error: %s\n", SDL_GetError());
+        }
+    }
+    else
+    {
+        SDL_Rect dest_rect = { 0, 0, st->window_width, st->window_height };
+        if (SDL_RenderCopy(st->renderer, st->texture, NULL, &dest_rect) != 0)
+        {
+            dbg(0, "SDL:SDL_RenderCopy SDL_Error: %s\n", SDL_GetError());
+        }
+    }
+
     SDL_RenderPresent(st->renderer);
     return 0;
 }
