@@ -3717,7 +3717,7 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
                              nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
         TOX_ERR_BOOTSTRAP error;
 
-        if ((add_as_tcp_relay == 1) || (switch_tcponly == 1))
+        if (add_as_tcp_relay == 1)
         {
             res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use as TCP relay
         }
@@ -3853,15 +3853,7 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic ignored "-Wall"
 
     // bootstrap nodes
-    if ((use_tor == 0) && (switch_tcponly == 0))
-    {
-        bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
-    }
-    else
-    {
-        // dummy node to bootstrap
-        tox_bootstrap(tox, "local", 7766, (uint8_t *)"2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
-    }
+    bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
 
     // tcp relay nodes
     bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
@@ -3895,18 +3887,11 @@ void bootstrap_wrapper(Tox *tox)
                     {
                         if (tbw_nd.node_type == 0)
                         {
-                            if ((use_tor == 0) && (switch_tcponly == 0))
-                            {
-                                bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
+                            bool res = tox_bootstrap(tox, ipv4_str, tbw_nd.sin_port, tbw_nd.key_hex, NULL);
 
-                                if (res)
-                                {
-                                    custom_file_ok = 1;
-                                }
-                            }
-                            else
+                            if (res)
                             {
-                                tox_bootstrap(tox, "local", 7766, (uint8_t *)"2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
+                                custom_file_ok = 1;
                             }
                         }
                         else
