@@ -13,7 +13,14 @@ function convert_img
         convert "$gfx_dir""/""$img""_x_"".png" -channel rgba -alpha on -set colorspace RGB -separate -swap 0,2 -combine -define png:color-type=6 "$gfx_dir""/""$img""_y_"".png"
         convert "$gfx_dir""/""$img""_y_"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba"
         rm -f "$gfx_dir""/""$img""_x_"".png" "$gfx_dir""/""$img""_y_"".png"
-    else
+    elif [ "$RASPI5_FB""x" == "2x" ]; then
+        img="$1"
+        convert "$gfx_dir""/""$img"".png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir""/""$img""_x_"".png"
+        # swap from RGBA to BGRA
+        convert "$gfx_dir""/""$img""_x_"".png" -channel rgba -alpha off -set colorspace RGB -separate -swap 0,2 -combine -define png:color-type=6 "$gfx_dir""/""$img""_y_"".png"
+        convert "$gfx_dir""/""$img""_y_"".png" -gravity northwest -background black -extent "${real_width}x${FB_HEIGHT}" "$gfx_dir""/""$img"".rgba"
+        rm -f "$gfx_dir""/""$img""_x_"".png" "$gfx_dir""/""$img""_y_"".png"
+    else # RASPI5_FB == 1
         fb_bit_depth=$(fbset|grep geometry|awk '{ print $6}')
         img="$1"
         convert "$gfx_dir""/""$img"".png" -scale "${BKWALL_WIDTH}x${BKWALL_HEIGHT}" "$gfx_dir""/""$img""_x_"".png"

@@ -41,6 +41,11 @@ if [ "$fb_rgba""x" == 'rgba5/11,6/5,5/0,0/0x' ] ; then
     RASPI5_FB=1
   fi
 fi
+if [ "$fb_rgba""x" == 'rgba8/16,8/8,8/0,0/0x' ] ; then
+  if [ "$fb_geo""x" == 'geometry192010801920108032x' ] ; then
+    RASPI5_FB=2
+  fi
+fi
 export RASPI5_FB
 # TODO: make this better and more solid -----------------
 
