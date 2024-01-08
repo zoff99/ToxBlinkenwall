@@ -6507,7 +6507,18 @@ void on_file_recv_chunk(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint
                 if (some_file)
                 {
                     fseek(some_file, (long)position, SEEK_SET);
-                    fwrite(data, length, 1, some_file);
+                    uint64_t f_cap = tox_friend_get_capabilities(m, friendnumber);
+#define TBW_TOX_CAPABILITY_FTV2 ((uint64_t)1) << 4
+                    if (((f_cap & TBW_TOX_CAPABILITY_FTV2) != 0) && ((length - TOX_FILE_ID_LENGTH) > 0))
+                    {
+                        // friend is sending ftv2
+                        fwrite((data + TOX_FILE_ID_LENGTH), (length - TOX_FILE_ID_LENGTH), 1, some_file);
+                    }
+                    else
+                    {
+                        // normal "legacy" ft
+                        fwrite(data, length, 1, some_file);
+                    }
                     fclose(some_file);
                     // close(fd_);
                 }
@@ -6521,7 +6532,7 @@ void on_file_recv(Tox *m, uint32_t friendnumber, uint32_t filenumber, uint32_t k
                   const uint8_t *filename, size_t filename_length, void *userdata)
 {
     /* We don't care about receiving avatars */
-    if (kind != TOX_FILE_KIND_DATA)
+    if ((kind != TOX_FILE_KIND_DATA) && (kind != TOX_FILE_KIND_FTV2))
     {
         tox_file_control_wrapper(m, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, NULL);
         dbg(9, "on_file_recv:002:cancel incoming avatar\n");
