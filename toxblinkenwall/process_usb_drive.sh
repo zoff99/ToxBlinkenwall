@@ -378,16 +378,16 @@ usb_device_to_use="$usb_device""1"
 rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
 mkdir -p "$mount_dir" >> "$logfile" 2>&1
 echo "mounting $usb_device_to_use ..." >> "$logfile"
-echo mount "$usb_device_to_use" "$mount_dir" >> "$logfile"
-mount "$usb_device_to_use" "$mount_dir" >> "$logfile" 2>&1
+echo systemd-mount --collect "$usb_device_to_use" "$mount_dir" >> "$logfile"
+systemd-mount --collect "$usb_device_to_use" "$mount_dir" >> "$logfile" 2>&1
 res=$?
 
 if [ $res -ne 0 ]; then
     echo "ERROR:mounting $usb_device_to_use" >> "$logfile"
     echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-    umount -f "$mount_dir" >> "$logfile" 2>&1
-    echo umount -f "$usb_device_to_use" >> "$logfile"
-    umount -f "$usb_device_to_use" >> "$logfile" 2>&1
+    systemd-umount "$mount_dir" >> "$logfile" 2>&1
+    echo systemd-umount "$usb_device_to_use" >> "$logfile"
+    systemd-umount "$usb_device_to_use" >> "$logfile" 2>&1
     rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
     exit 1
 fi
@@ -449,9 +449,9 @@ fi
 # --------- IMPORT ---------
 
 echo "UNmounting $usb_device_to_use ..." >> "$logfile"
-umount -f "$mount_dir" >> "$logfile" 2>&1
-echo umount -f "$usb_device_to_use" >> "$logfile"
-umount -f "$usb_device_to_use" >> "$logfile" 2>&1
+systemd-umount "$mount_dir" >> "$logfile" 2>&1
+echo systemd-umount "$usb_device_to_use" >> "$logfile"
+systemd-umount "$usb_device_to_use" >> "$logfile" 2>&1
 rm -Rf "$mount_dir"/ >> "$logfile" 2>&1
 
 
