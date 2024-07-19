@@ -128,6 +128,7 @@ jobs:
           ls -al
           sed -i -e 's/#define HAVE_OUTPUT_OPENGL /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           sed -i -e 's/#define HAVE_OUTPUT_OMX /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
+          sed -i -e 's/#define HAVE_SDLVIDEO_OUT /#define HAVE_FRAMEBUFFER /' toxblinkenwall.c
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OPENGL'||echo _
           cat toxblinkenwall.c|grep 'define HAVE_OUTPUT_OMX'||echo _
           cat toxblinkenwall.c|grep 'define HAVE_FRAMEBUFFER'||echo _
