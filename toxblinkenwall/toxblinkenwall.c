@@ -696,7 +696,13 @@ static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
         dbg(0, "SDL:Texture could not be created! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
+#if SDL_MAJOR_VERSION < 3
+    // SDL version 2.x
     int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
+#else
+    // SDL version 3.x
+    int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_SCALEMODE_BEST);
+#endif
     if (res_scale != 0) {
         dbg(0, "SDL:SDL_SetTextureScaleMode SDL_Error\n");
         return 1;
