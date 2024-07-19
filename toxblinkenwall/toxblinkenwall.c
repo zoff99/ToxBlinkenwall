@@ -698,15 +698,14 @@ static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
     }
 #if SDL_MAJOR_VERSION < 3
     // SDL version 2.x
-    int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
+    //int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
+    //if (res_scale != 0) {
+    //    dbg(0, "SDL:SDL_SetTextureScaleMode SDL_Error\n");
+    //    return 1;
+    //}
 #else
     // SDL version 3.x
-    // int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_SCALEMODE_BEST);
 #endif
-    if (res_scale != 0) {
-        dbg(0, "SDL:SDL_SetTextureScaleMode SDL_Error\n");
-        return 1;
-    }
     // SDL_SetTextureBlendMode(st->texture, SDL_BLENDMODE_NONE);
     return 0;
 }
