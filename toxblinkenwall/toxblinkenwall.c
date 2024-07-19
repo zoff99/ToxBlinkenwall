@@ -701,7 +701,7 @@ static int gen_display_yuvtex_init(void *gen_display_st, int width, int height)
     int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_ScaleModeBest);
 #else
     // SDL version 3.x
-    int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_SCALEMODE_BEST);
+    // int res_scale = SDL_SetTextureScaleMode(st->texture, SDL_SCALEMODE_BEST);
 #endif
     if (res_scale != 0) {
         dbg(0, "SDL:SDL_SetTextureScaleMode SDL_Error\n");
