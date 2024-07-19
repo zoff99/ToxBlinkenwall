@@ -32,6 +32,9 @@
 // LD_PRELOAD=/usr/lib/arm-linux-gnueabihf/libasan.so.3
 /*
 
+
+## convert-resize 640x640 -background black -gravity center -rotate 0 -extent 1920x1080 emoji.png bgra:/dev/fb0
+
 ## limit process I/O:
 
 apt install cgroup-tools
@@ -8661,6 +8664,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
     {
         global_decoder_string = " H264";
     }
+    else if (comm_value == TOXAV_CALL_COMM_DECODER_IN_USE_H265)
+    {
+        global_decoder_string = " H265";
+    }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8)
     {
         global_encoder_string = " VP8 ";
@@ -8677,6 +8684,10 @@ static void t_toxav_call_comm_cb(ToxAV *av, uint32_t friend_number, TOXAV_CALL_C
         }
 
 #endif
+    }
+    else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H265)
+    {
+        global_encoder_string = " H265";
     }
     else if (comm_value == TOXAV_CALL_COMM_ENCODER_IN_USE_H264_OMX_PI)
     {
