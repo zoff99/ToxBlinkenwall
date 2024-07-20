@@ -5,9 +5,27 @@ on:
   pull_request:
 
 jobs:
+  update-nightly-tag:
+    name: Update nightly release tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+        contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move nightly tag to head for nightly release
+        run: git tag -f nightly && git push origin nightly -f
+
   build:
     name: Build
     runs-on: ubuntu-20.04
+    needs: [update-nightly-tag]
+    if: |
+      always() &&
+      (needs.update-nightly-tag.result == 'success' ||
+        needs.update-nightly-tag.result == 'skipped')
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: install dependencies
@@ -103,7 +121,7 @@ jobs:
           toxblinkenwall.c rb.c \
           -std=gnu99 \
           ./libtoxcore.a \
-          $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
+          $(pkg-config --cflags --libs libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
           $(pkg-config --cflags --libs sdl2) \
           -pthread \
           -lrt \
@@ -114,7 +132,7 @@ jobs:
           ldd toxblinkenwall
           ls -hal toxblinkenwall
           file toxblinkenwall
-          cp -av toxblinkenwall toxblinkenwall_linux_x11
+          cp -av toxblinkenwall toxblinkenwall_linux_sdl
 
       - name: compile binary for Linux Framebuffer
         run: |
@@ -158,5 +176,31 @@ jobs:
           ls -hal toxblinkenwall
           file toxblinkenwall
           cp -av toxblinkenwall toxblinkenwall_linux_fb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: toxblinkenwall_linux_fb
+          path: toxblinkenwall_linux_fb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: toxblinkenwall_linux_sdl
+          path: toxblinkenwall_linux_sdl
+
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "toxblinkenwall_linux_fb,toxblinkenwall_linux_sdl"
 
 
