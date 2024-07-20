@@ -181,13 +181,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: toxblinkenwall_linux_fb
-          path: toxblinkenwall_linux_fb
+          path: build_dir/toxblinkenwall_linux_fb
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: toxblinkenwall_linux_sdl
-          path: toxblinkenwall_linux_sdl
+          path: build_dir/toxblinkenwall_linux_sdl
 
 
       - name: Upload to nightly release
@@ -201,6 +201,6 @@ jobs:
           prerelease: true
           replacesArtifacts: true
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "toxblinkenwall_linux_fb,toxblinkenwall_linux_sdl"
+          artifacts: "build_dir/toxblinkenwall_linux_fb,build_dir/toxblinkenwall_linux_sdl"
 
 
