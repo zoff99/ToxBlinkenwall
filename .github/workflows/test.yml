@@ -81,17 +81,10 @@ jobs:
           command: |
             cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
 
-      - name: install deps
+      - name: build included toxcore amalgamation
         run: |
           pwd
-          mkdir -p build_dir/
-          cd build_dir/
-          wget -O toxcore_amalgamation.c 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/toxcore_amalgamation.c'
-          wget -O Makefile 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/Makefile'
-          mkdir -p tox/
-          wget -O tox/tox.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxcore/tox.h'
-          wget -O tox/toxutil.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxutil/toxutil.h'
-          wget -O tox/toxav.h 'https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxav/toxav.h'
+          cd toxcore/
           make
           ls -al
 
@@ -125,7 +118,7 @@ jobs:
           -lm \
           toxblinkenwall.c rb.c \
           -std=gnu99 \
-          ./libtoxcore.a \
+          ../toxcore/libtoxcore.a \
           $(pkg-config --cflags --libs libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
           $(pkg-config --cflags --libs sdl2) \
           -pthread \
@@ -169,7 +162,7 @@ jobs:
           -lm \
           toxblinkenwall.c rb.c \
           -std=gnu99 \
-          ./libtoxcore.a \
+          ../toxcore/libtoxcore.a \
           $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
           -pthread \
           -lrt \
