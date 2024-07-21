@@ -118,6 +118,7 @@ jobs:
           -lm \
           toxblinkenwall.c rb.c \
           -std=gnu99 \
+          -I../toxcore \
           ../toxcore/libtoxcore.a \
           $(pkg-config --cflags --libs libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
           $(pkg-config --cflags --libs sdl2) \
@@ -162,6 +163,7 @@ jobs:
           -lm \
           toxblinkenwall.c rb.c \
           -std=gnu99 \
+          -I../toxcore \
           ../toxcore/libtoxcore.a \
           $(pkg-config --cflags --libs x11 libsodium libswresample opus vpx libavcodec libswscale libavformat libavdevice libavutil x264) \
           -pthread \
