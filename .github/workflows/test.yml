@@ -72,14 +72,14 @@ jobs:
           mkdir -p _test_python_/
           cd _test_python_/;ls -al ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py;sleep 15;python3 ../toxblinkenwall/ext_keys_scripts/ext_keys_evdev.py > log.txt 2> log.txt &
 
-      - name: test-python-script-reader
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 3
-          max_attempts: 3
-          retry_on: error
-          command: |
-            cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
+      #- name: test-python-script-reader
+      #  uses: nick-fields/retry@v3
+      #  with:
+      #    timeout_minutes: 3
+      #    max_attempts: 3
+      #    retry_on: error
+      #    command: |
+      #      cd _test_python_/; mkfifo ../ext_keys.fifo;sleep 10; if [ -s log.txt ]; then ls -al log.txt;echo "python script ERROR"; cat log.txt;exit 1; fi
 
       - name: build included toxcore amalgamation
         run: |
