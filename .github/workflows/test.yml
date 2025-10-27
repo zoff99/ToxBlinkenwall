@@ -178,13 +178,13 @@ jobs:
           cp -av toxblinkenwall toxblinkenwall_linux_fb
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: toxblinkenwall_linux_fb
           path: build_dir/toxblinkenwall_linux_fb
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: toxblinkenwall_linux_sdl
           path: build_dir/toxblinkenwall_linux_sdl
