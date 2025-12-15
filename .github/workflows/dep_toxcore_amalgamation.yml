@@ -29,7 +29,7 @@ jobs:
       run:  git diff || echo "no changes"
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v7
+      uses: peter-evans/create-pull-request@v8
       with:
         commit-message: toxcore amalgamation
         branch: 'create-pull-request/toxcore_amalgamation'
