@@ -1,7 +1,10 @@
 # ToxBlinkenwall
 
 <H3>A nice little Software to transform your Huge LED Wall into a video conferencing system.</H3>
-<font size="1">Or you can use any HDMI capable device (TV, Computer Monitor) connected to your PI to receive Video and Audio</font>
+<font size="1">Or you can use any HDMI capable device (TV, Computer Monitor) connected to your PI to receive Video and Audio</font><br><br>
+
+[![Liberapay](https://img.shields.io/liberapay/goal/zoff.svg?logo=liberapay)](https://liberapay.com/zoff/donate)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/zoff99/ToxBlinkenwall)
 
 also have a look at https://github.com/zoff99/ToxBlinkenwall_raspi_lite_image
 
