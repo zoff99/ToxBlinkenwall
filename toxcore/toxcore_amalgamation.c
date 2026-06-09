@@ -81690,6 +81690,9 @@ VCSession *vc_new_h264(Logger *log, ToxAV *av, uint32_t friend_number, toxav_vid
     }
 
     vc->h264_decoder = avcodec_alloc_context3(codec);
+    // HINT: make sure this is set to NULL in start
+    vc->h264_decoder->extradata = NULL;
+    vc->h264_decoder->extradata_size = 0;
 
     if (codec) {
 #if LIBAVCODEC_VERSION_MAJOR < 60
@@ -81770,7 +81773,9 @@ VCSession *vc_new_h264(Logger *log, ToxAV *av, uint32_t friend_number, toxav_vid
         const uint8_t pps[] = {0x00, 0x00, 0x00, 0x01,      0x68, 0xCE, 0x38, 0x80};
         const size_t sps_pps_size = sizeof(sps) + sizeof(pps);
 
+        LOGGER_API_WARNING(av->tox, "setting up h264_mediacodec decoder: allocating vc->h264_decoder->extradata ...");
         vc->h264_decoder->extradata = (uint8_t *)av_mallocz(sps_pps_size + AV_INPUT_BUFFER_PADDING_SIZE);
+        LOGGER_API_WARNING(av->tox, "setting up h264_mediacodec decoder: allocating vc->h264_decoder->extradata ... DONE %p", (void*)vc->h264_decoder->extradata);
         vc->h264_decoder->extradata_size = sps_pps_size;
         // memset(&vc->h264_decoder->extradata[vc->h264_decoder->extradata_size], 0, AV_INPUT_BUFFER_PADDING_SIZE);
         memcpy(vc->h264_decoder->extradata, sps, sizeof(sps));
@@ -82794,6 +82799,8 @@ uint32_t send_frames_h264(ToxAV *av, uint32_t friend_number, uint16_t width, uin
 
 void vc_kill_h264(VCSession *vc)
 {
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h264");
+
     // encoder
     if (vc->x264_software_encoder_used == 1) {
         if (vc->h264_encoder) {
@@ -82806,14 +82813,18 @@ void vc_kill_h264(VCSession *vc)
         avcodec_free_context(&(vc->h264_encoder2));
         // --- ffmpeg encoder ---
     }
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h264: encoder killed");
 
     // decoder
-    if (vc->h264_decoder->extradata) {
-        av_free(vc->h264_decoder->extradata);
-        vc->h264_decoder->extradata = NULL;
+    if (vc->h264_decoder != nullptr) {
+        LOGGER_API_WARNING(vc->av->tox, "vc->h264_decoder->extradata %p size=%d", (void*)vc->h264_decoder->extradata, (int)vc->h264_decoder->extradata_size);
+        if ((vc->h264_decoder->extradata) && (vc->h264_decoder->extradata_size > 0)) {
+            av_free(vc->h264_decoder->extradata);
+            vc->h264_decoder->extradata = NULL;
+        }
+        avcodec_free_context(&vc->h264_decoder);
     }
-
-    avcodec_free_context(&vc->h264_decoder);
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h264: decoder killed");
 }
 
 
@@ -82948,6 +82959,8 @@ VCSession *vc_new_h265(Logger *log, ToxAV *av, uint32_t friend_number, toxav_vid
 
         vc->h265_decoder = avcodec_alloc_context3(codec);
         LOGGER_API_INFO(av->tox, "H265 decoder:h265_decoder=%p", (void *)vc->h265_decoder);
+        vc->h265_decoder->extradata = NULL;
+        vc->h265_decoder->extradata_size = 0;
 
         if (codec) {
 
@@ -83433,20 +83446,26 @@ uint32_t send_frames_h265(ToxAV *av, uint32_t friend_number, uint16_t width, uin
 
 void vc_kill_h265(VCSession *vc)
 {
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h265");
+
 #ifdef HAVE_H265_ENCODER
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h265: trying to kill encoder ...");
     // encoder
     vc_kill_encoder_h265(vc);
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h265: encoder killed");
 #endif
 
     // decoder
     if (vc->h265_decoder != nullptr) {
-        if (vc->h265_decoder->extradata) {
+        LOGGER_API_WARNING(vc->av->tox, "vc->h265_decoder->extradata %p size=%d", (void*)vc->h265_decoder->extradata, (int)vc->h265_decoder->extradata_size);
+        if ((vc->h265_decoder->extradata) && (vc->h265_decoder->extradata_size > 0)) {
             av_free(vc->h265_decoder->extradata);
             vc->h265_decoder->extradata = NULL;
         }
         avcodec_free_context(&vc->h265_decoder);
         vc->h265_decoder = NULL;
     }
+    LOGGER_API_WARNING(vc->av->tox, "vc_kill_h265: decoder killed");
 }
 
 /*
