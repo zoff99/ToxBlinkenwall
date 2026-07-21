@@ -4680,9 +4680,9 @@ typedef enum Tox_Err_Group_Send_Private_Message {
  *   containing the message text.
  * @param length Length of the message to be sent.
  *
- * @return true on success.
+ * @return pseudo message id on success or -1 on failure.
  */
-bool tox_group_send_private_message(const Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Message_Type type,
+int64_t tox_group_send_private_message(const Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Message_Type type,
                                     const uint8_t *message, size_t length, Tox_Err_Group_Send_Private_Message *error);
 
 /**
@@ -4702,9 +4702,9 @@ bool tox_group_send_private_message(const Tox *tox, uint32_t group_number, uint3
  *   containing the message text.
  * @param length Length of the message to be sent.
  *
- * @return true on success.
+ * @return pseudo message id on success or -1 on failure.
  */
-bool tox_group_send_private_message_by_peerpubkey(const Tox *tox, uint32_t group_number, const uint8_t *public_key,
+int64_t tox_group_send_private_message_by_peerpubkey(const Tox *tox, uint32_t group_number, const uint8_t *public_key,
                                     Tox_Message_Type type, const uint8_t *message, size_t length,
                                     Tox_Err_Group_Send_Private_Message *error);
 
@@ -4878,9 +4878,10 @@ void tox_callback_group_message(Tox *tox, tox_group_message_cb *callback);
  * @param peer_id The ID of the peer who sent the private message.
  * @param message The message data.
  * @param length The length of the message.
+ * @param message_id The message ID of this private message.
  */
 typedef void tox_group_private_message_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Message_Type type,
-        const uint8_t *message, size_t length, void *user_data);
+        const uint8_t *message, size_t length, uint32_t message_id, void *user_data);
 
 
 /**
