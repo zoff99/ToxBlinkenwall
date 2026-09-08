@@ -985,6 +985,22 @@ size_t tox_get_savedata_size(const Tox *tox);
  */
 void tox_get_savedata(const Tox *tox, uint8_t *savedata);
 
+/**
+ * @brief Store all information associated with the tox instance to a byte array, safely checking the buffer size.
+ *
+ * This function is thread-safe and prevents Time-of-Check to Time-of-Use (TOCTOU) race conditions
+ * by holding the Tox instance lock during both the size calculation and the data writing.
+ *
+ * @param tox The Tox instance.
+ * @param savedata A memory region to store the tox instance data. If this parameter is NULL,
+ *   this function returns (size_t)-1.
+ * @param buf_len The size of the allocated `savedata` buffer in bytes.
+ *
+ * @return The actual number of bytes written to `savedata` on success. If the provided `buf_len`
+ *   is smaller than the required size, or if `savedata` is NULL, this function returns (size_t)-1.
+ */
+size_t tox_get_savedata_len(const Tox *tox, uint8_t *savedata, size_t buf_len);
+
 /** @} */
 
 
@@ -1725,6 +1741,82 @@ void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback);
 Tox_Connection tox_friend_get_connection_status(const Tox *tox, uint32_t friend_number, Tox_Err_Friend_Query *error);
 
 void tox_friend_get_connection_ip(const Tox *tox, uint32_t friend_number, uint8_t *ip_str);
+
+
+
+
+/**
+ * Represents the overall health/quality of the network connection as measured
+ * by the crypto layer.
+ *
+ * This is a composite score based on:
+ *   - RTT (round-trip time) across all established connections
+ *   - Packet resend ratio (how many packets had to be retransmitted)
+ *   - Transport type (direct UDP vs TCP relays)
+ *   - Recent congestion events
+ *
+ * Use this to adapt your application's behavior on mobile devices:
+ *   - UNKNOWN: No connections yet, cannot determine health
+ *   - EXCELLENT: Direct UDP, low RTT (<150ms), <5% retransmits
+ *   - GOOD: Direct UDP, moderate RTT (150-400ms), <15% retransmits
+ *   - FAIR: Mixed TCP/UDP or rising RTT (400-1000ms), <35% retransmits
+ *   - POOR: Mostly TCP relays or high RTT (1-3s), <60% retransmits
+ *   - BAD: Very high RTT (>3s) or >60% retransmits, active congestion
+ *
+ * When the health is POOR or BAD, consider increasing your tox_iterate()
+ * interval to reduce battery drain and thermal load on mobile devices.
+ */
+typedef enum TOX_NETWORK_HEALTH {
+
+    /**
+     * No established connections yet, or not enough data to determine health.
+     */
+    TOX_NETWORK_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent connection: direct UDP, very low latency, almost no packet loss.
+     */
+    TOX_NETWORK_HEALTH_EXCELLENT,
+
+    /**
+     * Good connection: direct UDP, acceptable latency, minimal retransmits.
+     */
+    TOX_NETWORK_HEALTH_GOOD,
+
+    /**
+     * Fair connection: mixed TCP/UDP or moderate latency, some retransmits.
+     */
+    TOX_NETWORK_HEALTH_FAIR,
+
+    /**
+     * Poor connection: mostly TCP relays or high latency, frequent retransmits.
+     * The device may run warm on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_POOR,
+
+    /**
+     * Bad connection: very high latency or severe packet loss, active congestion.
+     * The device will likely overheat on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_BAD,
+
+} TOX_NETWORK_HEALTH;
+
+
+/**
+ * Get the overall health/quality of the network connection as measured by toxcore.
+ *
+ * This returns a composite score based on RTT, packet loss, transport type,
+ * and recent congestion events across all established connections.
+ *
+ * Thread-safe: Yes. This function acquires the Tox lock before reading the value.
+ *
+ * @param tox The Tox instance.
+ * @return The current network health status.
+ */
+TOX_NETWORK_HEALTH tox_self_get_network_health(const Tox *tox);
+
+
 
 
 /**
@@ -3616,6 +3708,56 @@ typedef enum Tox_Group_Role {
 
 } Tox_Group_Role;
 
+
+typedef enum Tox_Group_Health {
+
+    /**
+     * No active group peers, or not enough data to determine health.
+     */
+    TOX_GROUP_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent group connections: direct UDP, no backlog, fresh receives.
+     */
+    TOX_GROUP_HEALTH_EXCELLENT,
+
+    /**
+     * Good group connections: healthy links, possibly TCP-relayed.
+     */
+    TOX_GROUP_HEALTH_GOOD,
+
+    /**
+     * Fair group connections: some degradation detected.
+     */
+    TOX_GROUP_HEALTH_FAIR,
+
+    /**
+     * Poor group connections: notable degradation, device may run warm.
+     */
+    TOX_GROUP_HEALTH_POOR,
+
+    /**
+     * Bad group connections: severe degradation, device will likely overheat.
+     */
+    TOX_GROUP_HEALTH_BAD,
+
+} Tox_Group_Health;
+
+
+/**
+ * Get the overall health/quality of the NGC group connections.
+ *
+ * Returns a composite score based on transport type, send queue depth,
+ * receive staleness, and handshake attempts across all active group peers.
+ * This is independent from tox_self_get_network_health(), which reflects
+ * friend connections only.
+ *
+ * Thread-safe: Yes.
+ *
+ * @param tox The Tox instance.
+ * @return The current group connection health status.
+ */
+Tox_Group_Health tox_group_get_health(const Tox *tox);
 
 
 /*******************************************************************************

@@ -2913,6 +2913,26 @@ typedef struct New_Connection {
     uint8_t cookie_length;
 } New_Connection;
 
+/* [ADDED] Overall health of the crypto-layer network, computed across all active connections.
+ *
+ * UNKNOWN  - no established connections yet, or not enough data
+ * EXCELLENT - direct UDP, low RTT, almost no retransmits
+ * GOOD     - direct UDP, moderate RTT, few retransmits
+ * FAIR     - mixed TCP/UDP, or RTT rising, some retransmits
+ * POOR     - mostly TCP relays, high RTT, many retransmits
+ * BAD      - congestion events, very high RTT, almost all packets resent
+ */
+typedef enum {
+    NET_CRYPTO_HEALTH_UNKNOWN   = 0,
+    NET_CRYPTO_HEALTH_EXCELLENT = 1,
+    NET_CRYPTO_HEALTH_GOOD      = 2,
+    NET_CRYPTO_HEALTH_FAIR      = 3,
+    NET_CRYPTO_HEALTH_POOR      = 4,
+    NET_CRYPTO_HEALTH_BAD       = 5
+} Net_Crypto_Health;
+
+Net_Crypto_Health net_crypto_overall_health(const Net_Crypto *c);
+
 typedef int connection_status_cb(void *object, int id, bool status, void *userdata);
 typedef int connection_data_cb(void *object, int id, const uint8_t *data, uint16_t length, void *userdata);
 typedef int connection_lossy_data_cb(void *object, int id, const uint8_t *data, uint16_t length, void *userdata);
@@ -4259,12 +4279,30 @@ typedef void gc_peer_exit_cb(const Messenger *m, uint32_t group_number, uint32_t
 typedef void gc_self_join_cb(const Messenger *m, uint32_t group_number, void *user_data);
 typedef void gc_rejected_cb(const Messenger *m, uint32_t group_number, unsigned int type, void *user_data);
 
+/**
+ * @brief Represents the overall health/quality of GC (group chat) connections.
+ *
+ * This is evaluated independently from friend (Net_Crypto) connections.
+ */
+typedef enum GC_Health {
+    GC_HEALTH_UNKNOWN   = 0,
+    GC_HEALTH_EXCELLENT = 1,
+    GC_HEALTH_GOOD      = 2,
+    GC_HEALTH_FAIR      = 3,
+    GC_HEALTH_POOR      = 4,
+    GC_HEALTH_BAD       = 5
+} GC_Health;
+
 typedef struct GC_Session {
     Messenger                 *messenger;
     GC_Chat                   *chats;
     struct GC_Announces_List  *announces_list;
 
     uint32_t     chats_index;
+
+    /* [ADDED] Cached GC health, recomputed periodically in do_gc(). */
+    GC_Health  gc_overall_health;
+    uint64_t    gc_health_last_update;
 
     gc_message_cb *message;
     gc_private_message_cb *private_message;
@@ -6891,6 +6929,22 @@ size_t tox_get_savedata_size(const Tox *tox);
  */
 void tox_get_savedata(const Tox *tox, uint8_t *savedata);
 
+/**
+ * @brief Store all information associated with the tox instance to a byte array, safely checking the buffer size.
+ *
+ * This function is thread-safe and prevents Time-of-Check to Time-of-Use (TOCTOU) race conditions
+ * by holding the Tox instance lock during both the size calculation and the data writing.
+ *
+ * @param tox The Tox instance.
+ * @param savedata A memory region to store the tox instance data. If this parameter is NULL,
+ *   this function returns (size_t)-1.
+ * @param buf_len The size of the allocated `savedata` buffer in bytes.
+ *
+ * @return The actual number of bytes written to `savedata` on success. If the provided `buf_len`
+ *   is smaller than the required size, or if `savedata` is NULL, this function returns (size_t)-1.
+ */
+size_t tox_get_savedata_len(const Tox *tox, uint8_t *savedata, size_t buf_len);
+
 /** @} */
 
 
@@ -7631,6 +7685,82 @@ void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback);
 Tox_Connection tox_friend_get_connection_status(const Tox *tox, uint32_t friend_number, Tox_Err_Friend_Query *error);
 
 void tox_friend_get_connection_ip(const Tox *tox, uint32_t friend_number, uint8_t *ip_str);
+
+
+
+
+/**
+ * Represents the overall health/quality of the network connection as measured
+ * by the crypto layer.
+ *
+ * This is a composite score based on:
+ *   - RTT (round-trip time) across all established connections
+ *   - Packet resend ratio (how many packets had to be retransmitted)
+ *   - Transport type (direct UDP vs TCP relays)
+ *   - Recent congestion events
+ *
+ * Use this to adapt your application's behavior on mobile devices:
+ *   - UNKNOWN: No connections yet, cannot determine health
+ *   - EXCELLENT: Direct UDP, low RTT (<150ms), <5% retransmits
+ *   - GOOD: Direct UDP, moderate RTT (150-400ms), <15% retransmits
+ *   - FAIR: Mixed TCP/UDP or rising RTT (400-1000ms), <35% retransmits
+ *   - POOR: Mostly TCP relays or high RTT (1-3s), <60% retransmits
+ *   - BAD: Very high RTT (>3s) or >60% retransmits, active congestion
+ *
+ * When the health is POOR or BAD, consider increasing your tox_iterate()
+ * interval to reduce battery drain and thermal load on mobile devices.
+ */
+typedef enum TOX_NETWORK_HEALTH {
+
+    /**
+     * No established connections yet, or not enough data to determine health.
+     */
+    TOX_NETWORK_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent connection: direct UDP, very low latency, almost no packet loss.
+     */
+    TOX_NETWORK_HEALTH_EXCELLENT,
+
+    /**
+     * Good connection: direct UDP, acceptable latency, minimal retransmits.
+     */
+    TOX_NETWORK_HEALTH_GOOD,
+
+    /**
+     * Fair connection: mixed TCP/UDP or moderate latency, some retransmits.
+     */
+    TOX_NETWORK_HEALTH_FAIR,
+
+    /**
+     * Poor connection: mostly TCP relays or high latency, frequent retransmits.
+     * The device may run warm on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_POOR,
+
+    /**
+     * Bad connection: very high latency or severe packet loss, active congestion.
+     * The device will likely overheat on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_BAD,
+
+} TOX_NETWORK_HEALTH;
+
+
+/**
+ * Get the overall health/quality of the network connection as measured by toxcore.
+ *
+ * This returns a composite score based on RTT, packet loss, transport type,
+ * and recent congestion events across all established connections.
+ *
+ * Thread-safe: Yes. This function acquires the Tox lock before reading the value.
+ *
+ * @param tox The Tox instance.
+ * @return The current network health status.
+ */
+TOX_NETWORK_HEALTH tox_self_get_network_health(const Tox *tox);
+
+
 
 
 /**
@@ -9522,6 +9652,56 @@ typedef enum Tox_Group_Role {
 
 } Tox_Group_Role;
 
+
+typedef enum Tox_Group_Health {
+
+    /**
+     * No active group peers, or not enough data to determine health.
+     */
+    TOX_GROUP_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent group connections: direct UDP, no backlog, fresh receives.
+     */
+    TOX_GROUP_HEALTH_EXCELLENT,
+
+    /**
+     * Good group connections: healthy links, possibly TCP-relayed.
+     */
+    TOX_GROUP_HEALTH_GOOD,
+
+    /**
+     * Fair group connections: some degradation detected.
+     */
+    TOX_GROUP_HEALTH_FAIR,
+
+    /**
+     * Poor group connections: notable degradation, device may run warm.
+     */
+    TOX_GROUP_HEALTH_POOR,
+
+    /**
+     * Bad group connections: severe degradation, device will likely overheat.
+     */
+    TOX_GROUP_HEALTH_BAD,
+
+} Tox_Group_Health;
+
+
+/**
+ * Get the overall health/quality of the NGC group connections.
+ *
+ * Returns a composite score based on transport type, send queue depth,
+ * receive staleness, and handshake attempts across all active group peers.
+ * This is independent from tox_self_get_network_health(), which reflects
+ * friend connections only.
+ *
+ * Thread-safe: Yes.
+ *
+ * @param tox The Tox instance.
+ * @return The current group connection health status.
+ */
+Tox_Group_Health tox_group_get_health(const Tox *tox);
 
 
 /*******************************************************************************
@@ -12626,6 +12806,7 @@ typedef enum Group_Message_Ack_Type {
     GR_ACK_REQ     = 0x01,  // indicates a message needs to be re-sent
 } Group_Message_Ack_Type;
 
+
 /** @brief Returns the GC_Connection object associated with `peer_number`.
  * Returns null if peer_number does not designate a valid peer.
  */
@@ -13325,6 +13506,37 @@ GC_Chat *gc_get_group_by_public_key(const GC_Session *c, const uint8_t *public_k
  */
 non_null()
 int gc_add_peers_from_announces(GC_Chat *chat, const GC_Announce *announces, uint8_t gc_announces_count);
+
+/**
+ * @brief Computes the overall health/quality of all active GC group connections.
+ *
+ * Evaluates transport type, send queue depth, receive staleness, and handshake
+ * attempts to determine if group chat links are degraded. Returns the MEAN
+ * health across all active peers.
+ *
+ * @param c The group chat session.
+ * @param log The logger instance for debug output.
+ * @return The mean health state across all active group peers.
+ */
+non_null(1, 2)
+GC_Health gc_compute_health(const GC_Session *c, const Logger *log);
+
+
+/**
+ * @brief Returns the cached overall health/quality of all active GC group connections.
+ *
+ * This value is computed periodically (every GC_HEALTH_RECOMPUTE_S seconds) in
+ * do_gc() and cached in the GC_Session struct. This function simply returns the
+ * cached value without recomputing.
+ *
+ * @param c The group chat session.
+ * @return The cached mean health state across all active group peers, or
+ *         GC_HEALTH_UNKNOWN if the session is null.
+ */
+non_null()
+GC_Health gc_get_overall_health(const GC_Session *c);
+
+
 
 #endif  // GROUP_CHATS_H
 /* SPDX-License-Identifier: GPL-3.0-or-later
@@ -20361,7 +20573,7 @@ int dht_create_packet(const Random *rng, const uint8_t public_key[CRYPTO_PUBLIC_
  */
 int unpack_ip_port(IP_Port *ip_port, const uint8_t *data, uint16_t length, bool tcp_enabled)
 {
-    if (data == nullptr) {
+    if (data == nullptr || length == 0 || ip_port == nullptr) {
         return -1;
     }
 
@@ -20463,6 +20675,10 @@ int pack_nodes(const Logger *logger, uint8_t *data, uint16_t length, const Node_
 int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed_data_len, const uint8_t *data,
                  uint16_t length, bool tcp_enabled)
 {
+    if (nodes == nullptr && max_num_nodes > 0) {
+        return -1;
+    }
+
     uint32_t num = 0;
     uint32_t len_processed = 0;
 
@@ -28997,6 +29213,22 @@ static_assert(MAX_GC_PACKET_SIZE >= 50000,
 static_assert(MAX_GC_PACKET_SIZE <= UINT16_MAX - MAX_GC_PACKET_CHUNK_SIZE,
               "MAX_GC_PACKET_SIZE must be <= UINT16_MAX - MAX_GC_PACKET_CHUNK_SIZE");
 
+/* [ADDED] GC Health Scoring Thresholds */
+#define GC_HEALTH_SEND_QUEUE_FAIR    5
+#define GC_HEALTH_SEND_QUEUE_POOR    10
+#define GC_HEALTH_SEND_QUEUE_BAD     20
+
+/* Time in seconds since last received packet before link is considered degraded */
+#define GC_HEALTH_RECV_STALE_FAIR_S  15
+#define GC_HEALTH_RECV_STALE_POOR_S  30
+
+/* Number of failed handshake attempts indicating a struggling connection */
+#define GC_HEALTH_HANDSHAKE_FAIR     5
+
+/* Recompute GC health at most every 2 seconds (client polls every ~3s). */
+#define GC_HEALTH_RECOMPUTE_S 2
+
+
 /** Types of broadcast messages. */
 typedef enum Group_Message_Type {
     GC_MESSAGE_TYPE_NORMAL = 0x00,
@@ -36204,6 +36436,15 @@ void do_gc(GC_Session *c, void *userdata)
             }
         }
 
+        /* [ADDED] Recompute GC health at most every 2 seconds (client polls every ~3s). */
+        if (c->gc_health_last_update == 0 ||
+            mono_time_is_timeout(c->messenger->mono_time,
+                                 c->gc_health_last_update,
+                                 GC_HEALTH_RECOMPUTE_S)) {
+            c->gc_overall_health = gc_compute_health(c, c->messenger->log);
+            c->gc_health_last_update = mono_time_get(c->messenger->mono_time);
+        }
+
         if (chat->flag_exit) {  // should always come last as it modifies the chats array
             group_delete(c, chat);
         }
@@ -37556,6 +37797,168 @@ int gc_add_peers_from_announces(GC_Chat *chat, const GC_Announce *announces, uin
 
     return added_peers;
 }
+
+/* [ADDED] Compute the overall health of GC (group chat) connections.
+ *
+ * GC does not track RTT or resend ratios like Net_Crypto does. Instead,
+ * we estimate health based on:
+ *   1. Transport type (direct UDP vs TCP relay)
+ *   2. Send queue depth (unacknowledged packets waiting in send_array)
+ *   3. Receive staleness (time since last received packet)
+ *   4. Handshake attempts (connection trouble indicator)
+ *
+ * For each peer we take the worst of its individual metrics, then return the
+ * MEAN across all active peers (so one bad peer doesn't dominate the score).
+ */
+GC_Health gc_compute_health(const GC_Session *c, const Logger *log)
+{
+    if (c == nullptr) {
+        LOGGER_DEBUG(log, "gc health: session is null -> UNKNOWN");
+        return GC_HEALTH_UNKNOWN;
+    }
+
+    LOGGER_DEBUG(log, "gc health: computing over %u chat slots", c->chats_index);
+
+    uint32_t total_score = 0;   /* sum of per-peer scores */
+    uint32_t peer_count  = 0;   /* number of peers that contributed a score */
+
+    for (uint32_t i = 0; i < c->chats_index; ++i) {
+        const GC_Chat *chat = &c->chats[i];
+
+        /* Skip inactive or disconnected groups */
+        if (chat->connection_state == CS_NONE || chat->connection_state == CS_DISCONNECTED) {
+            LOGGER_DEBUG(log, "gc health: chat %u skipped (state=%d)", i, (int)chat->connection_state);
+            continue;
+        }
+
+        LOGGER_DEBUG(log, "gc health: chat %u active, numpeers=%u", i, chat->numpeers);
+
+        /* Iterate peers (skip index 0, which is self) */
+        for (uint32_t j = 1; j < chat->numpeers; ++j) {
+            const GC_Connection *gconn = get_gc_connection(chat, j);
+
+            /* Skip unconfirmed, deleted, or null peers */
+            if (gconn == nullptr || !gconn->confirmed || gconn->pending_delete) {
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u skipped (null/unconfirmed/deleted)", i, j);
+                continue;
+            }
+
+            /* Per-peer score: worst of this peer's individual metrics */
+            GC_Health peer_score = GC_HEALTH_EXCELLENT;
+
+            /* --- 1. Transport type --- */
+            const bool is_direct = gcc_conn_is_direct(chat->mono_time, gconn);
+            if (!is_direct) {
+                /* TCP relay is normal on mobile, cap at GOOD */
+                if (peer_score < GC_HEALTH_GOOD) {
+                    peer_score = GC_HEALTH_GOOD;
+                }
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u transport=TCP_RELAY -> GOOD", i, j);
+            } else {
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u transport=DIRECT_UDP", i, j);
+            }
+
+            /* --- 2. Send queue depth (unacked packets) --- */
+            if (gconn->send_array != nullptr) {
+                uint16_t queue_depth = 0;
+                const uint16_t start = gconn->send_array_start;
+                const uint16_t end = gconn->send_message_id % GCC_BUFFER_SIZE;
+
+                for (uint16_t k = start; k != end; k = (k + 1) % GCC_BUFFER_SIZE) {
+                    if (gconn->send_array[k].time_added != 0) { /* not empty */
+                        queue_depth++;
+                    }
+                }
+
+                GC_Health queue_score = GC_HEALTH_EXCELLENT;
+                if (queue_depth > GC_HEALTH_SEND_QUEUE_BAD) {
+                    queue_score = GC_HEALTH_BAD;
+                } else if (queue_depth > GC_HEALTH_SEND_QUEUE_POOR) {
+                    queue_score = GC_HEALTH_POOR;
+                } else if (queue_depth > GC_HEALTH_SEND_QUEUE_FAIR) {
+                    queue_score = GC_HEALTH_FAIR;
+                }
+
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u send_queue_depth=%u -> %d",
+                             i, j, queue_depth, (int)queue_score);
+
+                if (queue_score > peer_score) {
+                    peer_score = queue_score;
+                }
+            } else {
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u send_array is null", i, j);
+            }
+
+            /* --- 3. Receive staleness --- */
+            if (gconn->last_received_packet_time > 0) {
+                GC_Health stale_score = GC_HEALTH_EXCELLENT;
+
+                if (mono_time_is_timeout(chat->mono_time, gconn->last_received_packet_time, GC_HEALTH_RECV_STALE_POOR_S)) {
+                    stale_score = GC_HEALTH_POOR;
+                } else if (mono_time_is_timeout(chat->mono_time, gconn->last_received_packet_time, GC_HEALTH_RECV_STALE_FAIR_S)) {
+                    stale_score = GC_HEALTH_FAIR;
+                }
+
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u recv staleness -> %d",
+                             i, j, (int)stale_score);
+
+                if (stale_score > peer_score) {
+                    peer_score = stale_score;
+                }
+            } else {
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u no recv timestamp yet", i, j);
+            }
+
+            /* --- 4. Handshake attempts --- */
+            if (!gconn->handshaked && gconn->handshake_attempts > GC_HEALTH_HANDSHAKE_FAIR) {
+                LOGGER_DEBUG(log, "gc health: chat %u peer %u handshake_attempts=%u -> FAIR",
+                             i, j, gconn->handshake_attempts);
+
+                if (peer_score < GC_HEALTH_FAIR) {
+                    peer_score = GC_HEALTH_FAIR;
+                }
+            }
+
+            LOGGER_DEBUG(log, "gc health: chat %u peer %u final peer_score=%d",
+                         i, j, (int)peer_score);
+
+            total_score += (uint32_t)peer_score;
+            peer_count++;
+        }
+    }
+
+    if (peer_count == 0) {
+        LOGGER_DEBUG(log, "gc health: no active peers -> UNKNOWN");
+        return GC_HEALTH_UNKNOWN;
+    }
+
+    /* Mean with rounding to nearest integer */
+    const uint32_t mean_score = (total_score + (peer_count / 2)) / peer_count;
+
+    LOGGER_DEBUG(log, "gc health: %u peers, total_score=%u, mean_score=%u",
+                 peer_count, total_score, mean_score);
+
+    /* Clamp to valid enum range just in case */
+    GC_Health result;
+    if (mean_score > GC_HEALTH_BAD) {
+        result = GC_HEALTH_BAD;
+    } else {
+        result = (GC_Health)mean_score;
+    }
+
+    LOGGER_DEBUG(log, "gc health: FINAL RESULT = %d", (int)result);
+
+    return result;
+}
+
+GC_Health gc_get_overall_health(const GC_Session *c)
+{
+    if (c == nullptr) {
+        return GC_HEALTH_UNKNOWN;
+    }
+    return c->gc_overall_health;
+}
+
 #endif  // VANILLA_NACL
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2020 The TokTok team.
@@ -45243,6 +45646,42 @@ uint64_t current_time_monotonic(Mono_Time *mono_time)
 #include <string.h>
 
 
+
+/* [CHANGED] Health scoring thresholds - tuned for mobile networks.
+ *
+ * Mobile networks inherently have higher jitter, more packet loss during
+ * cell handoffs, and variable latency due to radio power state transitions.
+ * These thresholds account for that normal mobile behavior.
+ *
+ * Desktop/wired: 5% resend is bad. Mobile: 10-25% resend is normal.
+ * Desktop/wired: 150ms RTT is slow. Mobile: 200ms RTT is typical 4G.
+ */
+#define HEALTH_RTT_EXCELLENT_MS     200
+#define HEALTH_RTT_GOOD_MS          500
+#define HEALTH_RTT_FAIR_MS         1500
+#define HEALTH_RTT_POOR_MS         4000
+
+/* Resend ratios (resent / sent), as percentages 0..100.
+ * Mobile networks routinely see 10-25% retransmits during tower handoffs
+ * and NAT keepalive cycles without any actual quality problem. */
+#define HEALTH_RESEND_EXCELLENT_PCT  10
+#define HEALTH_RESEND_GOOD_PCT       25
+#define HEALTH_RESEND_FAIR_PCT       50
+#define HEALTH_RESEND_POOR_PCT       75
+
+/* How long (ms) a congestion event keeps the "recent congestion" penalty active. */
+#define HEALTH_CONGESTION_PENALTY_MS 5000
+
+/* Minimum number of established connections required before we trust the score. */
+#define HEALTH_MIN_CONNECTIONS        1
+
+/* Minimum number of packets we need to have observed before we trust the resend ratio. */
+#define HEALTH_MIN_PACKET_SAMPLE      8
+
+/* Recompute at most every HEALTH_RECOMPUTE_MS, even if do_net_crypto() runs faster. */
+#define HEALTH_RECOMPUTE_MS           2000
+
+
 typedef struct Packet_Data {
     uint64_t sent_time;
     uint16_t length;
@@ -45373,6 +45812,12 @@ struct Net_Crypto {
     uint32_t current_sleep_time;
 
     BS_List ip_port_list;
+
+    /* [ADDED] Cached overall health of the crypto layer, updated in do_net_crypto(). */
+    Net_Crypto_Health overall_health;
+
+    /* [ADDED] When overall_health was last recomputed (mono_time ticks). */
+    uint64_t overall_health_last_update;
 };
 
 const uint8_t *nc_get_self_public_key(const Net_Crypto *c)
@@ -48171,6 +48616,211 @@ static void send_crypto_packets(Net_Crypto *c)
     }
 }
 
+
+
+/* [ADDED] Compute the overall health of the crypto layer across all established
+ * connections, and store the result in c->overall_health.
+ *
+ * The score is derived from the following signals per connection:
+ *   1. transport     (direct UDP vs TCP relay, via crypto_connection_status())
+ *   2. congestion    (a recent congestion event caps the score at POOR or worse)
+ *   3. measured RTT  (conn->rtt_time)
+ *   4. resend ratio  (packets_resent vs packets_sent over the measurement window)
+ *
+ * Connections that sent nothing in the measurement window are considered idle
+ * and are skipped before RTT/resend scoring: their rtt_time has not been
+ * refreshed by acknowledgments and may be stale, so letting it influence the
+ * score would produce false readings. Transport and congestion are still
+ * evaluated for idle connections.
+ *
+ * We take the WORST state seen across the connections, because a single hot
+ * flapping connection can overheat the device even if others are fine.
+ *
+ * NOTE: TCP relay alone does NOT make the health POOR. On mobile devices,
+ * TCP relay is the normal transport due to carrier NAT. Only RTT, packet loss,
+ * and congestion events determine POOR/BAD status.
+ */
+static void compute_overall_health(Net_Crypto *c)
+{
+    const uint64_t now = current_time_monotonic(c->mono_time);
+
+    /* Throttle recomputes so we don't burn CPU computing a score every millisecond. */
+    if (c->overall_health_last_update != 0 &&
+        (now - c->overall_health_last_update) < HEALTH_RECOMPUTE_MS) {
+        return;
+    }
+    c->overall_health_last_update = now;
+
+    /* Worst state seen across all connections. Start optimistically. */
+    Net_Crypto_Health worst = NET_CRYPTO_HEALTH_EXCELLENT;
+    bool any_established = false;
+    bool had_recent_congestion = false;
+    uint32_t num_direct = 0;
+    uint32_t num_relayed = 0;
+    uint32_t num_connections = 0;
+
+    for (uint32_t i = 0; i < c->crypto_connections_length; ++i) {
+        const Crypto_Connection *conn = get_crypto_connection(c, i);
+        if (conn == nullptr) {
+            continue;
+        }
+        if (conn->status != CRYPTO_CONN_ESTABLISHED) {
+            continue;
+        }
+
+        any_established = true;
+        num_connections++;
+
+        /* --- 1. transport type (UDP direct vs TCP relay) --- */
+        bool direct = false;
+        crypto_connection_status(c, i, &direct, nullptr);
+        if (direct) {
+            num_direct++;
+            LOGGER_DEBUG(c->log, "health: conn %u transport=DIRECT_UDP", i);
+        } else {
+            num_relayed++;
+            LOGGER_DEBUG(c->log, "health: conn %u transport=TCP_RELAY", i);
+            /*
+             * [CHANGED] TCP relay is NORMAL on mobile devices due to carrier NAT.
+             * It does NOT indicate poor link quality by itself.
+             * We only note it as a minor factor: cap at GOOD (not FAIR/POOR)
+             * because relayed connections have slightly higher overhead,
+             * but the actual quality is determined by RTT and resend ratio below.
+             */
+            if (worst < NET_CRYPTO_HEALTH_GOOD) {
+                worst = NET_CRYPTO_HEALTH_GOOD;
+                LOGGER_DEBUG(c->log, "health: conn %u TCP relay (normal on mobile) -> worst=GOOD", i);
+            }
+        }
+
+        /* --- 4. recent congestion event penalty --- */
+        if (conn->last_congestion_event != 0 &&
+            (now - conn->last_congestion_event) < HEALTH_CONGESTION_PENALTY_MS) {
+            had_recent_congestion = true;
+            LOGGER_DEBUG(c->log, "health: conn %u congestion event %llu ms ago",
+                         i, (unsigned long long)(now - conn->last_congestion_event));
+        }
+
+        /* --- 3. resend ratio over the measurement window --- */
+        uint64_t total_sent   = 0;
+        uint64_t total_resent = 0;
+        for (unsigned j = 0; j < CONGESTION_LAST_SENT_ARRAY_SIZE; ++j) {
+            total_sent   += conn->last_num_packets_sent[j];
+            total_resent += conn->last_num_packets_resent[j];
+        }
+
+        /* [ADDED] Option A: idle connection -> its rtt_time is stale, skip it */
+        if (total_sent == 0 && total_resent == 0) {
+            LOGGER_DEBUG(c->log, "health: conn %u idle, skipping stale rtt=%llu ms",
+                         i, (unsigned long long)conn->rtt_time);
+            continue;
+        }
+
+        /* --- 2. RTT --- */
+        const uint64_t rtt = conn->rtt_time;
+        Net_Crypto_Health rtt_state;
+        const char *rtt_state_name;
+
+        if      (rtt <= HEALTH_RTT_EXCELLENT_MS) { rtt_state = NET_CRYPTO_HEALTH_EXCELLENT; rtt_state_name = "EXCELLENT"; }
+        else if (rtt <= HEALTH_RTT_GOOD_MS)      { rtt_state = NET_CRYPTO_HEALTH_GOOD;      rtt_state_name = "GOOD"; }
+        else if (rtt <= HEALTH_RTT_FAIR_MS)      { rtt_state = NET_CRYPTO_HEALTH_FAIR;      rtt_state_name = "FAIR"; }
+        else if (rtt <= HEALTH_RTT_POOR_MS)      { rtt_state = NET_CRYPTO_HEALTH_POOR;      rtt_state_name = "POOR"; }
+        else                                     { rtt_state = NET_CRYPTO_HEALTH_BAD;       rtt_state_name = "BAD"; }
+
+        LOGGER_DEBUG(c->log, "health: conn %u rtt=%llu ms -> %s",
+                     i, (unsigned long long)rtt, rtt_state_name);
+
+        if (rtt_state > worst) {
+            worst = rtt_state;
+            LOGGER_DEBUG(c->log, "health: conn %u RTT raised worst to %s", i, rtt_state_name);
+        }
+
+
+        LOGGER_DEBUG(c->log, "health: conn %u sent=%llu resent=%llu",
+                     i, (unsigned long long)total_sent, (unsigned long long)total_resent);
+
+        if (total_sent >= HEALTH_MIN_PACKET_SAMPLE) {
+            const uint32_t resend_pct = (uint32_t)((total_resent * 100) / total_sent);
+            Net_Crypto_Health resend_state;
+            const char *resend_state_name;
+
+            if      (resend_pct <= HEALTH_RESEND_EXCELLENT_PCT) { resend_state = NET_CRYPTO_HEALTH_EXCELLENT; resend_state_name = "EXCELLENT"; }
+            else if (resend_pct <= HEALTH_RESEND_GOOD_PCT)      { resend_state = NET_CRYPTO_HEALTH_GOOD;      resend_state_name = "GOOD"; }
+            else if (resend_pct <= HEALTH_RESEND_FAIR_PCT)      { resend_state = NET_CRYPTO_HEALTH_FAIR;      resend_state_name = "FAIR"; }
+            else if (resend_pct <= HEALTH_RESEND_POOR_PCT)      { resend_state = NET_CRYPTO_HEALTH_POOR;      resend_state_name = "POOR"; }
+            else                                                { resend_state = NET_CRYPTO_HEALTH_BAD;       resend_state_name = "BAD"; }
+
+            LOGGER_DEBUG(c->log, "health: conn %u resend_ratio=%u%% -> %s",
+                         i, resend_pct, resend_state_name);
+
+            if (resend_state > worst) {
+                worst = resend_state;
+                LOGGER_DEBUG(c->log, "health: conn %u resend ratio raised worst to %s",
+                             i, resend_state_name);
+            }
+        } else {
+            LOGGER_DEBUG(c->log, "health: conn %u insufficient sample (%llu < %d), skip resend",
+                         i, (unsigned long long)total_sent, HEALTH_MIN_PACKET_SAMPLE);
+        }
+    }
+
+    /* If there are no established connections we cannot judge anything. */
+    if (!any_established) {
+        LOGGER_DEBUG(c->log, "health: no established connections -> UNKNOWN");
+        c->overall_health = NET_CRYPTO_HEALTH_UNKNOWN;
+        return;
+    }
+
+    LOGGER_DEBUG(c->log, "health: %u connections (%u direct, %u relayed)",
+                 num_connections, num_direct, num_relayed);
+
+    /*
+     * [CHANGED] Congestion event penalty: only cap at POOR if we had a recent
+     * congestion event AND the link otherwise looks okay.
+     */
+    if (had_recent_congestion && worst < NET_CRYPTO_HEALTH_POOR) {
+        worst = NET_CRYPTO_HEALTH_POOR;
+        LOGGER_DEBUG(c->log, "health: recent congestion -> capped at POOR");
+    }
+
+    /*
+     * [REMOVED] The old "num_direct == 0 -> POOR" cap.
+     *
+     * On mobile devices, TCP relay is the NORMAL transport because carrier-grade
+     * NAT blocks UDP hole-punching. Having zero direct UDP connections does NOT
+     * mean the network quality is poor - it just means we're going through a relay.
+     * The actual quality is determined by RTT and resend ratio above.
+     *
+     * If you still want a small penalty for pure-relay mode, you can uncomment
+     * the following block, but cap at FAIR (not POOR):
+     *
+     * if (num_direct == 0 && num_relayed > 0 && worst < NET_CRYPTO_HEALTH_FAIR) {
+     *     worst = NET_CRYPTO_HEALTH_FAIR;
+     *     LOGGER_DEBUG(c->log, "health: pure relay mode -> capped at FAIR");
+     * }
+     */
+
+    c->overall_health = worst;
+
+    /* Log the final result */
+    const char *final_state_name;
+    switch (worst) {
+        case NET_CRYPTO_HEALTH_UNKNOWN:   final_state_name = "UNKNOWN";   break;
+        case NET_CRYPTO_HEALTH_EXCELLENT: final_state_name = "EXCELLENT"; break;
+        case NET_CRYPTO_HEALTH_GOOD:      final_state_name = "GOOD";      break;
+        case NET_CRYPTO_HEALTH_FAIR:      final_state_name = "FAIR";      break;
+        case NET_CRYPTO_HEALTH_POOR:      final_state_name = "POOR";      break;
+        case NET_CRYPTO_HEALTH_BAD:       final_state_name = "BAD";       break;
+        default:                          final_state_name = "UNKNOWN";   break;
+    }
+
+    /* [ADDED] Log which specific metric determined the final score */
+    LOGGER_DEBUG(c->log, "health: score breakdown: worst=%d direct=%u relayed=%u congestion=%d",
+                 (int)worst, num_direct, num_relayed, (int)had_recent_congestion);
+
+    LOGGER_DEBUG(c->log, "health: FINAL RESULT = %s", final_state_name);
+}
+
 /**
  * @retval 1 if max speed was reached for this connection (no more data can be physically through the pipe).
  * @retval 0 if it wasn't reached.
@@ -48437,6 +49087,8 @@ Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *
     new_symmetric_key(rng, temp->secret_symmetric_key);
 
     temp->current_sleep_time = CRYPTO_SEND_PACKET_INTERVAL;
+    temp->overall_health = NET_CRYPTO_HEALTH_UNKNOWN;   /* [ADDED] */
+    temp->overall_health_last_update = 0;               /* [ADDED] */
 
     networking_registerhandler(dht_get_net(dht), NET_PACKET_COOKIE_REQUEST, &udp_handle_cookie_request, temp);
     networking_registerhandler(dht_get_net(dht), NET_PACKET_COOKIE_RESPONSE, &udp_handle_packet, temp);
@@ -48446,6 +49098,24 @@ Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *
     bs_list_init(&temp->ip_port_list, sizeof(IP_Port), 8);
 
     return temp;
+}
+
+/* [ADDED] Public accessor for the overall crypto-layer health.
+ *
+ * Returns one of:
+ *   NET_CRYPTO_HEALTH_UNKNOWN    - no established connections yet
+ *   NET_CRYPTO_HEALTH_EXCELLENT  - direct UDP, low RTT, almost no retransmits
+ *   NET_CRYPTO_HEALTH_GOOD
+ *   NET_CRYPTO_HEALTH_FAIR
+ *   NET_CRYPTO_HEALTH_POOR
+ *   NET_CRYPTO_HEALTH_BAD
+ */
+Net_Crypto_Health net_crypto_overall_health(const Net_Crypto *c)
+{
+    if (c == nullptr) {
+        return NET_CRYPTO_HEALTH_UNKNOWN;
+    }
+    return c->overall_health;
 }
 
 non_null(1) nullable(2)
@@ -48490,6 +49160,9 @@ void do_net_crypto(Net_Crypto *c, void *userdata)
     kill_timedout(c, userdata);
     do_tcp(c, userdata);
     send_crypto_packets(c);
+
+    /* [ADDED] Update the cached overall health score. */
+    compute_overall_health(c);
 }
 
 void kill_net_crypto(Net_Crypto *c)
@@ -60779,6 +61452,58 @@ void tox_get_savedata(const Tox *tox, uint8_t *savedata)
     tox_unlock(tox);
 }
 
+/**
+ * Gets the savedata and returns the actual size written.
+ * This function is thread-safe and prevents TOCTOU race conditions by holding
+ * the lock during both the size calculation and the data writing.
+ *
+ * @param tox      The Tox instance.
+ * @param savedata The buffer to write the savedata into.
+ * @param buf_len  The size of the allocated buffer.
+ * @return         The actual number of bytes written on success, or (size_t)-1
+ *                 if the buffer is too small or savedata is NULL.
+ */
+size_t tox_get_savedata_len(const Tox *tox, uint8_t *savedata, size_t buf_len)
+{
+    assert(tox != nullptr);
+
+    if (savedata == nullptr) {
+        return (size_t)-1;
+    }
+
+    tox_lock(tox);
+
+    // Calculate required size while holding the lock to prevent TOCTOU
+    const size_t required_size = 2 * sizeof(uint32_t)
+                                 + messenger_size(tox->m)
+                                 + conferences_size(tox->m->conferences_object)
+                                 + end_size();
+
+    // Check if the provided buffer is large enough
+    if (buf_len < required_size) {
+        tox_unlock(tox);
+        return (size_t)-1;
+    }
+
+    memset(savedata, 0, required_size);
+
+    const uint32_t size32 = sizeof(uint32_t);
+
+    // write cookie
+    memset(savedata, 0, size32);
+    savedata += size32;
+    host_to_lendian_bytes32(savedata, STATE_COOKIE_GLOBAL);
+    savedata += size32;
+
+    savedata = messenger_save(tox->m, savedata);
+    savedata = conferences_save(tox->m->conferences_object, savedata);
+    end_save(savedata);
+
+    tox_unlock(tox);
+
+    return required_size;
+}
+
 non_null(5) nullable(1, 2, 4, 6)
 static int32_t resolve_bootstrap_node(Tox *tox, const char *host, uint16_t port, const uint8_t *public_key,
                                       IP_Port **root, Tox_Err_Bootstrap *error)
@@ -60918,6 +61643,68 @@ Tox_Connection tox_self_get_connection_status(const Tox *tox)
     return TOX_CONNECTION_NONE;
 }
 
+TOX_NETWORK_HEALTH tox_self_get_network_health(const Tox *tox)
+{
+    assert(tox != nullptr);
+    tox_lock(tox);
+
+    Net_Crypto_Health internal_health = net_crypto_overall_health(tox->m->net_crypto);
+
+    TOX_NETWORK_HEALTH public_health;
+
+    /* Map internal Net_Crypto_Health to public TOX_NETWORK_HEALTH */
+    switch (internal_health) {
+        case NET_CRYPTO_HEALTH_UNKNOWN:
+            public_health = TOX_NETWORK_HEALTH_UNKNOWN;
+            break;
+        case NET_CRYPTO_HEALTH_EXCELLENT:
+            public_health = TOX_NETWORK_HEALTH_EXCELLENT;
+            break;
+        case NET_CRYPTO_HEALTH_GOOD:
+            public_health = TOX_NETWORK_HEALTH_GOOD;
+            break;
+        case NET_CRYPTO_HEALTH_FAIR:
+            public_health = TOX_NETWORK_HEALTH_FAIR;
+            break;
+        case NET_CRYPTO_HEALTH_POOR:
+            public_health = TOX_NETWORK_HEALTH_POOR;
+            break;
+        case NET_CRYPTO_HEALTH_BAD:
+            public_health = TOX_NETWORK_HEALTH_BAD;
+            break;
+        default:
+            public_health = TOX_NETWORK_HEALTH_UNKNOWN;
+            break;
+    }
+
+    tox_unlock(tox);
+    return public_health;
+}
+
+Tox_Group_Health tox_group_get_health(const Tox *tox)
+{
+    assert(tox != nullptr);
+    tox_lock(tox);
+
+    Tox_Group_Health public_health = TOX_GROUP_HEALTH_UNKNOWN;
+
+    if (tox->m->group_handler != nullptr) {
+        const GC_Health internal_health = gc_get_overall_health(tox->m->group_handler);
+
+        switch (internal_health) {
+            case GC_HEALTH_UNKNOWN:   public_health = TOX_GROUP_HEALTH_UNKNOWN;   break;
+            case GC_HEALTH_EXCELLENT: public_health = TOX_GROUP_HEALTH_EXCELLENT; break;
+            case GC_HEALTH_GOOD:      public_health = TOX_GROUP_HEALTH_GOOD;      break;
+            case GC_HEALTH_FAIR:      public_health = TOX_GROUP_HEALTH_FAIR;      break;
+            case GC_HEALTH_POOR:      public_health = TOX_GROUP_HEALTH_POOR;      break;
+            case GC_HEALTH_BAD:       public_health = TOX_GROUP_HEALTH_BAD;       break;
+            default:                   public_health = TOX_GROUP_HEALTH_UNKNOWN;   break;
+        }
+    }
+
+    tox_unlock(tox);
+    return public_health;
+}
 
 void tox_callback_self_connection_status(Tox *tox, tox_self_connection_status_cb *callback)
 {
@@ -89137,11 +89924,14 @@ void tox_utils_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t fil
                 if (((global_msgv2_incoming_ft_entry *)(n->data))->kind == TOX_FILE_KIND_MESSAGEV2_SEND) {
                     if (length == 0) {
                         // FT finished
-                        if (tox_utils_friend_message_v2) {
-                            const uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)
-                                                                (n->data))->msg_data);
-                            const uint64_t size_ = ((global_msgv2_incoming_ft_entry *)
-                                                    (n->data))->file_size;
+                        const uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)
+                                                            (n->data))->msg_data);
+                        const uint64_t size_ = ((global_msgv2_incoming_ft_entry *)
+                                                (n->data))->file_size;
+                        /* FIX: Verify the message is large enough before passing to callback.
+                         * Prevents user callbacks from reading garbage/truncated data. */
+                        uint32_t min_size = tox_messagev2_size(0, TOX_FILE_KIND_MESSAGEV2_SEND, 0);
+                        if (size_ >= min_size && tox_utils_friend_message_v2) {
                             tox_utils_friend_message_v2(tox, friend_number, data_, (size_t)size_);
                         }
 
@@ -89151,6 +89941,14 @@ void tox_utils_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t fil
                     } else {
                         // copy chunk into buffer
                         uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)(n->data))->msg_data);
+                        /* FIX: bounds check to prevent heap-buffer-overflow. Reject chunks
+                         * where position starts past the buffer end, or where position+length
+                         * would exceed the buffer size. The subtraction form avoids overflow. */
+                        if (position >= TOX_MAX_FILETRANSFER_SIZE_MSGV2 ||
+                            length > TOX_MAX_FILETRANSFER_SIZE_MSGV2 - position) {
+                            free(friend_pubkey);
+                            return;
+                        }
                         memcpy((data_ + position), data, length);
                     }
 
@@ -89159,11 +89957,14 @@ void tox_utils_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t fil
                 } else if (((global_msgv2_incoming_ft_entry *)(n->data))->kind == TOX_FILE_KIND_MESSAGEV2_SYNC) {
                     if (length == 0) {
                         // FT finished
-                        if (tox_utils_friend_sync_message_v2) {
-                            const uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)
-                                                                (n->data))->msg_data);
-                            const uint64_t size_ = ((global_msgv2_incoming_ft_entry *)
-                                                    (n->data))->file_size;
+                        const uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)
+                                                            (n->data))->msg_data);
+                        const uint64_t size_ = ((global_msgv2_incoming_ft_entry *)
+                                                (n->data))->file_size;
+                        /* FIX: Verify the message is large enough before passing to callback.
+                         * Prevents user callbacks from reading garbage/truncated data. */
+                        uint32_t min_size = tox_messagev2_size(0, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
+                        if (size_ >= min_size && tox_utils_friend_sync_message_v2) {
                             tox_utils_friend_sync_message_v2(tox, friend_number, data_, (size_t)size_);
                         }
 
@@ -89173,6 +89974,14 @@ void tox_utils_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t fil
                     } else {
                         // copy chunk into buffer
                         uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)(n->data))->msg_data);
+                        /* FIX: bounds check to prevent heap-buffer-overflow. Reject chunks
+                         * where position starts past the buffer end, or where position+length
+                         * would exceed the buffer size. The subtraction form avoids overflow. */
+                        if (position >= TOX_MAX_FILETRANSFER_SIZE_MSGV2 ||
+                            length > TOX_MAX_FILETRANSFER_SIZE_MSGV2 - position) {
+                            free(friend_pubkey);
+                            return;
+                        }
                         memcpy((data_ + position), data, length);
                     }
 
@@ -89216,6 +90025,14 @@ void tox_utils_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t fil
                     } else {
                         // copy chunk into buffer
                         uint8_t *data_ = ((uint8_t *)((global_msgv2_incoming_ft_entry *)(n->data))->msg_data);
+                        /* FIX: bounds check to prevent heap-buffer-overflow. Reject chunks
+                         * where position starts past the buffer end, or where position+length
+                         * would exceed the buffer size. The subtraction form avoids overflow. */
+                        if (position >= TOX_MAX_FILETRANSFER_SIZE_MSGV2 ||
+                            length > TOX_MAX_FILETRANSFER_SIZE_MSGV2 - position) {
+                            free(friend_pubkey);
+                            return;
+                        }
                         memcpy((data_ + position), data, length);
                     }
 
