@@ -970,6 +970,12 @@ void tox_get_options(Tox *tox, struct Tox_Options *options);
  * @brief Calculates the number of bytes required to store the tox instance with
  *   tox_get_savedata.
  *
+ * This function is used to determine the baseline buffer size needed before saving.
+ *
+ * @note Thread Safety / TOCTOU: In multithreaded environments, the internal state of the
+ * Tox instance (and thus the required save size) may change between calling this function
+ * and actually writing the data. See `tox_get_savedata_len` for how to handle this safely.
+ *
  * This function cannot fail. The result is always greater than 0.
  *
  * @see threading for concurrency implications.
@@ -979,11 +985,47 @@ size_t tox_get_savedata_size(const Tox *tox);
 /**
  * @brief Store all information associated with the tox instance to a byte array.
  *
+ * To use this function, you must first allocate a buffer using the size returned by
+ * `tox_get_savedata_size`.
+ *
+ * @warning Thread Safety: This two-step process is vulnerable to TOCTOU race conditions.
+ * If the state of the Tox instance changes and grows between calculating the size and
+ * calling this function, it may write past the end of the allocated buffer, causing a
+ * buffer overflow. Use `tox_get_savedata_len` instead for safe bounds checking.
+ *
+ * @param tox The Tox instance.
  * @param savedata A memory region large enough to store the tox instance
  *   data. Call tox_get_savedata_size to find the number of bytes required. If this parameter
  *   is NULL, this function has no effect.
  */
 void tox_get_savedata(const Tox *tox, uint8_t *savedata);
+
+/**
+ * @brief Store all information associated with the tox instance to a byte array, safely checking the buffer size.
+ *
+ * This function is thread-safe and prevents Time-of-Check to Time-of-Use (TOCTOU) race conditions and potential
+ * buffer overflows by acquiring the Tox instance lock and holding it during both the required
+ * size calculation and the data writing. It verifies that the provided buffer is large enough
+ * before writing any data.
+ *
+ * Usage:
+ * You still must call `tox_get_savedata_size()` first to determine the baseline buffer size to allocate.
+ * Because the internal state might change between calling `_size()` and `_len()` in multithreaded
+ * applications, the actual required size could exceed your initial allocation. To use this safely, you must either:
+ * - Use it in a single-threaded application (or context) where the state cannot change between calls.
+ * - Add a size margin to your allocation based on the result of `tox_get_savedata_size()`.
+ * - Check the return code of this function. If it returns `(size_t)-1`, the buffer was too small.
+ *   You must then retry the entire process (call `_size()` again, allocate a larger buffer, and call `_len()` again).
+ *
+ * @param tox The Tox instance.
+ * @param savedata A memory region to store the tox instance data. If this parameter is NULL,
+ *   this function returns (size_t)-1.
+ * @param buf_len The size of the allocated `savedata` buffer in bytes.
+ *
+ * @return The actual number of bytes written to `savedata` on success. If the provided `buf_len`
+ *   is smaller than the required size, or if `savedata` is NULL, this function returns (size_t)-1.
+ */
+size_t tox_get_savedata_len(const Tox *tox, uint8_t *savedata, size_t buf_len);
 
 /** @} */
 
@@ -1725,6 +1767,82 @@ void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback);
 Tox_Connection tox_friend_get_connection_status(const Tox *tox, uint32_t friend_number, Tox_Err_Friend_Query *error);
 
 void tox_friend_get_connection_ip(const Tox *tox, uint32_t friend_number, uint8_t *ip_str);
+
+
+
+
+/**
+ * Represents the overall health/quality of the network connection as measured
+ * by the crypto layer.
+ *
+ * This is a composite score based on:
+ *   - RTT (round-trip time) across all established connections
+ *   - Packet resend ratio (how many packets had to be retransmitted)
+ *   - Transport type (direct UDP vs TCP relays)
+ *   - Recent congestion events
+ *
+ * Use this to adapt your application's behavior on mobile devices:
+ *   - UNKNOWN: No connections yet, cannot determine health
+ *   - EXCELLENT: Direct UDP, low RTT (<150ms), <5% retransmits
+ *   - GOOD: Direct UDP, moderate RTT (150-400ms), <15% retransmits
+ *   - FAIR: Mixed TCP/UDP or rising RTT (400-1000ms), <35% retransmits
+ *   - POOR: Mostly TCP relays or high RTT (1-3s), <60% retransmits
+ *   - BAD: Very high RTT (>3s) or >60% retransmits, active congestion
+ *
+ * When the health is POOR or BAD, consider increasing your tox_iterate()
+ * interval to reduce battery drain and thermal load on mobile devices.
+ */
+typedef enum TOX_NETWORK_HEALTH {
+
+    /**
+     * No established connections yet, or not enough data to determine health.
+     */
+    TOX_NETWORK_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent connection: direct UDP, very low latency, almost no packet loss.
+     */
+    TOX_NETWORK_HEALTH_EXCELLENT,
+
+    /**
+     * Good connection: direct UDP, acceptable latency, minimal retransmits.
+     */
+    TOX_NETWORK_HEALTH_GOOD,
+
+    /**
+     * Fair connection: mixed TCP/UDP or moderate latency, some retransmits.
+     */
+    TOX_NETWORK_HEALTH_FAIR,
+
+    /**
+     * Poor connection: mostly TCP relays or high latency, frequent retransmits.
+     * The device may run warm on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_POOR,
+
+    /**
+     * Bad connection: very high latency or severe packet loss, active congestion.
+     * The device will likely overheat on mobile networks.
+     */
+    TOX_NETWORK_HEALTH_BAD,
+
+} TOX_NETWORK_HEALTH;
+
+
+/**
+ * Get the overall health/quality of the network connection as measured by toxcore.
+ *
+ * This returns a composite score based on RTT, packet loss, transport type,
+ * and recent congestion events across all established connections.
+ *
+ * Thread-safe: Yes. This function acquires the Tox lock before reading the value.
+ *
+ * @param tox The Tox instance.
+ * @return The current network health status.
+ */
+TOX_NETWORK_HEALTH tox_self_get_network_health(const Tox *tox);
+
+
 
 
 /**
@@ -3509,6 +3627,19 @@ uint32_t tox_group_chat_id_size(void);
 
 uint32_t tox_group_peer_public_key_size(void);
 
+/**
+ * The size of an Ed25519 group signing public key.
+ */
+#define TOX_GROUP_SIGNING_PUBLIC_KEY_SIZE 32
+
+/**
+ * The size of a peer's group secret signing key.
+ *
+ * This is the size of the Ed25519 secret signing key used for the client's
+ * group identity in an NGC group.
+ */
+#define TOX_GROUP_SIGNING_SECRET_KEY_SIZE 64
+
 
 /*******************************************************************************
  *
@@ -3616,6 +3747,56 @@ typedef enum Tox_Group_Role {
 
 } Tox_Group_Role;
 
+
+typedef enum Tox_Group_Health {
+
+    /**
+     * No active group peers, or not enough data to determine health.
+     */
+    TOX_GROUP_HEALTH_UNKNOWN,
+
+    /**
+     * Excellent group connections: direct UDP, no backlog, fresh receives.
+     */
+    TOX_GROUP_HEALTH_EXCELLENT,
+
+    /**
+     * Good group connections: healthy links, possibly TCP-relayed.
+     */
+    TOX_GROUP_HEALTH_GOOD,
+
+    /**
+     * Fair group connections: some degradation detected.
+     */
+    TOX_GROUP_HEALTH_FAIR,
+
+    /**
+     * Poor group connections: notable degradation, device may run warm.
+     */
+    TOX_GROUP_HEALTH_POOR,
+
+    /**
+     * Bad group connections: severe degradation, device will likely overheat.
+     */
+    TOX_GROUP_HEALTH_BAD,
+
+} Tox_Group_Health;
+
+
+/**
+ * Get the overall health/quality of the NGC group connections.
+ *
+ * Returns a composite score based on transport type, send queue depth,
+ * receive staleness, and handshake attempts across all active group peers.
+ * This is independent from tox_self_get_network_health(), which reflects
+ * friend connections only.
+ *
+ * Thread-safe: Yes.
+ *
+ * @param tox The Tox instance.
+ * @return The current group connection health status.
+ */
+Tox_Group_Health tox_group_get_health(const Tox *tox);
 
 
 /*******************************************************************************
@@ -4040,6 +4221,53 @@ uint32_t tox_group_self_get_peer_id(const Tox *tox, uint32_t group_number, Tox_E
 bool tox_group_self_get_public_key(const Tox *tox, uint32_t group_number, uint8_t *public_key,
                                    Tox_Err_Group_Self_Query *error);
 
+/**
+ * Write the client's group Ed25519 signing public key designated by the given
+ * group number to a byte array.
+ *
+ * This is the public signing key that corresponds to the group secret signing
+ * key returned by tox_group_self_get_signing_secret_key().
+ *
+ * `public_key` should have room for at least TOX_GROUP_SIGNING_PUBLIC_KEY_SIZE
+ * bytes.
+ *
+ * If `public_key` is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_self_get_signing_public_key(const Tox *tox,
+                                           uint32_t group_number,
+                                           uint8_t *public_key,
+                                           Tox_Err_Group_Self_Query *error);
+
+/**
+ * Write the client's group secret signing key designated by the given group
+ * number to a byte array.
+ *
+ * This key is the Ed25519 secret signing key for the client's group identity.
+ * It is permanently tied to the client's identity for this particular group
+ * until the client explicitly leaves the group.
+ *
+ * This key can be used to sign application-level group packets, for example
+ * membership / presence events.
+ *
+ * `secret_key` should have room for at least TOX_GROUP_SIGNING_SECRET_KEY_SIZE
+ * bytes.
+ *
+ * If `secret_key` is NULL, this function call has no effect.
+ *
+ * @param secret_key A valid memory region large enough to store the secret key.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_self_get_signing_secret_key(const Tox *tox,
+                                           uint32_t group_number,
+                                           uint8_t *secret_key,
+                                           Tox_Err_Group_Self_Query *error);
+
+
+
 
 /*******************************************************************************
  *
@@ -4167,6 +4395,26 @@ bool tox_group_peer_get_public_key(const Tox *tox, uint32_t group_number, uint32
 
 bool tox_group_savedpeer_get_public_key(const Tox *tox, uint32_t group_number, uint32_t slot_number, uint8_t *public_key,
                                    Tox_Err_Group_Peer_Query *error);
+
+/**
+ * Write the Ed25519 signing public key of the peer designated by `peer_id`
+ * to `public_key`.
+ *
+ * This key can be used to verify signatures created by that peer's group
+ * secret signing key.
+ *
+ * `public_key` should have room for at least TOX_GROUP_SIGNING_PUBLIC_KEY_SIZE
+ * bytes.
+ *
+ * If `public_key` is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_peer_get_signing_public_key(const Tox *tox,
+                                           uint32_t group_number,
+                                           uint32_t peer_id,
+                                           uint8_t *public_key,
+                                           Tox_Err_Group_Peer_Query *error);
 
 /**
  * @brief Return the peer number associated with that NGC Peer Public Key.
@@ -4313,6 +4561,24 @@ bool tox_group_set_topic(const Tox *tox, uint32_t group_number, const uint8_t *t
  * `group_topic` callback.
  */
 size_t tox_group_get_topic_size(const Tox *tox, uint32_t group_number, Tox_Err_Group_State_Queries *error);
+
+/**
+ * Write the group founder's public key designated by the given group number to a byte array.
+ *
+ * This key is permanently tied to the group's identity and represents the peer who originally
+ * created the group. It remains valid for the entire lifetime of the group and cannot be
+ * changed or reassigned. This key allows peers to reliably identify the group founder even
+ * when the founder is offline.
+ *
+ * `public_key` should have room for at least TOX_GROUP_PEER_PUBLIC_KEY_SIZE bytes.
+ *
+ * @param public_key A valid memory region large enough to store the public key.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_get_founder_public_key(const Tox *tox, uint32_t group_number, uint8_t *public_key,
+                                      Tox_Err_Group_State_Queries *error);
 
 /**
  * Write the topic designated by the given group number to a byte array.
@@ -5708,6 +5974,287 @@ void tox_get_all_tcp_relays(const Tox *tox, char *report);
  *
  */
 void tox_get_all_udp_connections(const Tox *tox, char *report);
+
+
+/*******************************************************************************
+ *
+ * :: Cpu cycles profiler
+ *
+ ******************************************************************************/
+
+/**
+ * Get the accumulated best-effort CPU cycle estimate since the last reset.
+ *
+ * Important: this is a global value, not per Tox instance (for technical reasons).
+ *            it will not be reset by tox_kill()
+ *
+ */
+uint64_t tox_get_estimated_cpu_cycles(void);
+
+/**
+ * Reset the accumulated CPU cycle counter to zero.
+ *
+ * Important: this is a global value, not per Tox instance (for technical reasons).
+ *            it will not be reset by tox_kill()
+ *
+ */
+void tox_reset_estimated_cpu_cycles(void);
+
+/*******************************************************************************
+ *
+ * :: Network profiler
+ *
+ ******************************************************************************/
+
+
+/**
+ * Represents all of the network packet identifiers that Toxcore uses.
+ *
+ * Notes:
+ * - Some packet ID's have different purposes depending on the
+ * packet type. These ID's are given numeral names.
+ *
+ * - Queries for invalid packet ID's return undefined results. For example,
+ *   querying a TCP-exclusive packet ID for UDP, or querying an ID that
+ *   doesn't exist in this enum.
+ */
+typedef enum Tox_Netprof_Packet_Id {
+    /**
+     * Ping request packet (UDP).
+     * Routing request (TCP).
+     */
+    TOX_NETPROF_PACKET_ID_ZERO                 = 0x00,
+
+    /**
+     * Ping response packet (UDP).
+     * Routing response (TCP).
+     */
+    TOX_NETPROF_PACKET_ID_ONE                  = 0x01,
+
+    /**
+     * Get nodes request packet (UDP).
+     * Connection notification (TCP).
+     */
+    TOX_NETPROF_PACKET_ID_TWO                  = 0x02,
+
+    /**
+     * TCP disconnect notification.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_DISCONNECT       = 0x03,
+
+    /**
+     * Send nodes response packet (UDP).
+     * Ping packet (TCP).
+     */
+    TOX_NETPROF_PACKET_ID_FOUR                 = 0x04,
+
+    /**
+     * TCP pong packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_PONG             = 0x05,
+
+    /**
+     * TCP out-of-band send packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_OOB_SEND         = 0x06,
+
+    /**
+     * TCP out-of-band receive packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_OOB_RECV         = 0x07,
+
+    /**
+     * TCP onion request packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_ONION_REQUEST    = 0x08,
+
+    /**
+     * TCP onion response packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_ONION_RESPONSE   = 0x09,
+
+    /**
+     * TCP data packet.
+     */
+    TOX_NETPROF_PACKET_ID_TCP_DATA             = 0x10,
+
+    /**
+     * Cookie request packet.
+     */
+    TOX_NETPROF_PACKET_ID_COOKIE_REQUEST       = 0x18,
+
+    /**
+     * Cookie response packet.
+     */
+    TOX_NETPROF_PACKET_ID_COOKIE_RESPONSE      = 0x19,
+
+    /**
+     * Crypto handshake packet.
+     */
+    TOX_NETPROF_PACKET_ID_CRYPTO_HS            = 0x1a,
+
+    /**
+     * Crypto data packet.
+     */
+    TOX_NETPROF_PACKET_ID_CRYPTO_DATA          = 0x1b,
+
+    /**
+     * Encrypted data packet.
+     */
+    TOX_NETPROF_PACKET_ID_CRYPTO               = 0x20,
+
+    /**
+     * LAN discovery packet.
+     */
+    TOX_NETPROF_PACKET_ID_LAN_DISCOVERY        = 0x21,
+
+    /**
+     * DHT groupchat packets.
+     */
+    TOX_NETPROF_PACKET_ID_GC_HANDSHAKE         = 0x5a,
+    TOX_NETPROF_PACKET_ID_GC_LOSSLESS          = 0x5b,
+    TOX_NETPROF_PACKET_ID_GC_LOSSY             = 0x5c,
+
+    /**
+     * Onion send packets.
+     */
+    TOX_NETPROF_PACKET_ID_ONION_SEND_INITIAL   = 0x80,
+    TOX_NETPROF_PACKET_ID_ONION_SEND_1         = 0x81,
+    TOX_NETPROF_PACKET_ID_ONION_SEND_2         = 0x82,
+
+    /**
+     * DHT announce request packet (deprecated).
+     */
+    TOX_NETPROF_PACKET_ID_ANNOUNCE_REQUEST_OLD = 0x83,
+
+    /**
+     * DHT announce response packet (deprecated).
+     */
+    TOX_NETPROF_PACKET_ID_ANNOUNCE_RESPONSE_OLD = 0x84,
+
+    /**
+     * Onion data request packet.
+     */
+    TOX_NETPROF_PACKET_ID_ONION_DATA_REQUEST   = 0x85,
+
+    /**
+     * Onion data response packet.
+     */
+    TOX_NETPROF_PACKET_ID_ONION_DATA_RESPONSE  = 0x86,
+
+    /**
+     * DHT announce request packet.
+     */
+    TOX_NETPROF_PACKET_ID_ANNOUNCE_REQUEST     = 0x87,
+
+    /**
+     * DHT announce response packet.
+     */
+    TOX_NETPROF_PACKET_ID_ANNOUNCE_RESPONSE    = 0x88,
+
+    /**
+     * Onion receive packets.
+     */
+    TOX_NETPROF_PACKET_ID_ONION_RECV_3         = 0x8c,
+    TOX_NETPROF_PACKET_ID_ONION_RECV_2         = 0x8d,
+    TOX_NETPROF_PACKET_ID_ONION_RECV_1         = 0x8e,
+
+    TOX_NETPROF_PACKET_ID_FORWARD_REQUEST      = 0x90,
+    TOX_NETPROF_PACKET_ID_FORWARDING           = 0x91,
+    TOX_NETPROF_PACKET_ID_FORWARD_REPLY        = 0x92,
+
+    TOX_NETPROF_PACKET_ID_DATA_SEARCH_REQUEST     = 0x93,
+    TOX_NETPROF_PACKET_ID_DATA_SEARCH_RESPONSE    = 0x94,
+    TOX_NETPROF_PACKET_ID_DATA_RETRIEVE_REQUEST   = 0x95,
+    TOX_NETPROF_PACKET_ID_DATA_RETRIEVE_RESPONSE  = 0x96,
+    TOX_NETPROF_PACKET_ID_STORE_ANNOUNCE_REQUEST  = 0x97,
+    TOX_NETPROF_PACKET_ID_STORE_ANNOUNCE_RESPONSE = 0x98,
+
+    /**
+     * Bootstrap info packet.
+     */
+    TOX_NETPROF_PACKET_ID_BOOTSTRAP_INFO       = 0xf0,
+} Tox_Netprof_Packet_Id;
+
+/**
+ * Specifies the packet type for a given query.
+ */
+typedef enum Tox_Netprof_Packet_Type {
+    /**
+     * TCP client packets.
+     */
+    TOX_NETPROF_PACKET_TYPE_TCP_CLIENT,
+
+    /**
+     * TCP server packets.
+     */
+    TOX_NETPROF_PACKET_TYPE_TCP_SERVER,
+
+    /**
+     * Combined TCP server and TCP client packets.
+     */
+    TOX_NETPROF_PACKET_TYPE_TCP,
+
+    /**
+     * UDP packets.
+     */
+    TOX_NETPROF_PACKET_TYPE_UDP,
+} Tox_Netprof_Packet_Type;
+
+/**
+ * Specifies the packet direction for a given query.
+ */
+typedef enum Tox_Netprof_Direction {
+    /**
+     * Outbound packets.
+     */
+    TOX_NETPROF_DIRECTION_SENT,
+
+    /**
+     * Inbound packets.
+     */
+    TOX_NETPROF_DIRECTION_RECV,
+} Tox_Netprof_Direction;
+
+/**
+ * Return the number of packets sent or received for a specific packet ID.
+ *
+ * @param type The types of packets being queried.
+ * @param id The packet ID being queried.
+ * @param direction The packet direction.
+ */
+uint64_t tox_netprof_get_packet_id_count(const Tox *tox, Tox_Netprof_Packet_Type type, uint8_t id,
+        Tox_Netprof_Direction direction);
+
+/**
+ * Return the total number of packets sent or received.
+ *
+ * @param type The types of packets being queried.
+ * @param direction The packet direction.
+ */
+uint64_t tox_netprof_get_packet_total_count(const Tox *tox, Tox_Netprof_Packet_Type type,
+        Tox_Netprof_Direction direction);
+
+/**
+ * Return the number of bytes sent or received for a specific packet ID.
+ *
+ * @param type The types of packets being queried.
+ * @param id The packet ID being queried.
+ * @param direction The packet direction.
+ */
+uint64_t tox_netprof_get_packet_id_bytes(const Tox *tox, Tox_Netprof_Packet_Type type, uint8_t id,
+        Tox_Netprof_Direction direction);
+
+/**
+ * Return the total number of bytes sent or received.
+ *
+ * @param type The types of packets being queried.
+ * @param direction The packet direction.
+ */
+uint64_t tox_netprof_get_packet_total_bytes(const Tox *tox, Tox_Netprof_Packet_Type type,
+        Tox_Netprof_Direction direction);
+
+
 
 #ifdef __cplusplus
 }
