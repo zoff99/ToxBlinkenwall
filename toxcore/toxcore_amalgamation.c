@@ -403,6 +403,10 @@ void mono_time_set_current_time_callback(Mono_Time *mono_time,
 #include <stdint.h>
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The max number of packet ID's (must fit inside one byte) */
 #define NET_PROF_MAX_PACKET_IDS 256
 
@@ -433,6 +437,13 @@ nullable(1)
 void netprof_record_packet(Net_Profile *profile, uint8_t id, size_t length, Packet_Direction dir);
 
 /**
+ * Records a sent or received TCP data packet, recording both the overarching TCP data ID
+ * and the specific inner Tox packet type without double-counting.
+ */
+nullable(1)
+void netprof_record_tcp_data_packet(Net_Profile *profile, uint8_t tcp_id, uint8_t inner_id, size_t length, Packet_Direction dir);
+
+/**
  * Returns the number of sent or received packets of type `id` for the given profile.
  */
 nullable(1)
@@ -456,7 +467,23 @@ uint64_t netprof_get_bytes_id(const Net_Profile *profile, uint8_t id, Packet_Dir
 nullable(1)
 uint64_t netprof_get_bytes_total(const Net_Profile *profile, Packet_Direction dir);
 
+/**
+ * Returns a new net_profile object. The caller is responsible for freeing the
+ * returned memory via `netprof_kill`.
+ */
+Net_Profile *netprof_new(const Logger *log);
+
+/**
+ * Kills a net_profile object and frees all associated memory.
+ */
+void netprof_kill(Net_Profile *net_profile);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif  /* C_TOXCORE_TOXCORE_NET_PROFILE_H */
+
 
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
@@ -2864,8 +2891,8 @@ uint32_t tcp_copy_connected_relays_index(const TCP_Connections *tcp_c, Node_form
  */
 non_null()
 TCP_Connections *new_tcp_connections(
-        const Logger *logger, const Random *rng, const Network *ns, Mono_Time *mono_time,
-        const uint8_t *secret_key, const TCP_Proxy_Info *proxy_info);
+        const Logger *logger, const Random *rng, const Network *ns, Mono_Time *mono_time, const uint8_t *secret_key,
+        const TCP_Proxy_Info *proxy_info, Net_Profile *net_profile);
 
 non_null()
 int kill_tcp_relay_connection(TCP_Connections *tcp_c, int tcp_connections_number);
@@ -2884,13 +2911,6 @@ TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_
 
 non_null()
 TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number);
-
-/** @brief Returns a pointer to the tcp client net profile associated with tcp_c.
- *
- * @retval null if tcp_c is null.
- */
-non_null()
-const Net_Profile *tcp_connection_get_client_net_profile(const TCP_Connections *tcp_c);
 
 #endif
 /* SPDX-License-Identifier: GPL-3.0-or-later
@@ -3310,7 +3330,7 @@ void load_secret_key(Net_Crypto *c, const uint8_t *sk);
  * Sets all the global connection variables to their default values.
  */
 non_null()
-Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *ns, Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info);
+Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *ns, Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, Net_Profile *tcp_np);
 
 /** return the optimal interval in ms for running do_net_crypto. */
 non_null()
@@ -3333,13 +3353,6 @@ void copy_friend_ip_port(Net_Crypto *c, const int crypt_conn_id, char *report_st
 
 non_null()
 char *udp_copy_all_connected(IP_Port conn_ip_port, char *connections_report_string, uint16_t max_num, uint32_t* num);
-
-/**
- * Returns a pointer to the net profile object for the TCP client associated with `c`.
- * Returns null if `c` is null or the TCP_Connections associated with `c` is null.
- */
-non_null()
-const Net_Profile *nc_get_tcp_client_net_profile(const Net_Crypto *c);
 
 #endif
 /* SPDX-License-Identifier: GPL-3.0-or-later
@@ -3654,6 +3667,9 @@ typedef struct TCP_Connection {
 
     TCP_Priority_List *priority_queue_start;
     TCP_Priority_List *priority_queue_end;
+
+    // This is a shared pointer to the parent's respective Net_Profile object
+    // (either TCP_Server for TCP server packets or TCP_Connections for TCP client packets).
     Net_Profile *net_profile;
 } TCP_Connection;
 
@@ -3740,13 +3756,6 @@ TCP_Server *new_TCP_server(const Logger *logger, const Random *rng, const Networ
                            bool ipv6_enabled, uint16_t num_sockets, const uint16_t *ports,
                            const uint8_t *secret_key, Onion *onion, Forwarding *forwarding);
 
-/** @brief Returns a pointer to the net profile associated with `tcp_server`.
- *
- * Returns null if `tcp_server` is null.
- */
-nullable(1)
-const Net_Profile *tcp_server_get_net_profile(const TCP_Server *tcp_server);
-
 /** Run the TCP_server */
 non_null()
 void do_TCP_server(TCP_Server *tcp_server, const Mono_Time *mono_time);
@@ -3755,7 +3764,11 @@ void do_TCP_server(TCP_Server *tcp_server, const Mono_Time *mono_time);
 nullable(1)
 void kill_TCP_server(TCP_Server *tcp_server);
 
-
+/** @brief Returns a pointer to the net profile associated with `tcp_server`.
+ *
+ * Returns null if `tcp_server` is null.
+ */
+const Net_Profile *tcp_server_get_net_profile(const TCP_Server *tcp_server);
 #endif
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2020 The TokTok team.
@@ -4420,6 +4433,7 @@ typedef enum GC_Health {
 typedef struct GC_Session {
     Messenger                 *messenger;
     GC_Chat                   *chats;
+    Net_Profile               *tcp_np;
     struct GC_Announces_List  *announces_list;
 
     uint32_t     chats_index;
@@ -15124,6 +15138,7 @@ struct Messenger {
     const Network *ns;
 
     Networking_Core *net;
+    Net_Profile *tcp_np;
     Net_Crypto *net_crypto;
     DHT *dht;
 
@@ -37587,7 +37602,7 @@ static bool init_gc_tcp_connection(const GC_Session *c, GC_Chat *chat)
     const Messenger *m = c->messenger;
 
     chat->tcp_conn = new_tcp_connections(chat->log, chat->rng, m->ns, chat->mono_time, chat->self_secret_key,
-                                         &m->options.proxy_info);
+                                         &m->options.proxy_info, c->tcp_np);
 
     if (chat->tcp_conn == nullptr) {
         return false;
@@ -38423,6 +38438,7 @@ GC_Session *new_dht_groupchats(Messenger *m)
 
     c->messenger = m;
     c->announces_list = m->group_announce;
+    c->tcp_np = m->tcp_np;
 
     networking_registerhandler(m->net, NET_PACKET_GC_LOSSLESS, &handle_gc_udp_packet, m);
     networking_registerhandler(m->net, NET_PACKET_GC_LOSSY, &handle_gc_udp_packet, m);
@@ -46252,9 +46268,22 @@ Messenger *new_messenger(Mono_Time *mono_time, const Random *rng, const Network 
         return nullptr;
     }
 
-    m->net_crypto = new_net_crypto(m->log, m->rng, m->ns, m->mono_time, m->dht, &options->proxy_info);
+    Net_Profile *tcp_np = netprof_new(m->log);
+    if (tcp_np == nullptr) {
+        LOGGER_WARNING(m->log, "TCP netprof initialisation failed");
+        kill_dht(m->dht);
+        kill_networking(m->net);
+        friendreq_kill(m->fr);
+        logger_kill(m->log);
+        free(m);
+        return nullptr;
+    }
+    m->tcp_np = tcp_np;
+
+    m->net_crypto = new_net_crypto(m->log, m->rng, m->ns, m->mono_time, m->dht, &options->proxy_info, m->tcp_np);
 
     if (m->net_crypto == nullptr) {
+        netprof_kill(m->tcp_np);
         kill_dht(m->dht);
         kill_networking(m->net);
         friendreq_kill(m->fr);
@@ -46267,6 +46296,7 @@ Messenger *new_messenger(Mono_Time *mono_time, const Random *rng, const Network 
     m->group_announce = new_gca_list();
 
     if (m->group_announce == nullptr) {
+        netprof_kill(m->tcp_np);
         kill_net_crypto(m->net_crypto);
         kill_dht(m->dht);
         kill_networking(m->net);
@@ -46299,6 +46329,7 @@ Messenger *new_messenger(Mono_Time *mono_time, const Random *rng, const Network 
 #ifndef VANILLA_NACL
         kill_gca(m->group_announce);
 #endif /* VANILLA_NACL */
+        netprof_kill(m->tcp_np);
         kill_friend_connections(m->fr_c);
         kill_announcements(m->announce);
         kill_forwarding(m->forwarding);
@@ -46327,6 +46358,7 @@ Messenger *new_messenger(Mono_Time *mono_time, const Random *rng, const Network 
         kill_net_crypto(m->net_crypto);
         kill_dht(m->dht);
         kill_networking(m->net);
+        netprof_kill(m->tcp_np);
         friendreq_kill(m->fr);
         logger_kill(m->log);
         free(m);
@@ -46355,6 +46387,7 @@ Messenger *new_messenger(Mono_Time *mono_time, const Random *rng, const Network 
             kill_net_crypto(m->net_crypto);
             kill_dht(m->dht);
             kill_networking(m->net);
+            netprof_kill(m->tcp_np);
             friendreq_kill(m->fr);
             logger_kill(m->log);
             free(m);
@@ -46411,6 +46444,7 @@ void kill_messenger(Messenger *m)
     kill_announcements(m->announce);
     kill_forwarding(m->forwarding);
     kill_net_crypto(m->net_crypto);
+    netprof_kill(m->tcp_np);
     kill_dht(m->dht);
     kill_networking(m->net);
 
@@ -50120,7 +50154,7 @@ void load_secret_key(Net_Crypto *c, const uint8_t *sk)
 /** @brief Create new instance of Net_Crypto.
  * Sets all the global connection variables to their default values.
  */
-Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *ns, Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info)
+Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *ns, Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, Net_Profile *tcp_np)
 {
     if (dht == nullptr) {
         return nullptr;
@@ -50137,7 +50171,7 @@ Net_Crypto *new_net_crypto(const Logger *log, const Random *rng, const Network *
     temp->mono_time = mono_time;
     temp->ns = ns;
 
-    temp->tcp_c = new_tcp_connections(log, rng, ns, mono_time, dht_get_self_secret_key(dht), proxy_info);
+    temp->tcp_c = new_tcp_connections(log, rng, ns, mono_time, dht_get_self_secret_key(dht), proxy_info, tcp_np);
 
     if (temp->tcp_c == nullptr) {
         free(temp);
@@ -50220,21 +50254,6 @@ uint32_t crypto_run_interval(const Net_Crypto *c)
     return c->current_sleep_time;
 }
 
-const Net_Profile *nc_get_tcp_client_net_profile(const Net_Crypto *c)
-{
-    if (c == nullptr) {
-        return nullptr;
-    }
-
-    const TCP_Connections *tcp_c = nc_get_tcp_c(c);
-
-    if (tcp_c == nullptr) {
-        return nullptr;
-    }
-
-    return tcp_connection_get_client_net_profile(tcp_c);
-}
-
 /** Main loop. */
 void do_net_crypto(Net_Crypto *c, void *userdata)
 {
@@ -50289,8 +50308,8 @@ void kill_net_crypto(Net_Crypto *c)
  * Functions for the network profile.
  */
 
-
 #include <stdint.h>
+#include <stdlib.h>
 
 
 #define NETPROF_TCP_DATA_PACKET_ID 0x10
@@ -50333,6 +50352,30 @@ static uint64_t netprof_get_bytes_id_range(const Net_Profile *profile, uint8_t s
     return bytes;
 }
 
+void netprof_record_tcp_data_packet(Net_Profile *profile, uint8_t tcp_id, uint8_t inner_id, size_t length, Packet_Direction dir)
+{
+    if (profile == nullptr) {
+        return;
+    }
+
+    if (dir == PACKET_DIRECTION_SEND) {
+        ++profile->total_packets_sent;
+        profile->total_bytes_sent += length;
+
+        /* FIX: Only record the inner payload ID to prevent double-counting
+           when the UI sums up individual packet ID buckets. */
+        ++profile->packets_sent[inner_id];
+        profile->bytes_sent[inner_id] += length;
+    } else {
+        ++profile->total_packets_recv;
+        profile->total_bytes_recv += length;
+
+        /* FIX: Only record the inner payload ID. */
+        ++profile->packets_recv[inner_id];
+        profile->bytes_recv[inner_id] += length;
+    }
+}
+
 void netprof_record_packet(Net_Profile *profile, uint8_t id, size_t length, Packet_Direction dir)
 {
     if (profile == nullptr) {
@@ -50360,11 +50403,6 @@ uint64_t netprof_get_packet_count_id(const Net_Profile *profile, uint8_t id, Pac
         return 0;
     }
 
-    // Special case - TCP data packets can have any ID between 0x10 and 0xff
-    if (id == NETPROF_TCP_DATA_PACKET_ID) {
-        return netprof_get_packet_count_id_range(profile, id, UINT8_MAX, dir);
-    }
-
     return dir == PACKET_DIRECTION_SEND ? profile->packets_sent[id] : profile->packets_recv[id];
 }
 
@@ -50383,11 +50421,6 @@ uint64_t netprof_get_bytes_id(const Net_Profile *profile, uint8_t id, Packet_Dir
         return 0;
     }
 
-    // Special case - TCP data packets can have any ID between 0x10 and 0xff
-    if (id == NETPROF_TCP_DATA_PACKET_ID) {
-        return netprof_get_bytes_id_range(profile, id, 0xff, dir);
-    }
-
     return dir == PACKET_DIRECTION_SEND ? profile->bytes_sent[id] : profile->bytes_recv[id];
 }
 
@@ -50399,6 +50432,26 @@ uint64_t netprof_get_bytes_total(const Net_Profile *profile, Packet_Direction di
 
     return dir == PACKET_DIRECTION_SEND ? profile->total_bytes_sent : profile->total_bytes_recv;
 }
+
+Net_Profile *netprof_new(const Logger *log)
+{
+    Net_Profile *np = (Net_Profile *)calloc(1, sizeof(Net_Profile));
+
+    if (np == nullptr) {
+        LOGGER_ERROR(log, "failed to allocate memory for net profiler");
+        return nullptr;
+    }
+
+    return np;
+}
+
+void netprof_kill(Net_Profile *net_profile)
+{
+    if (net_profile != nullptr) {
+        free(net_profile);
+    }
+}
+
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
  * Copyright © 2013 Tox project.
@@ -51203,7 +51256,9 @@ int net_send(const Network *ns, const Logger *log,
     const int res = ns->funcs->send(ns->obj, sock.sock, buf, len);
 
     if (res > 0) {
-        netprof_record_packet(net_profile, buf[0], res, PACKET_DIRECTION_SEND);
+        // REMOVED: netprof_record_packet(net_profile, buf[0], res, PACKET_DIRECTION_SEND);
+        // Profiling is now done at a higher level (TCP_common.c) before encryption,
+        // because buf[0] here is the length prefix, not the packet type.
         ESTIMATE_CPU_CYCLES(40000 + res * 5); /* estimated cost of sending a TCP packet */
     }
 
@@ -51307,7 +51362,7 @@ struct Networking_Core {
     uint16_t port;
     /* Our UDP socket. */
     Socket sock;
-    Net_Profile udp_net_profile;
+    Net_Profile *udp_net_profile;
 };
 
 Family net_family(const Networking_Core *net)
@@ -51393,8 +51448,8 @@ int send_packet(Networking_Core *net, const IP_Port *ip_port, Packet packet)
 
     assert(res <= INT_MAX);
 
-    if (res == packet.length) {
-        netprof_record_packet(&net->udp_net_profile, packet.data[0], packet.length, PACKET_DIRECTION_SEND);
+    if (res == packet.length && packet.data != nullptr) {
+        netprof_record_packet(net->udp_net_profile, packet.data[0], packet.length, PACKET_DIRECTION_SEND);
         ESTIMATE_CPU_CYCLES(30000 + packet.length * 5); /* estimated cost of sending a UDP packet */
     }
 
@@ -51502,7 +51557,7 @@ void networking_poll(Networking_Core *net, void *userdata)
             continue;
         }
 
-        netprof_record_packet(&net->udp_net_profile, data[0], length, PACKET_DIRECTION_RECV);
+        netprof_record_packet(net->udp_net_profile, data[0], length, PACKET_DIRECTION_RECV);
         ESTIMATE_CPU_CYCLES(50000 + length * 5); /* estimated cost of receiving a UDP packet */
 
         const Packet_Handler *const handler = &net->packethandlers[data[0]];
@@ -51565,6 +51620,14 @@ Networking_Core *new_networking_ex(
         return nullptr;
     }
 
+    Net_Profile *np = netprof_new(log);
+
+    if (np == nullptr) {
+        free(temp);
+        return nullptr;
+    }
+
+    temp->udp_net_profile = np;
     temp->ns = ns;
     temp->log = log;
     temp->family = ip->family;
@@ -51580,6 +51643,7 @@ Networking_Core *new_networking_ex(
         char *strerror = net_new_strerror(neterror);
         LOGGER_ERROR(log, "failed to get a socket?! %d, %s", neterror, strerror);
         net_kill_strerror(strerror);
+        netprof_kill(temp->udp_net_profile);
         free(temp);
 
         if (error != nullptr) {
@@ -51785,7 +51849,7 @@ const Net_Profile *net_get_net_profile(const Networking_Core *net)
         return nullptr;
     }
 
-    return &net->udp_net_profile;
+    return net->udp_net_profile;
 }
 
 /** Function to cleanup networking stuff (doesn't do much right now). */
@@ -51800,6 +51864,7 @@ void kill_networking(Networking_Core *net)
         kill_sock(net->ns, net->sock);
     }
 
+    netprof_kill(net->udp_net_profile);
     free(net);
 }
 
@@ -53959,6 +54024,15 @@ void kill_onion(Onion *onion)
 #define ANNOUNCE_ARRAY_SIZE 256
 #define ANNOUNCE_TIMEOUT 10
 
+/* How often we allow re-population when a friend has too few nodes */
+#define ANNOUNCE_POPULATE_TIMEOUT_LOW 30
+
+/* Limit for reactive node pings from client_ping_nodes() */
+#define ONION_PING_NODES_MAX_PER_SECOND 20
+#define ONION_PING_NODES_MAX_PER_CALL 3
+
+#define ONION_REPOPULATE_MAX_PER_SECOND 50
+
 typedef struct Onion_Node {
     uint8_t     public_key[CRYPTO_PUBLIC_KEY_SIZE];
     IP_Port     ip_port;
@@ -54010,6 +54084,7 @@ struct Onion_Friend {
 
     uint64_t last_populated;  // the last time we had a fully populated client nodes list
     uint64_t time_last_pinged; // the last time we pinged this friend with any node
+    uint32_t populate_interval;
 
     uint32_t run_count;
     uint32_t pings;  // how many sucessful pings we've made for this friend
@@ -54084,7 +54159,91 @@ struct Onion_Client {
 
     onion_group_announce_cb *group_announce_response;
     void *group_announce_response_user_data;
+    
+    uint64_t repopulate_budget_last_sec;
+    uint32_t repopulate_budget_sent;
+
+    uint64_t ping_nodes_budget_last_sec;
+    uint32_t ping_nodes_budget_sent;
 };
+
+/* DEBUG: onion announce callsite counters */
+static uint64_t dbg_onion_stats_time = 0;
+static uint32_t dbg_self_announce = 0;
+static uint32_t dbg_self_repopulate = 0;
+static uint32_t dbg_friend_lookup = 0;
+static uint32_t dbg_friend_repopulate = 0;
+static uint32_t dbg_ping_nodes = 0;
+
+
+non_null()
+static void onion_debug_log_stats(Onion_Client *onion_c)
+{
+    const uint64_t now = mono_time_get(onion_c->mono_time);
+
+    if (now == dbg_onion_stats_time) {
+        return;
+    }
+
+    if (dbg_self_announce != 0 ||
+        dbg_self_repopulate != 0 ||
+        dbg_friend_lookup != 0 ||
+        dbg_friend_repopulate != 0 ||
+        dbg_ping_nodes != 0) {
+
+        LOGGER_WARNING(onion_c->logger,
+                       "ONION CALLSITE STATS: self_announce=%u self_repopulate=%u friend_lookup=%u friend_repopulate=%u ping_nodes=%u num_friends=%u",
+                       dbg_self_announce,
+                       dbg_self_repopulate,
+                       dbg_friend_lookup,
+                       dbg_friend_repopulate,
+                       dbg_ping_nodes,
+                       onion_c->num_friends);
+    }
+
+    dbg_onion_stats_time = now;
+    dbg_self_announce = 0;
+    dbg_self_repopulate = 0;
+    dbg_friend_lookup = 0;
+    dbg_friend_repopulate = 0;
+    dbg_ping_nodes = 0;
+}
+
+non_null()
+static bool onion_repopulate_budget_allow(Onion_Client *onion_c)
+{
+    const uint64_t now = mono_time_get(onion_c->mono_time);
+
+    if (now != onion_c->repopulate_budget_last_sec) {
+        onion_c->repopulate_budget_last_sec = now;
+        onion_c->repopulate_budget_sent = 0;
+    }
+
+    if (onion_c->repopulate_budget_sent >= ONION_REPOPULATE_MAX_PER_SECOND) {
+        return false;
+    }
+
+    ++onion_c->repopulate_budget_sent;
+    return true;
+}
+
+non_null()
+static bool ping_nodes_budget_allow(Onion_Client *onion_c)
+{
+    const uint64_t now = mono_time_get(onion_c->mono_time);
+
+    if (now != onion_c->ping_nodes_budget_last_sec) {
+        onion_c->ping_nodes_budget_last_sec = now;
+        onion_c->ping_nodes_budget_sent = 0;
+    }
+
+    if (onion_c->ping_nodes_budget_sent >= ONION_PING_NODES_MAX_PER_SECOND) {
+        return false;
+    }
+
+    ++onion_c->ping_nodes_budget_sent;
+    return true;
+}
 
 uint16_t onion_get_friend_count(const Onion_Client *const onion_c)
 {
@@ -54824,7 +54983,16 @@ static int client_ping_nodes(Onion_Client *onion_c, uint32_t num, const Node_for
 
     const bool lan_ips_accepted = ip_is_lan(&source->ip);
 
+    uint32_t sent_this_call = 0;
+
     for (uint32_t i = 0; i < num_nodes; ++i) {
+        /*
+         * Limit how many pings one response can trigger.
+         */
+        if (sent_this_call >= ONION_PING_NODES_MAX_PER_CALL) {
+            break;
+        }
+
         if (!lan_ips_accepted) {
             if (ip_is_lan(&nodes[i].ip_port.ip)) {
                 continue;
@@ -54845,7 +55013,17 @@ static int client_ping_nodes(Onion_Client *onion_c, uint32_t num, const Node_for
             }
 
             if (j == list_length && good_to_ping(onion_c->mono_time, last_pinged, last_pinged_index, nodes[i].public_key)) {
+                /*
+                 * Global per-second budget for this function.
+                 */
+                if (!ping_nodes_budget_allow(onion_c)) {
+                    return 0;
+                }
+
                 client_send_announce_request(onion_c, num, &nodes[i].ip_port, nodes[i].public_key, nullptr, -1);
+
+                ++dbg_ping_nodes;
+                ++sent_this_call;
             }
         }
     }
@@ -55452,6 +55630,11 @@ int onion_addfriend(Onion_Client *onion_c, const uint8_t *public_key)
     memcpy(onion_c->friends_list[index].real_public_key, public_key, CRYPTO_PUBLIC_KEY_SIZE);
     crypto_new_keypair(onion_c->rng, onion_c->friends_list[index].temp_public_key,
                        onion_c->friends_list[index].temp_secret_key);
+
+    onion_c->friends_list[index].populate_interval =
+        ANNOUNCE_POPULATE_TIMEOUT_LOW +
+        random_range_u32(onion_c->rng, 60);
+
     return index;
 }
 
@@ -55639,7 +55822,7 @@ static void populate_path_nodes(Onion_Client *onion_c)
 }
 
 /* How often we ping new friends per node */
-#define ANNOUNCE_FRIEND_NEW_INTERVAL 3
+#define ANNOUNCE_FRIEND_NEW_INTERVAL 5
 
 /* How long we consider a friend new based on the value of their run_count */
 #define ANNOUNCE_FRIEND_RUN_COUNT_BEGINNING 5
@@ -55705,6 +55888,11 @@ static void do_friend(Onion_Client *onion_c, uint16_t friendnum)
 
     Onion_Node *node_list = o_friend->clients_list;
 
+    uint32_t spacing_timeout = interval / (MAX_ONION_CLIENTS / 2);
+    if (spacing_timeout == 0) {
+        spacing_timeout = 1;
+    }
+
     for (unsigned i = 0; i < MAX_ONION_CLIENTS; ++i) {
         if (onion_node_timed_out(&node_list[i], onion_c->mono_time)) {
             continue;
@@ -55724,7 +55912,8 @@ static void do_friend(Onion_Client *onion_c, uint16_t friendnum)
         }
 
         // space requests out between nodes
-        if (!mono_time_is_timeout(onion_c->mono_time, o_friend->time_last_pinged, interval / (MAX_ONION_CLIENTS / 2))) {
+        if (!mono_time_is_timeout(onion_c->mono_time, o_friend->time_last_pinged,
+                                  spacing_timeout)) {
             continue;
         }
 
@@ -55732,6 +55921,7 @@ static void do_friend(Onion_Client *onion_c, uint16_t friendnum)
             continue;
         }
 
+        ++dbg_friend_lookup;
         if (client_send_announce_request(onion_c, friendnum + 1, &node_list[i].ip_port,
                                          node_list[i].public_key, nullptr, -1) == 0) {
             node_list[i].last_pinged = tm;
@@ -55754,21 +55944,59 @@ static void do_friend(Onion_Client *onion_c, uint16_t friendnum)
     }
 
     // check if path nodes list for this friend needs to be repopulated
-    if (count <= MAX_ONION_CLIENTS / 2
-            || mono_time_is_timeout(onion_c->mono_time, o_friend->last_populated, ANNOUNCE_POPULATE_TIMEOUT)) {
+    uint32_t populate_timeout = ANNOUNCE_POPULATE_TIMEOUT;
+
+    if (count <= MAX_ONION_CLIENTS / 2) {
+        if (o_friend->populate_interval == 0) {
+            o_friend->populate_interval =
+                ANNOUNCE_POPULATE_TIMEOUT_LOW +
+                random_range_u32(onion_c->rng, 60);
+        }
+
+        populate_timeout = o_friend->populate_interval;
+    }
+
+    if (mono_time_is_timeout(onion_c->mono_time, o_friend->last_populated, populate_timeout)) {
         const uint16_t num_nodes = min_u16(onion_c->path_nodes_index, MAX_PATH_NODES);
-        const uint16_t n = min_u16(num_nodes, MAX_PATH_NODES / 4);
+        const uint16_t n = min_u16(num_nodes, 1);
 
         if (n == 0) {
             return;
         }
 
-        o_friend->last_populated = tm;
+        bool sent_any = false;
 
         for (uint16_t i = 0; i < n; ++i) {
+            if (!onion_repopulate_budget_allow(onion_c)) {
+                break;
+            }
+
             const uint32_t num = random_range_u32(onion_c->rng, num_nodes);
-            client_send_announce_request(onion_c, friendnum + 1, &onion_c->path_nodes[num].ip_port,
-                                         onion_c->path_nodes[num].public_key, nullptr, -1);
+
+            ++dbg_friend_repopulate;
+
+            if (client_send_announce_request(onion_c, friendnum + 1,
+                                             &onion_c->path_nodes[num].ip_port,
+                                             onion_c->path_nodes[num].public_key,
+                                             nullptr, -1) == 0) {
+                sent_any = true;
+            }
+        }
+
+        /*
+         * Only mark this friend as populated if we actually managed to send
+         * at least one request. Otherwise we keep trying on the next run.
+         */
+        if (sent_any) {
+            o_friend->last_populated = tm;
+
+            /*
+             * Choose a new random interval for next time.
+             * This prevents all friends from repopulating in the same second.
+             */
+            o_friend->populate_interval =
+                ANNOUNCE_POPULATE_TIMEOUT_LOW +
+                random_range_u32(onion_c->rng, 60);
         }
     }
 }
@@ -55849,6 +56077,7 @@ static void do_announce(Onion_Client *onion_c)
                 path_to_use = -1;
             }
 
+            ++dbg_self_announce;
             if (client_send_announce_request(onion_c, 0, &node_list[i].ip_port, node_list[i].public_key,
                                              node_list[i].ping_id, path_to_use) == 0) {
                 node_list[i].last_pinged = mono_time_get(onion_c->mono_time);
@@ -55864,8 +56093,13 @@ static void do_announce(Onion_Client *onion_c)
     }
 
     // check if list needs to be re-populated
-    if (count <= MAX_ONION_CLIENTS_ANNOUNCE / 2
-            || mono_time_is_timeout(onion_c->mono_time, onion_c->last_populated, ANNOUNCE_POPULATE_TIMEOUT)) {
+    uint32_t populate_timeout = ANNOUNCE_POPULATE_TIMEOUT;
+
+    if (count <= MAX_ONION_CLIENTS_ANNOUNCE / 2) {
+        populate_timeout = ANNOUNCE_POPULATE_TIMEOUT_LOW;
+    }
+
+    if (mono_time_is_timeout(onion_c->mono_time, onion_c->last_populated, populate_timeout)) {
         uint16_t num_nodes;
         const Node_format *path_nodes;
 
@@ -55881,9 +56115,14 @@ static void do_announce(Onion_Client *onion_c)
             return;
         }
 
-        for (unsigned int i = 0; i < (MAX_ONION_CLIENTS_ANNOUNCE / 2); ++i) {
+        onion_c->last_populated = mono_time_get(onion_c->mono_time);
+
+        for (unsigned i = 0; i < (MAX_ONION_CLIENTS_ANNOUNCE / 2); ++i) {
             const uint32_t num = random_range_u32(onion_c->rng, num_nodes);
-            client_send_announce_request(onion_c, 0, &path_nodes[num].ip_port, path_nodes[num].public_key, nullptr, -1);
+
+            ++dbg_self_repopulate;
+            client_send_announce_request(onion_c, 0, &path_nodes[num].ip_port,
+                                         path_nodes[num].public_key, nullptr, -1);
         }
     }
 }
@@ -55975,6 +56214,8 @@ void do_onion_client(Onion_Client *onion_c)
     if (onion_c->last_run == mono_time_get(onion_c->mono_time)) {
         return;
     }
+
+    // DEBUG // onion_debug_log_stats(onion_c);
 
     ESTIMATE_CPU_CYCLES(150000); /* baseline cost of onion client loop */
 
@@ -57220,6 +57461,12 @@ static int generate_handshake(TCP_Client_Connection *tcp_conn)
 
     tcp_conn->con.last_packet_length = CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + sizeof(plain) + CRYPTO_MAC_SIZE;
     tcp_conn->con.last_packet_sent = 0;
+
+    // --- NEW: Record the TCP handshake packet ---
+    /* We use 0x1a (TOX_NETPROF_PACKET_ID_CRYPTO_HS) since the TCP handshake is essentially a cryptographic handshake */
+    netprof_record_packet(tcp_conn->con.net_profile, 0x1a, tcp_conn->con.last_packet_length, PACKET_DIRECTION_SEND);
+    // --- END NEW ---
+
     return 0;
 }
 
@@ -57710,7 +57957,13 @@ static int handle_TCP_client_packet(const Logger *logger, TCP_Client_Connection 
         return -1;
     }
 
-    netprof_record_packet(conn->con.net_profile, data[0], length, PACKET_DIRECTION_RECV);
+    // If the connection ID is >= NUM_RESERVED_PORTS (16), it's a routed TCP Data packet.
+    // The actual Tox packet type is located at data[1].
+    if (data[0] >= NUM_RESERVED_PORTS && length >= 2) {
+        netprof_record_tcp_data_packet(conn->con.net_profile, 0x10, data[1], length, PACKET_DIRECTION_RECV);
+    } else {
+        netprof_record_packet(conn->con.net_profile, data[0], length, PACKET_DIRECTION_RECV);
+    }
 
     ESTIMATE_CPU_CYCLES(50000 + length * 5); /* estimated cost of receiving and dispatching a TCP packet */
 
@@ -57939,6 +58192,15 @@ void wipe_priority_list(TCP_Priority_List *p)
     }
 }
 
+static void record_sent_tcp_packet(Net_Profile *profile, const uint8_t *data, uint16_t length) {
+    if (data[0] >= NUM_RESERVED_PORTS && length >= 2) {
+        /* TOX_NETPROF_PACKET_ID_TCP_DATA */
+        netprof_record_tcp_data_packet(profile, 0x10, data[1], length, PACKET_DIRECTION_SEND);
+    } else {
+        netprof_record_packet(profile, data[0], length, PACKET_DIRECTION_SEND);
+    }
+}
+
 /**
  * @retval 0 if pending data was sent completely
  * @retval -1 if it wasn't
@@ -58052,7 +58314,7 @@ int write_packet_TCP_secure_connection(const Logger *logger, TCP_Connection *con
                                        bool priority)
 {
     if (length + CRYPTO_MAC_SIZE > MAX_PACKET_SIZE) {
-        return -1;
+        return -1; // Failure: do not count
     }
 
     bool sendpriority = true;
@@ -58061,7 +58323,7 @@ int write_packet_TCP_secure_connection(const Logger *logger, TCP_Connection *con
         if (priority) {
             sendpriority = false;
         } else {
-            return 0;
+            return 0; // Failure: do not count
         }
     }
 
@@ -58072,7 +58334,7 @@ int write_packet_TCP_secure_connection(const Logger *logger, TCP_Connection *con
     int len = encrypt_data_symmetric(con->shared_key, con->sent_nonce, data, length, packet + sizeof(uint16_t));
 
     if ((unsigned int)len != (SIZEOF_VLA(packet) - sizeof(uint16_t))) {
-        return -1;
+        return -1; // Failure (encryption): do not count
     }
 
     if (priority) {
@@ -58084,28 +58346,40 @@ int write_packet_TCP_secure_connection(const Logger *logger, TCP_Connection *con
 
         increment_nonce(con->sent_nonce);
 
+        // Success path 1: Fully sent immediately
         if ((unsigned int)len == SIZEOF_VLA(packet)) {
+            record_sent_tcp_packet(con->net_profile, data, length);
             return 1;
         }
 
-        return add_priority(con, packet, SIZEOF_VLA(packet), len) ? 1 : 0;
+        // Success path 2: Partially sent or blocked, successfully queued
+        bool added = add_priority(con, packet, SIZEOF_VLA(packet), len);
+        if (added) {
+            record_sent_tcp_packet(con->net_profile, data, length);
+        }
+        return added ? 1 : 0;
     }
 
     len = net_send(con->ns, logger, con->sock, packet, SIZEOF_VLA(packet), &con->ip_port, con->net_profile);
 
     if (len <= 0) {
-        return 0;
+        return 0; // Failure: do not count
     }
 
     increment_nonce(con->sent_nonce);
 
+    // Success path 3: Fully sent immediately (non-priority)
     if ((unsigned int)len == SIZEOF_VLA(packet)) {
+        record_sent_tcp_packet(con->net_profile, data, length);
         return 1;
     }
 
+    // Success path 4: Partially sent, saved to last_packet for later flushing
     memcpy(con->last_packet, packet, SIZEOF_VLA(packet));
     con->last_packet_length = SIZEOF_VLA(packet);
     con->last_packet_sent = len;
+
+    record_sent_tcp_packet(con->net_profile, data, length);
     return 1;
 }
 
@@ -58270,7 +58544,8 @@ struct TCP_Connections {
     bool onion_status;
     uint16_t onion_num_conns;
 
-    Net_Profile net_profile;
+    /* Network profile for all TCP client packets. */
+    Net_Profile *net_profile;
 };
 
 
@@ -59142,7 +59417,7 @@ static int reconnect_tcp_relay_connection(TCP_Connections *tcp_c, int tcp_connec
     uint8_t relay_pk[CRYPTO_PUBLIC_KEY_SIZE];
     memcpy(relay_pk, tcp_con_public_key(tcp_con->connection), CRYPTO_PUBLIC_KEY_SIZE);
     kill_TCP_connection(tcp_con->connection);
-    tcp_con->connection = new_TCP_connection(tcp_c->logger, tcp_c->mono_time, tcp_c->rng, tcp_c->ns, &ip_port, relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, &tcp_c->net_profile);
+    tcp_con->connection = new_TCP_connection(tcp_c->logger, tcp_c->mono_time, tcp_c->rng, tcp_c->ns, &ip_port, relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, tcp_c->net_profile);
 
     if (tcp_con->connection == nullptr) {
         kill_tcp_relay_connection(tcp_c, tcp_connections_number);
@@ -59231,7 +59506,7 @@ static int unsleep_tcp_relay_connection(TCP_Connections *tcp_c, int tcp_connecti
 
     tcp_con->connection = new_TCP_connection(
             tcp_c->logger, tcp_c->mono_time, tcp_c->rng, tcp_c->ns, &tcp_con->ip_port,
-            tcp_con->relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, &tcp_c->net_profile);
+            tcp_con->relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, tcp_c->net_profile);
 
     if (tcp_con->connection == nullptr) {
         kill_tcp_relay_connection(tcp_c, tcp_connections_number);
@@ -59527,7 +59802,7 @@ static int add_tcp_relay_instance(TCP_Connections *tcp_c, const IP_Port *ip_port
 
     tcp_con->connection = new_TCP_connection(
             tcp_c->logger, tcp_c->mono_time, tcp_c->rng, tcp_c->ns, &ipp_copy,
-            relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, &tcp_c->net_profile);
+            relay_pk, tcp_c->self_public_key, tcp_c->self_secret_key, &tcp_c->proxy_info, tcp_c->net_profile);
 
     if (tcp_con->connection == nullptr) {
         return -1;
@@ -59848,7 +60123,7 @@ int set_tcp_onion_status(TCP_Connections *tcp_c, bool status)
  */
 TCP_Connections *new_tcp_connections(
         const Logger *logger, const Random *rng, const Network *ns, Mono_Time *mono_time, const uint8_t *secret_key,
-        const TCP_Proxy_Info *proxy_info)
+        const TCP_Proxy_Info *proxy_info, Net_Profile *tcp_np)
 {
     if (secret_key == nullptr) {
         return nullptr;
@@ -59860,6 +60135,7 @@ TCP_Connections *new_tcp_connections(
         return nullptr;
     }
 
+    temp->net_profile = tcp_np;
     temp->logger = logger;
     temp->rng = rng;
     temp->mono_time = mono_time;
@@ -59953,15 +60229,6 @@ static void kill_nonused_tcp(TCP_Connections *tcp_c)
             }
         }
     }
-}
-
-const Net_Profile *tcp_connection_get_client_net_profile(const TCP_Connections *tcp_c)
-{
-    if (tcp_c == nullptr) {
-        return nullptr;
-    }
-
-    return &tcp_c->net_profile;
 }
 
 void do_tcp_connections(const Logger *logger, TCP_Connections *tcp_c, void *userdata)
@@ -60067,7 +60334,8 @@ struct TCP_Server {
 
     BS_List accepted_key_list;
 
-    Net_Profile net_profile;
+    /* Network profile for all TCP server packets. */
+    Net_Profile *net_profile;
 };
 
 const uint8_t *tcp_server_public_key(const TCP_Server *tcp_server)
@@ -60210,7 +60478,7 @@ static int add_accepted(TCP_Server *tcp_server, const Mono_Time *mono_time, TCP_
     tcp_server->accepted_connection_array[index].identifier = ++tcp_server->counter;
     tcp_server->accepted_connection_array[index].last_pinged = mono_time_get(mono_time);
     tcp_server->accepted_connection_array[index].ping_id = 0;
-    tcp_server->accepted_connection_array[index].con.net_profile = &tcp_server->net_profile;
+    tcp_server->accepted_connection_array[index].con.net_profile = tcp_server->net_profile;
 
     return index;
 }
@@ -60336,6 +60604,11 @@ static int handle_TCP_handshake(const Logger *logger, TCP_Secure_Connection *con
         crypto_memzero(shared_key, sizeof(shared_key));
         return -1;
     }
+
+    // --- NEW: Record the server handshake ---
+    /* We use 0x1a (TOX_NETPROF_PACKET_ID_CRYPTO_HS) since the TCP handshake is essentially a cryptographic handshake */
+    netprof_record_packet(con->con.net_profile, 0x1a, TCP_SERVER_HANDSHAKE_SIZE, PACKET_DIRECTION_SEND);
+    // --- END NEW ---
 
     encrypt_precompute(plain, temp_secret_key, con->con.shared_key);
     con->status = TCP_STATUS_UNCONFIRMED;
@@ -60653,7 +60926,11 @@ static int handle_TCP_packet(TCP_Server *tcp_server, uint32_t con_id, const uint
 
     TCP_Secure_Connection *const con = &tcp_server->accepted_connection_array[con_id];
 
-    netprof_record_packet(con->con.net_profile, data[0], length, PACKET_DIRECTION_RECV);
+    if (data[0] >= NUM_RESERVED_PORTS && length >= 2) {
+        netprof_record_tcp_data_packet(con->con.net_profile, 0x10, data[1], length, PACKET_DIRECTION_RECV);
+    } else {
+        netprof_record_packet(con->con.net_profile, data[0], length, PACKET_DIRECTION_RECV);
+    }
 
     ESTIMATE_CPU_CYCLES(50000 + length * 5); /* estimated cost of receiving and dispatching a TCP packet */
 
@@ -60945,6 +61222,14 @@ TCP_Server *new_TCP_server(const Logger *logger, const Random *rng, const Networ
         return nullptr;
     }
 
+    Net_Profile *np = netprof_new(logger);
+
+    if (np == nullptr) {
+        free(temp);
+        return nullptr;
+    }
+
+    temp->net_profile = np;
     temp->logger = logger;
     temp->ns = ns;
     temp->rng = rng;
@@ -60953,6 +61238,7 @@ TCP_Server *new_TCP_server(const Logger *logger, const Random *rng, const Networ
 
     if (temp->socks_listening == nullptr) {
         LOGGER_ERROR(logger, "socket allocation failed");
+        netprof_kill(temp->net_profile);
         free(temp);
         return nullptr;
     }
@@ -60962,6 +61248,7 @@ TCP_Server *new_TCP_server(const Logger *logger, const Random *rng, const Networ
 
     if (temp->efd == -1) {
         LOGGER_ERROR(logger, "epoll initialisation failed");
+        netprof_kill(temp->net_profile);
         free(temp->socks_listening);
         free(temp);
         return nullptr;
@@ -60995,6 +61282,7 @@ TCP_Server *new_TCP_server(const Logger *logger, const Random *rng, const Networ
     }
 
     if (temp->num_listening_socks == 0) {
+        netprof_kill(temp->net_profile);
         free(temp->socks_listening);
         free(temp);
         return nullptr;
@@ -61348,15 +61636,6 @@ static void do_TCP_epoll(TCP_Server *tcp_server, const Mono_Time *mono_time)
 }
 #endif
 
-const Net_Profile *tcp_server_get_net_profile(const TCP_Server *tcp_server)
-{
-    if (tcp_server == nullptr) {
-        return nullptr;
-    }
-
-    return &tcp_server->net_profile;
-}
-
 void do_TCP_server(TCP_Server *tcp_server, const Mono_Time *mono_time)
 {
 #ifdef TCP_SERVER_USE_EPOLL
@@ -61404,8 +61683,18 @@ void kill_TCP_server(TCP_Server *tcp_server)
 
     crypto_memzero(tcp_server->secret_key, sizeof(tcp_server->secret_key));
 
+    netprof_kill(tcp_server->net_profile);
     free(tcp_server->socks_listening);
     free(tcp_server);
+}
+
+const Net_Profile *tcp_server_get_net_profile(const TCP_Server *tcp_server)
+{
+    if (tcp_server == nullptr) {
+        return nullptr;
+    }
+
+    return tcp_server->net_profile;
 }
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2019-2021 The TokTok team.
@@ -67236,7 +67525,7 @@ uint64_t tox_netprof_get_packet_id_count(const Tox *tox, Tox_Netprof_Packet_Type
 
     tox_lock(tox);
 
-    const Net_Profile *tcp_c_profile = nc_get_tcp_client_net_profile(tox->m->net_crypto);
+    const Net_Profile *tcp_c_profile = tox->m->tcp_np;
     const Net_Profile *tcp_s_profile = tcp_server_get_net_profile(tox->m->tcp_server);
 
     const Packet_Direction dir = (Packet_Direction) direction;
@@ -67285,7 +67574,7 @@ uint64_t tox_netprof_get_packet_total_count(const Tox *tox, Tox_Netprof_Packet_T
 
     tox_lock(tox);
 
-    const Net_Profile *tcp_c_profile = nc_get_tcp_client_net_profile(tox->m->net_crypto);
+    const Net_Profile *tcp_c_profile = tox->m->tcp_np;
     const Net_Profile *tcp_s_profile = tcp_server_get_net_profile(tox->m->tcp_server);
 
     const Packet_Direction dir = (Packet_Direction) direction;
@@ -67334,7 +67623,7 @@ uint64_t tox_netprof_get_packet_id_bytes(const Tox *tox, Tox_Netprof_Packet_Type
 
     tox_lock(tox);
 
-    const Net_Profile *tcp_c_profile = nc_get_tcp_client_net_profile(tox->m->net_crypto);
+    const Net_Profile *tcp_c_profile = tox->m->tcp_np;
     const Net_Profile *tcp_s_profile = tcp_server_get_net_profile(tox->m->tcp_server);
 
     const Packet_Direction dir = (Packet_Direction) direction;
@@ -67383,7 +67672,7 @@ uint64_t tox_netprof_get_packet_total_bytes(const Tox *tox, Tox_Netprof_Packet_T
 
     tox_lock(tox);
 
-    const Net_Profile *tcp_c_profile = nc_get_tcp_client_net_profile(tox->m->net_crypto);
+    const Net_Profile *tcp_c_profile = tox->m->tcp_np;
     const Net_Profile *tcp_s_profile = tcp_server_get_net_profile(tox->m->tcp_server);
 
     const Packet_Direction dir = (Packet_Direction) direction;
@@ -96055,7 +96344,7 @@ void mid_iterate(MidState *s, Tox *tox)
                     g->last_announce = now;
                     int idx = mid_find_identity(g, g->self_identity_key);
                     if (idx >= 0) {
-                        g->records[idx].timestamp = mid_round_timestamp(now);
+                        g->records[idx].last_seen = now;
                     }
 
                     /*
