@@ -4524,6 +4524,9 @@ extern "C" {
 /* Maximum size of a public announce. */
 #define GCA_PUBLIC_ANNOUNCE_MAX_SIZE (ENC_PUBLIC_KEY_SIZE + GCA_ANNOUNCE_MAX_SIZE)
 
+/* How long we save a peer's announce before we consider it stale and remove it. */
+#define GCA_ANNOUNCE_SAVE_TIMEOUT 60
+
 typedef struct GC_Announce GC_Announce;
 typedef struct GC_Peer_Announce GC_Peer_Announce;
 typedef struct GC_Announces GC_Announces;
@@ -16648,10 +16651,17 @@ The middleware will fetch keys, announce the client, and request the roster.
 void mid_on_group_self_join(MidState *s, Tox *tox, uint32_t group_number, const uint8_t *nickname, size_t nickname_len);
 
 /*
-Call this when the client leaves or deletes a group.
 The middleware will securely wipe keys and free the roster for this group.
+but this "legacy" function queries toxcore for the chat ID, so you must call this before toxcore deleted the group!
 */
 void mid_on_group_delete(MidState *s, Tox *tox, uint32_t group_number);
+
+/*
+Call this after the client deletes a group.
+The middleware will securely wipe keys and free the roster for this group.
+We need the chat ID here, since toxcore already has deleted the information for the group!
+*/
+void mid_on_group_chat_delete(MidState *s, const uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE]);
 
 /******************************************************************************
 Peer Event Hooks
@@ -26153,9 +26163,6 @@ void kill_gca(GC_Announces_List *announces_list)
     free(announces_list);
 }
 
-/* How long we save a peer's announce before we consider it stale and remove it. */
-#define GCA_ANNOUNCE_SAVE_TIMEOUT 30
-
 /* How often we run do_gca() */
 #define GCA_DO_GCA_TIMEOUT 1
 
@@ -30169,6 +30176,9 @@ uint32_t copy_chatlist(const Group_Chats *g_c, uint32_t *out_list, uint32_t list
 
 /* The value the topic lock is set to when the topic lock is enabled. */
 #define GC_TOPIC_LOCK_ENABLED 0
+
+/* Force refresh a DHT announcement for the group if we haven't refreshed after this interval */
+#define GC_MAX_SELF_ANNOUNCE_INTERVAL (60 * 60)
 
 static_assert(GCC_BUFFER_SIZE <= UINT16_MAX,
               "GCC_BUFFER_SIZE must be <= UINT16_MAX)");
@@ -37367,12 +37377,28 @@ static void do_gc_tcp(const GC_Session *c, GC_Chat *chat, void *userdata)
     }
 }
 
+/*
+ * Returns how often in seconds we refresh our group announcement to the DHT.
+ */
+#define SELF_GC_ANNOUNCE_TIMEOUT (GCA_ANNOUNCE_SAVE_TIMEOUT - 10)
+static uint16_t get_gc_self_announce_refresh_interval(const GC_Chat *chat)
+{
+    if (chat->numpeers <= 1) {
+        return SELF_GC_ANNOUNCE_TIMEOUT;
+    }
+
+    // Slightly randomize interval each call to ensure that the group doesn't get stuck
+    // with a bad case scenario where every or most peers in the group announce at the
+    // same time indefinitely.
+    const int rand_increment = random_u16(chat->rng) % 2 == 0 ? 5 : -5;
+    const uint16_t interval = chat->numpeers * SELF_GC_ANNOUNCE_TIMEOUT + rand_increment;
+    return min_u16(GC_MAX_SELF_ANNOUNCE_INTERVAL, interval);
+}
+
 /**
- * Updates our TCP and UDP connection status and flags a new announcement if our connection has
- * changed and we have either a UDP or TCP connection.
+ * Updates our TCP and UDP connection status and flags a new announcement if we need one.
  */
 #define GC_SELF_CONNECTION_CHECK_INTERVAL 5  // how often in seconds we should run this function
-#define GC_SELF_REFRESH_ANNOUNCE_INTERVAL (60 * 20)  // how often in seconds we force refresh our group announcement
 non_null()
 static void do_self_connection(const GC_Session *c, GC_Chat *chat)
 {
@@ -37382,13 +37408,14 @@ static void do_self_connection(const GC_Session *c, GC_Chat *chat)
 
     const unsigned int self_udp_status = ipport_self_copy(c->messenger->dht, &chat->self_ip_port);
     const bool udp_change = (chat->self_udp_status != self_udp_status) && (self_udp_status != SELF_UDP_STATUS_NONE);
+    const uint16_t refresh_interval = get_gc_self_announce_refresh_interval(chat);
 
     // We flag a group announce if our UDP status has changed since last run, or if our last announced TCP
     // relay is no longer valid. Additionally, we will always flag an announce in the specified interval
     // regardless of the prior conditions. Private groups are never announced.
     if (is_public_chat(chat) &&
             ((udp_change || !tcp_relay_is_valid(chat->tcp_conn, chat->announced_tcp_relay_pk))
-             || mono_time_is_timeout(chat->mono_time, chat->last_time_self_announce, GC_SELF_REFRESH_ANNOUNCE_INTERVAL))) {
+             || mono_time_is_timeout(chat->mono_time, chat->last_time_self_announce, refresh_interval))) {
         chat->update_self_announces = true;
     }
 
@@ -54029,9 +54056,9 @@ void kill_onion(Onion *onion)
 
 /* Limit for reactive node pings from client_ping_nodes() */
 #define ONION_PING_NODES_MAX_PER_SECOND 20
-#define ONION_PING_NODES_MAX_PER_CALL 3
+#define ONION_PING_NODES_MAX_PER_CALL 2
 
-#define ONION_REPOPULATE_MAX_PER_SECOND 50
+#define ONION_REPOPULATE_MAX_PER_SECOND 40
 
 typedef struct Onion_Node {
     uint8_t     public_key[CRYPTO_PUBLIC_KEY_SIZE];
@@ -74788,6 +74815,8 @@ struct BWController_s {
     Mono_Time *bwc_mono_time;
     uint32_t packet_loss_counted_cycles;
     bool bwc_receive_active;
+    pthread_mutex_t mutex_bwc[1];
+    int refcount;
 };
 
 struct BWCMessage {
@@ -74802,8 +74831,16 @@ void send_update(BWController *bwc, bool force_update_now);
 
 BWController *bwc_new(Tox *tox, Mono_Time *mono_time_given, uint32_t friendnumber, m_cb *mcb, void *mcb_user_data)
 {
-    int i = 0;
     BWController *retu = (BWController *)calloc(sizeof(struct BWController_s), 1);
+
+    if (retu == nullptr) {
+        return nullptr;
+    }
+
+    if (create_recursive_mutex(retu->mutex_bwc) != 0) {
+        free(retu);
+        return nullptr;
+    }
 
     retu->mcb = mcb;
     retu->mcb_user_data = mcb_user_data;
@@ -74818,19 +74855,67 @@ BWController *bwc_new(Tox *tox, Mono_Time *mono_time_given, uint32_t friendnumbe
     retu->cycle.lost = 0;
     retu->cycle.recv = 0;
     retu->packet_loss_counted_cycles = 0;
+    retu->refcount = 1;  // owned by call
 
     return retu;
 }
 
-void bwc_kill(BWController *bwc)
+static BWController *bwc_ref_if_active(BWController *bwc)
 {
-    if (!bwc) {
+    if (bwc == nullptr) {
+        return nullptr;
+    }
+
+    pthread_mutex_lock(bwc->mutex_bwc);
+
+    if (!bwc->bwc_receive_active || bwc->refcount <= 0) {
+        pthread_mutex_unlock(bwc->mutex_bwc);
+        return nullptr;
+    }
+
+    bwc->refcount++;
+
+    pthread_mutex_unlock(bwc->mutex_bwc);
+
+    return bwc;
+}
+
+static void bwc_unref(BWController *bwc)
+{
+    if (bwc == nullptr) {
         return;
     }
 
+    bool do_free = false;
+
+    pthread_mutex_lock(bwc->mutex_bwc);
+
+    bwc->refcount--;
+
+    if (bwc->refcount == 0) {
+        do_free = true;
+    }
+
+    pthread_mutex_unlock(bwc->mutex_bwc);
+
+    if (do_free) {
+        pthread_mutex_destroy(bwc->mutex_bwc);
+        free(bwc);
+    }
+}
+
+void bwc_kill(BWController *bwc)
+{
+    if (bwc == nullptr) {
+        return;
+    }
+
+    pthread_mutex_lock(bwc->mutex_bwc);
     bwc->bwc_receive_active = false;
-    free(bwc);
-    bwc = nullptr;
+    pthread_mutex_unlock(bwc->mutex_bwc);
+
+    // Drop the owner reference held by the call.
+    bwc_unref(bwc);
 }
 
 void bwc_add_lost_v3(BWController *bwc, uint32_t bytes_lost, bool dummy)
@@ -74890,7 +74975,7 @@ void send_update(BWController *bwc, bool dummy)
     }
 }
 
-inline __attribute__((always_inline)) static int on_update(BWController *bwc, const struct BWCMessage *msg)
+inline static int on_update(BWController *bwc, const struct BWCMessage *msg)
 {
     if (!bwc) {
         return -1;
@@ -76728,6 +76813,7 @@ static void handle_init(MSICall *call, const MSIMessage *msg)
     return;
 FAILURE:
     send_error(call->session->tox, call->friend_number, call->error);
+    invoke_callback(call, MSI_ON_ERROR);
     kill_call(call);
 }
 
@@ -76791,6 +76877,7 @@ static void handle_push(MSICall *call, const MSIMessage *msg)
 
 FAILURE:
     send_error(call->session->tox, call->friend_number, call->error);
+    invoke_callback(call, MSI_ON_ERROR);
     kill_call(call);
 }
 
@@ -77295,9 +77382,10 @@ static bool fill_data_into_slot(Tox *tox, struct RTPWorkBufferList *wkbl, const 
 
     assert(header != nullptr);
 
-    if (slot->received_len == 0) {
-        assert(slot->buf == nullptr);
-
+    // FIX: Check if the buffer is null, rather than checking received_len == 0.
+    // This prevents a null pointer dereference if received_len is somehow > 0
+    // but the buffer was not allocated (e.g., due to memory corruption or edge cases).
+    if (slot->buf == nullptr) {
         if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
             LOGGER_API_WARNING(tox, "RTP frame too large: %u > %u", (unsigned)header->data_length_full, (unsigned)MAX_RTP_FRAME_SIZE);
             return false;
@@ -77324,8 +77412,6 @@ static bool fill_data_into_slot(Tox *tox, struct RTPWorkBufferList *wkbl, const 
         slot->buf = msg;
         slot->is_keyframe = is_keyframe;
         slot->received_len = 0;
-
-
 
         assert(wkbl->next_free_entry < USED_RTP_WORKBUFFER_COUNT);
         ++wkbl->next_free_entry;
@@ -80885,46 +80971,73 @@ static ToxAVCall *call_remove(ToxAVCall *call)
         call->msi_call->av_call = nullptr;
     }
 
+    /*
+     * FIX: Lock av->toxav_endcall_mutex to synchronize with incoming packet handlers
+     * (like handle_rtp_packet -> call_get) which read av->calls under this exact lock.
+     * If we don't hold this lock here, we will trigger a data race and potential crashes.
+     */
+    pthread_mutex_lock(av->toxav_endcall_mutex);
     pthread_mutex_lock(call->toxav_call_mutex);
     LOGGER_API_DEBUG(av->tox, "call:calls[friend_number] NULL ...");
     av->calls[friend_number] = nullptr;
     pthread_mutex_unlock(call->toxav_call_mutex);
 
-    LOGGER_API_WARNING(av->tox, "call:freeing ...");
-    pthread_mutex_destroy(call->toxav_call_mutex);
-    free(call);
-    call = nullptr;
-    LOGGER_API_WARNING(av->tox, "call:freed");
-
+    /*
+     * FIX: Unlink the call from the linked list while STILL holding toxav_endcall_mutex.
+     * This ensures that no reader traversing the list sees an inconsistent state.
+     *
+     * IMPORTANT: We MUST unlink BEFORE freeing the call object. The original code
+     * freed the object first, causing a use-after-free if another thread was traversing!
+     */
     if (prev) {
         prev->next = next;
     } else if (next) {
         av->calls_head = next->friend_number;
-    } else {
-        goto CLEAR;
     }
 
     if (next) {
         next->prev = prev;
     } else if (prev) {
         av->calls_tail = prev->friend_number;
-    } else {
-        goto CLEAR;
     }
 
     LOGGER_API_INFO(av->tox, "call:remove:fnum=%d after_01:h=%d t=%d", friend_number, av->calls_head, av->calls_tail);
 
+    ToxAVCall **calls_array_to_free = nullptr;
+
+    /* If the list is now empty, prepare to free the array, but don't free it yet */
+    if (!prev && !next) {
+        av->calls_head = 0;
+        av->calls_tail = 0;
+        calls_array_to_free = av->calls;
+        av->calls = nullptr;
+
+        LOGGER_API_INFO(av->tox, "call:remove:fnum=%d after_02:h=%d t=%d", friend_number, av->calls_head, av->calls_tail);
+    }
+
+    pthread_mutex_unlock(av->toxav_endcall_mutex);
+
+    /*
+     * Now it is safe to free the av->calls array. By doing this OUTSIDE the lock,
+     * we guarantee that any reader currently inside call_get has finished its
+     * critical section and released its reference.
+     */
+    if (calls_array_to_free) {
+        free(calls_array_to_free);
+    }
+
+    /*
+     * Finally, destroy the call's own mutex and free the call object itself.
+     * This is completely safe now because the call is fully unlinked from the
+     * av->calls array and the linked list, meaning no new readers can find it.
+     */
+    LOGGER_API_WARNING(av->tox, "call:freeing ...");
+    pthread_mutex_destroy(call->toxav_call_mutex);
+    free(call);
+    call = nullptr;
+    LOGGER_API_WARNING(av->tox, "call:freed");
+
     return next;
-
-CLEAR:
-    av->calls_head = 0;
-    av->calls_tail = 0;
-    free(av->calls);
-    av->calls = nullptr;
-
-    LOGGER_API_INFO(av->tox, "call:remove:fnum=%d after_02:h=%d t=%d", friend_number, av->calls_head, av->calls_tail);
-
-    return nullptr;
 }
 
 static bool call_prepare_transmission(ToxAVCall *call)
@@ -81022,6 +81135,8 @@ static void call_kill_transmission(ToxAVCall *call)
         return;
     }
 
+    ToxAV *av = call->av;
+
     pthread_mutex_lock(call->toxav_call_mutex);
     if (call->active == 0) {
         pthread_mutex_unlock(call->toxav_call_mutex);
@@ -81034,52 +81149,79 @@ static void call_kill_transmission(ToxAVCall *call)
     pthread_mutex_unlock(call->mutex_audio);
 
     /*
-     * Destroy bwc while holding the video mutex and the call mutex in the
-     * same order as toxav_video_send_frame_age():
+     * Wait for in-flight video senders and iterate loops to finish their current work.
+     * We lock and immediately unlock to act as a memory barrier and ensure
+     * any threads currently holding these locks have released them.
+     */
+    pthread_mutex_lock(call->mutex_video);
+    pthread_mutex_unlock(call->mutex_video);
+
+    /*
+     * The incoming packet callbacks (like bwc_handle_data and handle_rtp_packet)
+     * lock av->toxav_endcall_mutex before reading call->bwc, call->audio_rtp, etc.
      *
-     *     call->mutex_video -> call->toxav_call_mutex
-     *
-     * This synchronizes with in-flight video senders and with toxav_iterate()
-     * without creating a lock-order inversion.
+     * We MUST lock av->toxav_endcall_mutex here to synchronize with those callbacks.
+     * If we don't, they could read internal pointers just before we free them,
+     * causing a data race or use-after-free.
+     */
+    pthread_mutex_lock(av->toxav_endcall_mutex);
+
+    /*
+     * Safely detach call->bwc.
+     * We hold call->mutex_video here because toxav_video_send_frame_age()
+     * accesses call->bwc under call->mutex_video. This prevents senders
+     * from reading a non-null bwc while we are tearing it down.
      */
     pthread_mutex_lock(call->mutex_video);
     pthread_mutex_lock(call->toxav_call_mutex);
-    bwc_kill(call->bwc);
+
+    BWController *bwc_copy = call->bwc;
     call->bwc = nullptr;
+
     pthread_mutex_unlock(call->toxav_call_mutex);
     pthread_mutex_unlock(call->mutex_video);
 
-    ToxAV *av = call->av;
-
-    pthread_mutex_lock(av->toxav_endcall_mutex);
-
+    /*
+     * Safely detach and destroy the rest of the RTP and codec objects.
+     * We hold call->toxav_call_mutex to protect them from concurrent API threads.
+     * We are still holding toxav_endcall_mutex to protect them from incoming packet handlers.
+     */
     pthread_mutex_lock(call->toxav_call_mutex);
+
     RTPSession *audio_rtp_copy = call->audio_rtp;
     call->audio_rtp = nullptr;
     rtp_kill(av->tox, audio_rtp_copy);
-    pthread_mutex_unlock(call->toxav_call_mutex);
 
-    pthread_mutex_lock(call->toxav_call_mutex);
     ac_kill(call->audio);
     call->audio = nullptr;
-    pthread_mutex_unlock(call->toxav_call_mutex);
 
-    pthread_mutex_lock(call->toxav_call_mutex);
     RTPSession *video_rtp_copy = call->video_rtp;
     call->video_rtp = nullptr;
     rtp_kill(av->tox, video_rtp_copy);
-    pthread_mutex_unlock(call->toxav_call_mutex);
 
-    pthread_mutex_lock(call->toxav_call_mutex);
     VCSession *vc_copy = (VCSession *)call->video;
     call->video = nullptr;
     vc_kill(vc_copy);
+
     pthread_mutex_unlock(call->toxav_call_mutex);
+
+    /*
+     * Now we can release the endcall mutex. Incoming packet handlers will
+     * either fail to acquire it (via trylock) or will get nullptr pointers
+     * and return safely.
+     */
+    pthread_mutex_unlock(av->toxav_endcall_mutex);
+
+    /*
+     * Finally, destroy the BWController outside of all critical sections
+     * so we don't block the network thread or API threads during its destruction.
+     */
+    if (bwc_copy != nullptr) {
+        bwc_kill(bwc_copy);
+    }
 
     pthread_mutex_destroy(call->mutex_audio);
     pthread_mutex_destroy(call->mutex_video);
-
-    pthread_mutex_unlock(av->toxav_endcall_mutex);
 }
 
 Mono_Time *toxav_get_av_mono_time(ToxAV *toxav)
@@ -82002,12 +82144,242 @@ bool toxav_groupchat_av_enabled(Tox *tox, uint32_t groupnumber)
  */
 
 /*
- * TimeStamp Buffer implementation
+ * TimeStamp Buffer (TSBuffer) — Implementation & Usage Guide
+ * ==========================================================
+ *
+ * OVERVIEW
+ * --------
+ * TSBuffer is a fixed-capacity circular (ring) buffer where each entry carries
+ * a timestamp, an opaque type tag, and a void* data pointer.  It was designed
+ * as a jitter buffer for real-time media streams (video frames in ToxAV):
+ * frames arrive out of order or with varying network delay, and the consumer
+ * asks "give me the oldest frame whose timestamp is close to X".
+ *
+ * The buffer does NOT sort entries by timestamp.  Entries are stored in
+ * insertion (ring) order.  Timestamp-based selection happens only at read time
+ * by scanning all live entries.
+ *
+ *
+ * CAPACITY
+ * --------
+ *   TSBuffer *b = tsb_new(N);
+ *
+ * Internally allocates N+1 slots.  One slot is always kept empty so the
+ * classic ring-buffer trick (start == end → empty) works.  Therefore the
+ * usable capacity is exactly N entries.
+ *
+ * Because all indices are uint16_t, the maximum safe value for N is
+ * (UINT16_MAX - 2) = 65533.  Passing a larger value causes silent wrap-around
+ * and corruption.
+ *
+ *
+ * MEMORY OWNERSHIP  —  THE CRITICAL PART
+ * --------------------------------------
+ * TSBuffer takes OWNERSHIP of every pointer you hand to tsb_write().
+ * After a successful tsb_write() you must NOT free that pointer yourself.
+ * The buffer (or a later caller) will free it.
+ *
+ *   Allocating:  ALWAYS heap-allocate (malloc / calloc) the data you pass in.
+ *                Never pass a stack pointer - the buffer will call free() on it
+ *                and you will get an ASAN "bad-free" / glibc "invalid pointer"
+ *                abort.
+ *
+ *   Freeing happens in exactly four places:
+ *
+ *   1. tsb_write() return value (EVICTED entry)
+ *      If the buffer is full when you write, the entry at the ring's `start`
+ *      position is evicted and its pointer is RETURNED to you.
+ *      You MUST free() it:
+ *
+ *          void *evicted = tsb_write(b, my_data, type, ts);
+ *          if (evicted) free(evicted);   // <-- mandatory
+ *
+ *      If the buffer was not full, NULL is returned and nothing to free.
+ *
+ *   2. tsb_read() output parameter (EXTRACTED entry)
+ *      On success the matched entry's pointer is stored in *p.
+ *      Ownership transfers to you.  You MUST free(*p) after use:
+ *
+ *          void *frame; uint64_t type; uint32_t ts_out;
+ *          uint16_t removed, skip;
+ *          if (tsb_read(b, &frame, &type, &ts_out, want_ts, range,
+ *                       &removed, &skip)) {
+ *              process(frame);
+ *              free(frame);              // <-- mandatory
+ *          }
+ *
+ *   3. Internal deletion (tsb_delete_old_entries, called by tsb_read)
+ *      After a successful read, tsb_read() silently deletes every entry whose
+ *      timestamp is strictly less than (timestamp_in - timestamp_range).
+ *      Those entries are freed INTERNALLY - you never see them and must not
+ *      try to free them.
+ *
+ *   4. tsb_drain() / tsb_kill()
+ *      tsb_drain() extracts and free()s every remaining entry.
+ *      tsb_kill() calls tsb_drain() and then frees the buffer struct itself.
+ *      After tsb_kill() the pointer is invalid - do not touch it.
+ *
+ *   Summary table:
+ *   ┌─────────────────────────┬────────────────────────────────────────────┐
+ *   │ Event                   │ Who frees the data pointer?                │
+ *   ├─────────────────────────┼────────────────────────────────────────────┤
+ *   │ tsb_write (not full)    │ Buffer owns it; freed later by read/drain  │
+ *   │ tsb_write (full)        │ Caller MUST free the returned pointer      │
+ *   │ tsb_read (match found)  │ Caller MUST free *p                        │
+ *   │ tsb_read (internal del) │ Buffer frees internally — caller never sees│
+ *   │ tsb_drain / tsb_kill    │ Buffer frees everything remaining          │
+ *   └─────────────────────────┴────────────────────────────────────────────┘
+ *
+ *
+ * WHAT GETS EVICTED ON A FULL BUFFER?
+ * -----------------------------------
+ * When the buffer is full and tsb_write() is called, the entry at the
+ * physical `start` index of the ring is evicted.  This is the OLDEST entry
+ * in INSERTION ORDER, which is NOT necessarily the entry with the smallest
+ * timestamp.  (There is a TODO in the source acknowledging this.)
+ *
+ * Example:
+ *     write(A, ts=500)   →  ring: [A]
+ *     write(B, ts=100)   →  ring: [A, B]
+ *     write(C, ts=300)   →  ring: [A, B, C]   ← buffer now full (capacity 3)
+ *     evicted = write(D, ts=400)
+ *     → evicted == A  (ts=500), NOT B (ts=100)
+ *
+ * If you need true oldest-timestamp eviction, you must handle it in the
+ * caller before writing.
+ *
+ *
+ * HOW DOES tsb_read() SELECT AN ENTRY?
+ * ------------------------------------
+ * tsb_read(b, &p, &type, &ts_out, timestamp_in, timestamp_range, ...)
+ *
+ * 1. It scans ALL live entries and collects those whose timestamp falls in
+ *    the inclusive window:
+ *
+ *        [ timestamp_in - timestamp_range ,  timestamp_in + 1 ]
+ *
+ *    Note the asymmetric bounds: the lower end is inclusive, and the upper
+ *    end is timestamp_in + 1 (also inclusive), so an entry at exactly
+ *    timestamp_in + 1 WILL match.
+ *
+ * 2. Among all matching entries, it picks the one with the SMALLEST
+ *    timestamp (the "oldest" in time).  Ties are broken by ring position
+ *    (first found wins).
+ *
+ * 3. The chosen entry is swapped into the `start` slot and extracted.
+ *
+ * 4. Then tsb_delete_old_entries() is called with
+ *    threshold = timestamp_in - timestamp_range.  Every remaining entry
+ *    with timestamp STRICTLY LESS than this threshold is deleted and freed
+ *    internally.
+ *
+ * What if there is no exact timestamp match?
+ *    → The buffer returns the closest EARLIER entry that still falls inside
+ *      the range window.  It will NEVER return an entry with a timestamp
+ *      greater than timestamp_in + 1.
+ *    → If the range window contains no entries at all, tsb_read() returns
+ *      false and *p is set to NULL.  Nothing is deleted.
+ *
+ * Example (range = 100):
+ *     entries: ts=10, ts=150, ts=250, ts=400
+ *     tsb_read(want=300, range=100)
+ *       window = [200 .. 301]
+ *       matches: ts=250  →  returned
+ *       internal delete: entries with ts < 200  →  ts=10 and ts=150 freed
+ *
+ *
+ * THE is_skipping OUTPUT
+ * ----------------------
+ * If the caller's requested window starts AFTER the last timestamp that was
+ * read (last_timestamp_out), it means some time range was never consumed.
+ * is_skipping is set to the size of that gap:
+ *
+ *     is_skipping = (timestamp_in - timestamp_range) - last_timestamp_out
+ *
+ * A non-zero value warns the caller that frames were missed.  This is
+ * informational only; the buffer does not act on it.
+ *
+ *
+ * THE removed_entries_back OUTPUT
+ * -------------------------------
+ * Despite the name, this does NOT report the total number of deleted entries.
+ * It counts only those deleted entries whose timestamp was ALSO less than
+ * last_timestamp_out (i.e. entries that were already "behind" the last
+ * consumed timestamp).  In practice this is almost always 0 because
+ * last_timestamp_out starts at 0 and timestamps are typically positive.
+ * Do not rely on this value as a general "how many were cleaned up" counter.
+ *
+ *
+ * THE type FIELD
+ * --------------
+ * The uint64_t `type` stored alongside each entry is entirely opaque to the
+ * buffer.  The caller can use it for flags, frame type (keyframe / delta),
+ * codec ID, or anything else.  It is returned unchanged by tsb_read().
+ *
+ *
+ * THREAD SAFETY
+ * -------------
+ * TSBuffer is NOT thread-safe.  All functions operate without locking.
+ * If multiple threads produce/consume entries, the caller must provide
+ * external synchronisation (e.g. pthread_mutex).  In ToxAV, vc->queue_mutex
+ * protects the TSBuffer used for incoming video frames.
+ *
+ *
+ * TYPICAL LIFECYCLE (producer/consumer pattern)
+ * ---------------------------------------------
+ *     // --- setup ---
+ *     TSBuffer *buf = tsb_new(64);           // 64-entry jitter buffer
+ *
+ *     // --- producer (network receive thread) ---
+ *     void *frame = decode_packet(pkt);      // heap-allocated!
+ *     void *evicted = tsb_write(buf, frame, flags, record_ts);
+ *     if (evicted) {
+ *         free(evicted);                     // buffer was full, drop oldest
+ *     }
+ *
+ *     // --- consumer (playback / iterate thread) ---
+ *     void *out; uint64_t type; uint32_t ts_out;
+ *     uint16_t removed, skip;
+ *     uint32_t now = current_playback_time();
+ *     if (tsb_read(buf, &out, &type, &ts_out, now, 90, &removed, &skip)) {
+ *         render_frame(out);
+ *         free(out);                         // caller owns extracted data
+ *     }
+ *
+ *     // --- teardown ---
+ *     tsb_kill(buf);                         // frees all remaining entries
+ *     buf = NULL;
+ *
+ *
+ * EDGE CASES & CAVEATS
+ * --------------------
+ * • tsb_new(0) creates a buffer of capacity 0.  It is immediately "full".
+ *   Every tsb_write() will evict and return the just-written pointer.
+ *   This is technically safe but useless.
+ *
+ * • Timestamps wrap at UINT32_MAX.  The range comparison in tsb_read()
+ *   casts to int64_t, so a small window near 0 or UINT32_MAX works
+ *   correctly.  However, a range larger than ~2^31 will produce negative
+ *   lower bounds that may match unexpectedly.
+ *
+ * • tsb_read() with range = UINT32_MAX (as used by tsb_drain) matches
+ *   every entry regardless of timestamp.
+ *
+ * • The internal deletion pass (tsb_delete_old_entries) only runs after a
+ *   SUCCESSFUL read.  If tsb_read() finds no matching entry, old entries
+ *   are NOT cleaned up, even if they are far outside the window.
+ *
+ * • Calling tsb_read() on an empty buffer is safe: it returns false and
+ *   sets *p = NULL, *removed_entries_back = 0.
+ *
+ * • Calling tsb_kill(NULL) or tsb_drain(NULL) is safe (no-op).
  */
 
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 struct TSBuffer {
     uint16_t  size; /* max. number of elements in buffer [ MAX ALLOWED = (UINT16MAX - 1) !! ] */
@@ -82111,7 +82483,7 @@ static uint16_t tsb_delete_old_entries(TSBuffer *b, const uint64_t timestamp_thr
     for (int i = 0; i < tsb_size(b); i++) {
         current_element = (start_entry + i) % b->size;
 
-        if ((uint64_t)b->timestamp[current_element] < (uint64_t)timestamp_threshold) {
+        if ((uint64_t)b->timestamp[current_element] < timestamp_threshold) {
             tsb_close_hole(b, start_entry, current_element);
 
             if ((uint64_t)b->timestamp[current_element] < (uint64_t)b->last_timestamp_out) {
@@ -82152,23 +82524,26 @@ static bool tsb_return_oldest_entry_in_range(TSBuffer *b, void **p, uint64_t *da
         const uint32_t timestamp_in, const uint32_t timestamp_range)
 {
     int32_t found_element = -1;
-    uint32_t found_timestamp = UINT32_MAX;
+    uint32_t found_timestamp = 0;
     uint16_t start_entry = b->start;
     uint16_t current_element;
+    bool found_any = false;
+
+    /* FIX: Precompute bounds using int64_t to prevent overflow/underflow */
+    const int64_t lower_bound = (int64_t)timestamp_in - (int64_t)timestamp_range;
+    const int64_t upper_bound = (int64_t)timestamp_in + 1;
 
     for (int i = 0; i < tsb_size(b); i++) {
         current_element = (start_entry + i) % b->size;
 
-        if ((((int64_t)b->timestamp[current_element]) >= ((int64_t)timestamp_in - (int64_t)timestamp_range))
-                &&
-                ((int64_t)b->timestamp[current_element] <= ((int64_t)timestamp_in + (int64_t)1))) {
-            // printf("tsb_return_oldest_entry_in_range:1:%p data=%p\n", (void *)b, (void *)b->data[current_element]);
-            // timestamp of entry is in range
-            if ((int64_t)b->timestamp[current_element] < (int64_t)found_timestamp) {
-                // printf("tsb_return_oldest_entry_in_range:2:%p data=%p\n", (void *)b, (void *)b->data[current_element]);
-                // entry is older than previous found entry, or is the first found entry
-                found_timestamp = (uint32_t)b->timestamp[current_element];
+        const int64_t entry_ts = (int64_t)b->timestamp[current_element];
+
+        if (entry_ts >= lower_bound && entry_ts <= upper_bound) {
+            // FIX: Use found_any flag to correctly handle entries with timestamp == UINT32_MAX
+            if (!found_any || entry_ts < (int64_t)found_timestamp) {
+                found_timestamp = (uint32_t)entry_ts;
                 found_element = (int32_t)current_element;
+                found_any = true;
             }
         }
     }
@@ -82219,20 +82594,21 @@ static bool tsb_return_newest_entry_in_range(TSBuffer *b, void **p, uint64_t *da
     uint32_t found_timestamp = 0;
     uint16_t start_entry = b->start;
     uint16_t current_element;
+    bool found_any = false;
+
+    const int64_t lower_bound = (int64_t)timestamp_in - (int64_t)timestamp_range;
+    const int64_t upper_bound = (int64_t)timestamp_in + 1;
 
     for (int i = 0; i < tsb_size(b); i++) {
         current_element = (start_entry + i) % b->size;
 
-        if ((((int64_t)b->timestamp[current_element]) >= ((int64_t)timestamp_in - (int64_t)timestamp_range))
-                &&
-                ((int64_t)b->timestamp[current_element] <= ((int64_t)timestamp_in + (int64_t)1))) {
+        const int64_t entry_ts = (int64_t)b->timestamp[current_element];
 
-            // timestamp of entry is in range
-            if ((int64_t)b->timestamp[current_element] > (int64_t)found_timestamp) {
-
-                // entry is newer than previous found entry, or is the first found entry
-                found_timestamp = (uint32_t)b->timestamp[current_element];
+        if (entry_ts >= lower_bound && entry_ts <= upper_bound) {
+            if (!found_any || entry_ts > (int64_t)found_timestamp) {
+                found_timestamp = (uint32_t)entry_ts;
                 found_element = (int32_t)current_element;
+                found_any = true;
             }
         }
     }
@@ -82289,9 +82665,14 @@ bool tsb_read(TSBuffer *b, void **p, uint64_t *data_type, uint32_t *timestamp_ou
         return false;
     }
 
-    if ((int64_t)b->last_timestamp_out < ((int64_t)timestamp_in - (int64_t)timestamp_range)) {
+    /* FIX: Compute lower bound safely using int64_t to prevent underflow */
+    const int64_t lower_bound = (int64_t)timestamp_in - (int64_t)timestamp_range;
+
+    if ((int64_t)b->last_timestamp_out < lower_bound) {
         /* caller is missing a time range, either call more often, or increase range */
-        *is_skipping = (timestamp_in - timestamp_range) - b->last_timestamp_out;
+        /* FIX: Prevent overflow when assigning to uint16_t */
+        int64_t skip_amount = lower_bound - (int64_t)b->last_timestamp_out;
+        *is_skipping = (uint16_t)(skip_amount > UINT16_MAX ? UINT16_MAX : skip_amount);
     }
 
     bool have_found_element = tsb_return_oldest_entry_in_range(b, p, data_type,
@@ -82304,7 +82685,9 @@ bool tsb_read(TSBuffer *b, void **p, uint64_t *data_type, uint32_t *timestamp_ou
 
     if (have_found_element == true) {
         // only delete old entries if we found a "wanted" entry
-        uint16_t removed_entries = tsb_delete_old_entries(b, ((int64_t)timestamp_in - (int64_t)timestamp_range));
+        /* FIX: Clamp threshold to 0 if negative to prevent deleting everything */
+        uint64_t threshold = (lower_bound < 0) ? 0 : (uint64_t)lower_bound;
+        uint16_t removed_entries = tsb_delete_old_entries(b, threshold);
 
         // printf("tsb_read:%p size=%d st=%d end=%d removed_entries=%d\n", (void *)b, b->size, b->start, b->end,
         //       (int)removed_entries);
@@ -82322,7 +82705,7 @@ bool tsb_read(TSBuffer *b, void **p, uint64_t *data_type, uint32_t *timestamp_ou
 
 TSBuffer *tsb_new(const int size)
 {
-    TSBuffer *buf = (TSBuffer *)calloc(sizeof(TSBuffer), 1);
+    TSBuffer *buf = (TSBuffer *)calloc(1, sizeof(TSBuffer));
 
     if (!buf) {
         return NULL;
@@ -82825,7 +83208,9 @@ uint8_t vc_iterate(VCSession *vc, Tox *tox, uint8_t skip_video_flag, uint64_t *a
     uint32_t timestamp_min = 0;
     uint32_t timestamp_max = 0;
 
-    *timestamp_difference_to_sender_ = vc->timestamp_difference_to_sender__for_video;
+    if (timestamp_difference_to_sender_) {
+        *timestamp_difference_to_sender_ = vc->timestamp_difference_to_sender__for_video;
+    }
 
     tsb_get_range_in_buffer(tox, (TSBuffer *)vc->vbuf_raw, &timestamp_min, &timestamp_max);
 
@@ -82981,17 +83366,18 @@ uint8_t vc_iterate(VCSession *vc, Tox *tox, uint8_t skip_video_flag, uint64_t *a
         LOGGER_API_DEBUG(tox,"first_frame:001b:timestamp_want_get_used:002=%d", (int)timestamp_want_get_used);
     }
 
-    if (use_range_all == 1)
-    {
-        // this will force audio stream to play anything that comes in without timestamps
-        *video_has_rountrip_time_ms = 0;
-        LOGGER_API_DEBUG(tox,"force_audio");
+    if (video_has_rountrip_time_ms) {
+        if (use_range_all == 1)
+        {
+            // this will force audio stream to play anything that comes in without timestamps
+            *video_has_rountrip_time_ms = 0;
+            LOGGER_API_DEBUG(tox,"force_audio");
+        }
+        else
+        {
+            *video_has_rountrip_time_ms = vc->has_rountrip_time_ms;
+        }
     }
-    else
-    {
-        *video_has_rountrip_time_ms = vc->has_rountrip_time_ms;
-    }
-
 
     if ((video_frame_diff > 1000) && (video_frame_diff < 10000))
     {
@@ -83105,9 +83491,12 @@ uint8_t vc_iterate(VCSession *vc, Tox *tox, uint8_t skip_video_flag, uint64_t *a
             video_decoder_caused_delay_ms_mean_value_used = 300;
         }
 
-        *timestamp_difference_adjustment_for_audio = vc->timestamp_difference_adjustment -
-                delay_audio_stream_relative_to_video_stream -
-                vc->video_decoder_caused_delay_ms_mean_value;
+        if (timestamp_difference_adjustment_for_audio) {
+            *timestamp_difference_adjustment_for_audio = vc->timestamp_difference_adjustment -
+                    delay_audio_stream_relative_to_video_stream -
+                    vc->video_decoder_caused_delay_ms_mean_value;
+        }
+
         LOGGER_API_DEBUG(tox, "want_remote_video_ts:v:003=%d", (int)*timestamp_difference_adjustment_for_audio);
         LOGGER_API_DEBUG(tox, "VV:01:%d", (int)vc->video_decoder_buffer_ms);
         LOGGER_API_DEBUG(tox, "VV:02:%d %d", (int)*timestamp_difference_adjustment_for_audio, (int)vc->timestamp_difference_adjustment);
@@ -83375,6 +83764,7 @@ int vc_queue_message(Mono_Time *mono_time, void *vcp, struct RTPMessage *msg)
     }
 
     VCSession *vc = (VCSession *)vcp;
+    Tox *tox = (vc->av && vc->av->tox) ? vc->av->tox : NULL;
 
     const struct RTPHeader *header_v3 = (void *) & (msg->header);
     const struct RTPHeader *header = &msg->header;
@@ -83385,16 +83775,15 @@ int vc_queue_message(Mono_Time *mono_time, void *vcp, struct RTPMessage *msg)
     }
 
     if (msg->header.pt != RTP_TYPE_VIDEO % 128) {
-        LOGGER_API_WARNING(vc->av->tox, "Invalid payload type! pt=%d", (int)msg->header.pt);
+        LOGGER_API_WARNING(tox, "Invalid payload type! pt=%d", (int)msg->header.pt);
         free(msg);
         return -1;
     }
 
 
-    LOGGER_API_DEBUG(vc->av->tox, "want_lock");
+    LOGGER_API_DEBUG(tox, "want_lock");
     pthread_mutex_lock(vc->queue_mutex);
-    LOGGER_API_DEBUG(vc->av->tox, "got_lock");
-
+    LOGGER_API_DEBUG(tox, "got_lock");
 
     // calculate mean "frame incoming every x milliseconds" --------------
     if (vc->incoming_video_frames_gap_last_ts > 0) {
@@ -83420,12 +83809,12 @@ int vc_queue_message(Mono_Time *mono_time, void *vcp, struct RTPMessage *msg)
     vc->incoming_video_frames_gap_last_ts = current_time_monotonic(mono_time);
     // calculate mean "frame incoming every x milliseconds" --------------
 
-    LOGGER_API_DEBUG(vc->av->tox, "TT:queue:V:fragnum=%ld", (long)header_v3->fragment_num);
+    LOGGER_API_DEBUG(tox, "TT:queue:V:fragnum=%ld", (long)header_v3->fragment_num);
 
     // older clients do not send the frame record timestamp
     // compensate by using the frame sennt timestamp
     if (msg->header.frame_record_timestamp == 0) {
-        LOGGER_API_DEBUG(vc->av->tox, "old client:001");
+        LOGGER_API_DEBUG(tox, "old client:001");
         msg->header.frame_record_timestamp = msg->header.timestamp;
     }
 
@@ -83510,14 +83899,14 @@ int vc_queue_message(Mono_Time *mono_time, void *vcp, struct RTPMessage *msg)
                 vc->incoming_video_bitrate_last_cb_ts = current_time_monotonic(mono_time);
             }
 
-            LOGGER_API_DEBUG(vc->av->tox, "vc_queue_msg:tsb_write : %d", (uint32_t)header->frame_record_timestamp);
+            LOGGER_API_DEBUG(tox, "vc_queue_msg:tsb_write : %d", (uint32_t)header->frame_record_timestamp);
 
             struct RTPMessage *msg_old = tsb_write((TSBuffer *)vc->vbuf_raw, msg,
                                                    (uint64_t)header->flags,
                                                    (uint32_t)header->frame_record_timestamp);
 
             if (msg_old) {
-                LOGGER_API_WARNING(vc->av->tox, "FPATH:%d kicked out", (int)msg_old->header.sequnum);
+                LOGGER_API_WARNING(tox, "FPATH:%d kicked out", (int)msg_old->header.sequnum);
                 free(msg_old);
             }
         } else {
@@ -83556,7 +83945,7 @@ int vc_queue_message(Mono_Time *mono_time, void *vcp, struct RTPMessage *msg)
     vc->linfts = current_time_monotonic(mono_time);
 
     pthread_mutex_unlock(vc->queue_mutex);
-    LOGGER_API_DEBUG(vc->av->tox, "un_lock");
+    LOGGER_API_DEBUG(tox, "un_lock");
 
     return 0;
 }
@@ -90819,6 +91208,7 @@ bool cmp_object_to_bin(cmp_ctx_t *ctx, const cmp_object_t *obj, void *data,
 #pragma GCC diagnostic ignored "-Wmissing-variable-declarations"
 
 #include <time.h>
+#include <pthread.h>
 
 
 
@@ -90878,7 +91268,8 @@ typedef struct global_msgv2_outgoing_ft_entry {
 } global_msgv2_outgoing_ft_entry;
 
 static uint16_t global_ts_ms = 0;
-static pthread_mutex_t mutex_tox_util[1];
+// FIX: Statically initialize the mutex to prevent TSAN "uninitialized/destroyed" warnings.
+static pthread_mutex_t mutex_tox_util = PTHREAD_MUTEX_INITIALIZER;
 
 // ------------ UTILS ------------
 
@@ -90966,15 +91357,15 @@ get_hex(char *buf, int buf_len, char *hex_, int hex_len, int num_col)
 
 static void tox_utils_list_init(tox_utils_List *l)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
     l->size = 0;
     l->head = NULL;
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static void tox_utils_list_clear(tox_utils_List *l)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *next_ = NULL;
@@ -90996,13 +91387,13 @@ static void tox_utils_list_clear(tox_utils_List *l)
     l->size = 0;
     l->head = NULL;
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 
 static void tox_utils_list_add(tox_utils_List *l, uint8_t *key, uint32_t key2, void *data)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *n = (tox_utils_Node *)calloc(1, sizeof(tox_utils_Node));
 
@@ -91019,19 +91410,19 @@ static void tox_utils_list_add(tox_utils_List *l, uint8_t *key, uint32_t key2, v
     l->head = n;
     l->size++;
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static tox_utils_Node *tox_utils_list_get(tox_utils_List *l, uint8_t *key, uint32_t key2)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
 
     while (head) {
         if (head->key2 == key2) {
             if (check_file_signature(head->key, key, TOX_PUBLIC_KEY_SIZE) == 0) {
-                pthread_mutex_unlock(mutex_tox_util);
+                pthread_mutex_unlock(&mutex_tox_util);
                 return head;
             }
         }
@@ -91039,7 +91430,7 @@ static tox_utils_Node *tox_utils_list_get(tox_utils_List *l, uint8_t *key, uint3
         head = head->next;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
     return NULL;
 }
 
@@ -91081,7 +91472,7 @@ static void tox_utils_list_remove_single_node(tox_utils_List *l, tox_utils_Node 
 
 static void tox_utils_list_remove(tox_utils_List *l, uint8_t *key, uint32_t key2)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *prev_ = NULL;
@@ -91105,12 +91496,12 @@ static void tox_utils_list_remove(tox_utils_List *l, uint8_t *key, uint32_t key2
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static void tox_utils_list_remove_2(tox_utils_List *l, uint8_t *key)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *prev_ = NULL;
@@ -91132,7 +91523,7 @@ static void tox_utils_list_remove_2(tox_utils_List *l, uint8_t *key)
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 // ------------ UTILS ------------
@@ -91279,7 +91670,7 @@ static void tox_utils_housekeeping(Tox *tox)
 {
 #if 0
 
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     // cancel and clear old outgoing FTs ----------------
     tox_utils_List *l = &global_msgv2_outgoing_ft_list;
@@ -91367,7 +91758,7 @@ static void tox_utils_housekeeping(Tox *tox)
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 
     // cancel and clear old incoming FTs ----------------
 #endif
@@ -91478,15 +91869,7 @@ void tox_utils_callback_friend_read_receipt_message_v2(Tox *tox,
 
 Tox *tox_utils_new(const struct Tox_Options *options, TOX_ERR_NEW *error)
 {
-    if (pthread_mutex_init(mutex_tox_util, NULL) != 0) {
-        if (error) {
-            // TODO: find a better error code, use malloc error for now
-            *error = TOX_ERR_NEW_MALLOC;
-        }
-
-        return NULL;
-    }
-
+    // FIX: Mutex is now statically initialized, no need for pthread_mutex_init
     tox_utils_list_init(&global_friend_capability_list);
     tox_utils_list_init(&global_msgv2_incoming_ft_list);
     tox_utils_list_init(&global_msgv2_outgoing_ft_list);
@@ -91503,7 +91886,9 @@ void tox_utils_kill(Tox *tox)
 
     tox_kill(tox);
 
-    pthread_mutex_destroy(mutex_tox_util);
+    // FIX: Statically initialized mutexes do not require destruction.
+    // Removing pthread_mutex_destroy avoids TSAN "use of destroyed mutex" errors
+    // if toxcore fires stray callbacks during teardown.
 }
 
 bool tox_utils_friend_delete(Tox *tox, uint32_t friend_number, TOX_ERR_FRIEND_DELETE *error)
@@ -92616,13 +93001,6 @@ static const uint8_t MID_MAGIC[MID_MAGIC_BYTES_TOTAL] = {
  * making size-based traffic fingerprinting significantly harder.
  */
 #define MID_MAX_PACKET_PADDING  64
-
-/*
- * Maximum payload size BEFORE padding. Reserves room for the maximum padding
- * plus the 1-byte padding-length indicator so the final padded packet never
- * exceeds MID_MAX_PACKET_SIZE.
- */
-#define MID_MAX_PAYLOAD_SIZE (MID_MAX_PACKET_SIZE - MID_MAX_PACKET_PADDING - 1)
 
 #define MID_RECORD_STATUS_SIZE    sizeof(uint8_t)
 #define MID_RECORD_TIMESTAMP_SIZE sizeof(uint64_t)
@@ -96154,6 +96532,19 @@ void mid_on_group_delete(MidState *s, Tox *tox, uint32_t group_number)
     uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE];
     Tox_Err_Group_State_Queries err;
     if (!tox_group_get_chat_id(tox, group_number, chat_id, &err) || err != TOX_ERR_GROUP_STATE_QUERIES_OK) return;
+
+    mid_lock(s);
+    bool changed = mid_on_group_delete_internal(s, chat_id);
+    mid_peer_list_changed_cb cb = s->peer_list_changed_cb;
+    void *ud = s->peer_list_changed_user_data;
+    mid_unlock(s);
+
+    if (changed && cb) cb(chat_id, ud);
+}
+
+void mid_on_group_chat_delete(MidState *s, const uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE])
+{
+    if (!s || !chat_id) return;
 
     mid_lock(s);
     bool changed = mid_on_group_delete_internal(s, chat_id);
